@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <time.h>
+
 #include "EbDefinitions.h"
 #include "EbUtility.h"
 #include "EbPictureControlSet.h"
@@ -15,6 +17,9 @@
 #include "EbPictureDecisionResults.h"
 #include "EbReferenceObject.h"
 #include "EbSvtAv1ErrorCodes.h"
+#if ALTREF_FILTERING_SUPPORT
+#include "EbTemporalFiltering.h"
+#endif
 
 /************************************************
  * Defines
@@ -289,6 +294,7 @@ uint8_t  circ_inc(uint8_t max, uint8_t off, uint8_t input)
 #define OTH 64
 #define FC_SKIP_TX_SR_TH025                     125 // Fast cost skip tx search threshold.
 #define FC_SKIP_TX_SR_TH010                     110 // Fast cost skip tx search threshold.
+
  /************************************************
   * Picture Analysis Context Constructor
   ************************************************/
@@ -3124,8 +3130,8 @@ void  Av1GenerateRpsInfo(
                 picture_control_set_ptr->show_frame = EB_TRUE;
                 picture_control_set_ptr->has_show_existing = EB_FALSE;
             }
-    else
-    {
+            else
+            {
                 picture_control_set_ptr->show_frame = EB_FALSE;
                 picture_control_set_ptr->has_show_existing = EB_FALSE;
             }
@@ -3347,6 +3353,18 @@ void* picture_decision_kernel(void *input_ptr)
     // Debug
     uint64_t                           loopCount = 0;
 
+#if ALTREF_FILTERING_SUPPORT
+
+    // ----- Alt-Refs variables
+    PictureParentControlSet *list_picture_control_set_ptr[ALTREF_MAX_NFRAMES];
+    uint64_t mini_gop_count = 0;
+    uint8_t pics_saved = 0;
+    uint64_t alt_ref_central_loc = 0;
+    EbBool alt_ref_created_flag = EB_FALSE;
+    // -----
+
+#endif
+
     for (;;) {
 
         // Get Input Full Object
@@ -3408,6 +3426,9 @@ void* picture_decision_kernel(void *input_ptr)
             windowAvail = EB_TRUE;
             previousEntryIndex = QUEUE_GET_PREVIOUS_SPOT(encode_context_ptr->picture_decision_reorder_queue_head_index);
 
+#if ALTREF_FILTERING_SUPPORT
+            ParentPcsWindow[0] = ParentPcsWindow[1] = ParentPcsWindow[2] = ParentPcsWindow[3] = ParentPcsWindow[4] = ParentPcsWindow[5] = NULL;
+#endif
             if (encode_context_ptr->picture_decision_reorder_queue[previousEntryIndex]->parent_pcs_wrapper_ptr == NULL) {
                 windowAvail = EB_FALSE;
             }
@@ -3429,6 +3450,88 @@ void* picture_decision_kernel(void *input_ptr)
                     }
                 }
             }
+
+#if ALTREF_FILTERING_SUPPORT
+
+            // ----------------- Alt-Refs --------------------
+
+            // central location of alt-ref filtering
+            alt_ref_central_loc = (uint64_t)((mini_gop_count + 1) * (1 << sequence_control_set_ptr->static_config.hierarchical_levels));
+
+            uint8_t altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
+            uint8_t num_past_pics = (uint8_t)(altref_nframes/2);
+
+            // These conditions need to be met for temporal filtering to conducted
+            if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE &&
+               altref_nframes > 1 &&
+               alt_ref_created_flag == EB_FALSE) {
+
+                if(ParentPcsWindow[0]!=NULL && ParentPcsWindow[1]!=NULL){
+
+                    // get previous source pictures
+                    if (pics_saved < num_past_pics) {
+
+                        for (int pic_save = pics_saved; pic_save < num_past_pics; pic_save++) {
+
+                            uint64_t pic_to_save = alt_ref_central_loc - (num_past_pics - pic_save);
+
+                            if (ParentPcsWindow[0]->picture_number == pic_to_save) {
+                                list_picture_control_set_ptr[pic_save] = ParentPcsWindow[0];
+                                pics_saved++;
+
+                                // Set the default subpel settings
+                                list_picture_control_set_ptr[pic_save]->use_subpel_flag = 1;
+                            }
+
+                        }
+                    }
+
+                    // get central and futute source pictures
+                    if (pics_saved == num_past_pics) {
+
+                        int window_index = 1;
+                        for (int pic_save = pics_saved; pic_save < altref_nframes; pic_save++) {
+
+                            uint64_t pic_to_save = alt_ref_central_loc + (pic_save - num_past_pics);
+
+                            if (ParentPcsWindow[window_index]->picture_number == pic_to_save) {
+                                list_picture_control_set_ptr[pic_save] = ParentPcsWindow[window_index];
+                                window_index++;
+                                pics_saved++;
+
+                                // Set the default subpel settings
+                                list_picture_control_set_ptr[pic_save]->use_subpel_flag = 1;
+                            }
+
+                        }
+
+                        clock_t start_time;
+                        start_time = clock();
+
+                        // temporal filtering start
+                        EbErrorType ret = init_temporal_filtering(list_picture_control_set_ptr);
+
+                        if(ret!=EB_ErrorNone){
+                            printf("Error generating filtered picture");
+                        }
+
+                        clock_t elapsed_time = clock() - start_time;
+                        double time_taken = ((double) elapsed_time) / CLOCKS_PER_SEC; // in seconds
+
+                        printf("Producing the alt-ref picture at POC %d took %f seconds.\n", (int)alt_ref_central_loc, time_taken);
+
+                        alt_ref_created_flag = EB_TRUE;
+
+                    }
+
+                }
+
+            }
+
+            // ------------------- End of Alt-refs -------------------------
+
+#endif
+
             picture_control_set_ptr = (PictureParentControlSet*)queueEntryPtr->parent_pcs_wrapper_ptr->object_ptr;
 
             picture_control_set_ptr->fade_out_from_black = 0;
@@ -3527,7 +3630,7 @@ void* picture_decision_kernel(void *input_ptr)
 
                 // Determine if Pictures can be released from the Pre-Assignment Buffer
                 if ((encode_context_ptr->pre_assignment_buffer_intra_count > 0) ||
-                    (encode_context_ptr->pre_assignment_buffer_count == (uint32_t)(1 << sequence_control_set_ptr->static_config.hierarchical_levels)) || 
+                    (encode_context_ptr->pre_assignment_buffer_count == (uint32_t)(1 << sequence_control_set_ptr->static_config.hierarchical_levels)) ||
                     (encode_context_ptr->pre_assignment_buffer_eos_flag == EB_TRUE) ||
                     (picture_control_set_ptr->pred_structure == EB_PRED_LOW_DELAY_P) ||
                     (picture_control_set_ptr->pred_structure == EB_PRED_LOW_DELAY_B))
@@ -3574,6 +3677,18 @@ void* picture_decision_kernel(void *input_ptr)
                         context_ptr,
                         encode_context_ptr);
 
+#if ALTREF_FILTERING_SUPPORT
+
+                    // ---- Alt-refs ---- set state for next mini-gop
+                    // TODO: testing purposes only - stategy to define which frames are alt-refs is required
+                    if(picture_control_set_ptr->picture_number > 0){
+                        pics_saved = 0;
+                        mini_gop_count++;
+                        alt_ref_created_flag = EB_FALSE;
+                    }
+
+#endif
+
                     // Loop over Mini GOPs
 
                     for (mini_gop_index = 0; mini_gop_index < context_ptr->total_number_of_mini_gops; ++mini_gop_index) {
@@ -3603,7 +3718,6 @@ void* picture_decision_kernel(void *input_ptr)
 
                             // Update the Pred Structure if cutting short a Random Access period
                             if ((context_ptr->mini_gop_length[mini_gop_index] < picture_control_set_ptr->pred_struct_ptr->pred_struct_period || context_ptr->mini_gop_idr_count[mini_gop_index] > 0) &&
-
                                 picture_control_set_ptr->pred_struct_ptr->pred_type == EB_PRED_RANDOM_ACCESS &&
                                 picture_control_set_ptr->idr_flag == EB_FALSE &&
                                 picture_control_set_ptr->cra_flag == EB_FALSE)
@@ -3941,6 +4055,7 @@ void* picture_decision_kernel(void *input_ptr)
                                 else
                                     picture_control_set_ptr->sc_content_detected = context_ptr->last_i_picture_sc_detection;
 
+                                // TODO: put this in EbMotionEstimationProcess?
                                 // ME Kernel Multi-Processes Signal(s) derivation
                                 signal_derivation_multi_processes_oq(
 #if MEMORY_FOOTPRINT_OPT_ME_MV
@@ -4533,16 +4648,16 @@ void* picture_decision_kernel(void *input_ptr)
                             picture_control_set_ptr->me_segments_total_count = (uint16_t)(picture_control_set_ptr->me_segments_column_count  * picture_control_set_ptr->me_segments_row_count);
                             picture_control_set_ptr->me_segments_completion_mask = 0;
 
+
                             // Post the results to the ME processes
                             {
                                 uint32_t segment_index;
 
-                                for (segment_index = 0; segment_index < picture_control_set_ptr->me_segments_total_count; ++segment_index)
-                                {
+                                for (segment_index = 0; segment_index < picture_control_set_ptr->me_segments_total_count; ++segment_index) {
                                     // Get Empty Results Object
                                     eb_get_empty_object(
-                                        context_ptr->picture_decision_results_output_fifo_ptr,
-                                        &outputResultsWrapperPtr);
+                                            context_ptr->picture_decision_results_output_fifo_ptr,
+                                            &outputResultsWrapperPtr);
 
                                     outputResultsPtr = (PictureDecisionResults*)outputResultsWrapperPtr->object_ptr;
 #if ALT_REF_OVERLAY
@@ -4556,6 +4671,7 @@ void* picture_decision_kernel(void *input_ptr)
 
                                     // Post the Full Results Object
                                     eb_post_full_object(outputResultsWrapperPtr);
+
                                 }
                             }
 
@@ -4580,6 +4696,7 @@ void* picture_decision_kernel(void *input_ptr)
                                 encode_context_ptr->pre_assignment_buffer_scene_change_count = 0;
                                 encode_context_ptr->pre_assignment_buffer_eos_flag = EB_FALSE;
                             }
+
                         }
 
                     } // End MINI GOPs loop

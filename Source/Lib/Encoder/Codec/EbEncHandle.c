@@ -2484,6 +2484,10 @@ void CopyApiFromApp(
     else
         sequence_control_set_ptr->static_config.look_ahead_distance = cap_look_ahead_distance(&sequence_control_set_ptr->static_config);
 
+    sequence_control_set_ptr->static_config.enable_altrefs = pComponentParameterStructure->enable_altrefs;
+    sequence_control_set_ptr->static_config.altref_strength = pComponentParameterStructure->altref_strength;
+    sequence_control_set_ptr->static_config.altref_nframes = pComponentParameterStructure->altref_nframes;
+
     return;
 }
 
@@ -2948,6 +2952,11 @@ EbErrorType eb_svt_enc_init_parameter(
 
     // Debug info
     config_ptr->recon_enabled = 0;
+
+    // Alt-Ref default values
+    config_ptr->enable_altrefs = EB_FALSE;
+    config_ptr->altref_nframes = 7;
+    config_ptr->altref_strength = 5;
 
     return return_error;
 }

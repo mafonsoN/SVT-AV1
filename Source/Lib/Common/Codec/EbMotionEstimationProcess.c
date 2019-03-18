@@ -507,9 +507,6 @@ EbErrorType ComputeDecimatedZzSad(
     return return_error;
 }
 
-
-
-
 /************************************************
  * Motion Analysis Kernel
  * The Motion Analysis performs  Motion Estimation

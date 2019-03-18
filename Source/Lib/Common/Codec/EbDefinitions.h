@@ -35,6 +35,8 @@
 extern "C" {
 #endif
 
+#define ALTREF_FILTERING_SUPPORT 1
+
 #define MRP_SUPPORT            1// MRP Main Flag
 #define ALT_REF_SUPPORT                   1 // ALT_REF main flag
 
@@ -263,7 +265,6 @@ extern "C" {
 #define MAX_FRAMES_TO_REF_I                             64
 #endif
 #define NSQ_TAB_SIZE                                    6
-
 #define AOM_INTERP_EXTEND 4
 #define MRP_DISABLE_ADDED_CAND_M1                        0
 
@@ -1178,10 +1179,10 @@ typedef enum ATTRIBUTE_PACKED
 #define TXFM_PARTITION_CONTEXTS ((TX_SIZES - TX_8X8) * 6 - 3)
 typedef uint8_t TXFM_CONTEXT;
 
+// frame types
 #define NONE_FRAME -1
 #define INTRA_FRAME 0
 #define LAST_FRAME 1
-
 #define LAST2_FRAME 2
 #define LAST3_FRAME 3
 #define GOLDEN_FRAME 4
@@ -2742,6 +2743,8 @@ void(*ErrorHandler)(
 //***Encoding Parameters***
 #define MAX_PICTURE_WIDTH_SIZE                      4672u
 #define MAX_PICTURE_HEIGHT_SIZE                     2560u
+#define MAX_PICTURE_WIDTH_SIZE_CH                   2336u
+#define MAX_PICTURE_HEIGHT_SIZE_CH                  1280u
 #define INTERNAL_BIT_DEPTH                          8 // to be modified
 #define MAX_SAMPLE_VALUE                            ((1 << INTERNAL_BIT_DEPTH) - 1)
 #define MAX_SAMPLE_VALUE_10BIT                      0x3FF
