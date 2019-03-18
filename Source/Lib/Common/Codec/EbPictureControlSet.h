@@ -13948,7 +13948,7 @@ extern "C" {
 
     //CHKN
     // Add the concept of PictureParentControlSet which is a subset of the old PictureControlSet.
-    // It actually holds only high level Pciture based control data:(GOP management,when to start a picture, when to release the PCS, ....).
+    // It actually holds only high level Picture based control data:(GOP management,when to start a picture, when to release the PCS, ....).
     // The regular PictureControlSet(Child) will be dedicated to store SB based encoding results and information.
     // Parent is created before the Child, and continue to live more. Child PCS only lives the exact time needed to encode the picture: from ME to EC/ALF.
     typedef struct PictureParentControlSet_s

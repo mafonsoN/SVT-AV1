@@ -1124,10 +1124,10 @@ typedef enum ATTRIBUTE_PACKED {
 #define TXFM_PARTITION_CONTEXTS ((TX_SIZES - TX_8X8) * 6 - 3)
 typedef uint8_t TXFM_CONTEXT;
 
+// frame types
 #define NONE_FRAME -1
 #define INTRA_FRAME 0
 #define LAST_FRAME 1
-
 #define LAST2_FRAME 2
 #define LAST3_FRAME 3
 #define GOLDEN_FRAME 4

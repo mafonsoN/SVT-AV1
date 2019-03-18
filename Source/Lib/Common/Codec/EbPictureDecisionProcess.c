@@ -2030,7 +2030,6 @@ void* picture_decision_kernel(void *input_ptr)
 
                             // Update the Pred Structure if cutting short a Random Access period
                             if ((context_ptr->miniGopLength[miniGopIndex] < picture_control_set_ptr->pred_struct_ptr->predStructPeriod || context_ptr->miniGopIdrCount[miniGopIndex] > 0) &&
-
                                 picture_control_set_ptr->pred_struct_ptr->predType == EB_PRED_RANDOM_ACCESS &&
                                 picture_control_set_ptr->idr_flag == EB_FALSE &&
                                 picture_control_set_ptr->cra_flag == EB_FALSE)
