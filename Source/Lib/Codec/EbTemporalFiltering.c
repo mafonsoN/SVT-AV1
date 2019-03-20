@@ -199,3 +199,7 @@ void init_temporal_filtering(int altref_strength, int altref_nframes, int distan
     // function that implements the temporal filtering in libaom
     //temporal_filter_iterate_c(cpi, frames, frames_to_blur, frames_to_blur_backward, strength, &sf);
 }
+
+void init_altRefs(){
+
+}

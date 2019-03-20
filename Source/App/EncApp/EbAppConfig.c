@@ -72,7 +72,9 @@
 #define HME_LEVEL1_HEIGHT               "-hme-l1-h"
 #define HME_LEVEL2_WIDTH                "-hme-l2-w"
 #define HME_LEVEL2_HEIGHT               "-hme-l2-h"
-
+#define ENABLE_ALTREFS                  "-enable-altrefs"
+#define ALTREF_STRENGTH                 "-altref-strength"
+#define ALTREF_NFRAMES                  "-altref-nframes"
 #define CONSTRAINED_INTRA_ENABLE_TOKEN  "-constrd-intra"
 #define IMPROVE_SHARPNESS_TOKEN         "-sharp"
 #define HDR_INPUT_TOKEN                 "-hdr"
@@ -215,6 +217,11 @@ static void SetHmeLevel1SearchAreaInWidthArray  (const char *value, EbConfig_t *
 static void SetHmeLevel1SearchAreaInHeightArray (const char *value, EbConfig_t *cfg) {cfg->hmeLevel1SearchAreaInHeightArray[cfg->hmeLevel1RowIndex++] = strtoul(value, NULL, 0);};
 static void SetHmeLevel2SearchAreaInWidthArray  (const char *value, EbConfig_t *cfg) {cfg->hmeLevel2SearchAreaInWidthArray[cfg->hmeLevel2ColumnIndex++] = strtoul(value, NULL, 0);};
 static void SetHmeLevel2SearchAreaInHeightArray (const char *value, EbConfig_t *cfg) {cfg->hmeLevel2SearchAreaInHeightArray[cfg->hmeLevel2RowIndex++] = strtoul(value, NULL, 0);};
+
+static void SetEnableAltRefs                    (const char *value, EbConfig_t *cfg) {cfg->enable_altrefs = (EbBool)strtoul(value, NULL, 0);};
+static void SetAltRefStrength                   (const char *value, EbConfig_t *cfg) {cfg->altref_strength = strtoul(value, NULL, 0);};
+static void SetAltRefNFrames                    (const char *value, EbConfig_t *cfg) {cfg->altref_nframes = strtoul(value, NULL, 0);};
+
 static void SetEnableConstrainedIntra           (const char *value, EbConfig_t *cfg) {cfg->constrained_intra                                             = (EbBool)strtoul(value, NULL, 0);};
 static void SetImproveSharpness                 (const char *value, EbConfig_t *cfg) {cfg->improve_sharpness               = (EbBool)strtol(value,  NULL, 0);};
 static void SetHighDynamicRangeInput            (const char *value, EbConfig_t *cfg) {cfg->high_dynamic_range_input            = strtol(value,  NULL, 0);};
@@ -365,6 +372,12 @@ config_entry_t config_entry[] = {
     { ARRAY_INPUT,HME_LEVEL1_HEIGHT, "HmeLevel1SearchAreaInHeight", SetHmeLevel1SearchAreaInHeightArray },
     { ARRAY_INPUT,HME_LEVEL2_WIDTH, "HmeLevel2SearchAreaInWidth", SetHmeLevel2SearchAreaInWidthArray },
     { ARRAY_INPUT,HME_LEVEL2_HEIGHT, "HmeLevel2SearchAreaInHeight", SetHmeLevel2SearchAreaInHeightArray },
+
+    // Alt-ref frames related
+    { SINGLE_INPUT, ENABLE_ALTREFS, "ExtBlockFlag", SetEnableAltRefs },
+    { SINGLE_INPUT, ALTREF_STRENGTH, "ExtBlockFlag", SetAltRefStrength },
+    { SINGLE_INPUT, ALTREF_NFRAMES, "ExtBlockFlag", SetAltRefNFrames },
+
     // Termination
     {SINGLE_INPUT,NULL,  NULL,                                NULL}
 };
@@ -449,6 +462,9 @@ void EbConfigCtor(EbConfig_t *config_ptr)
     config_ptr->hmeLevel2SearchAreaInHeightArray[1]  = 1;
     config_ptr->constrained_intra                    = 0;
     config_ptr->film_grain_denoise_strength          = 0;
+    config_ptr->enable_altrefs                       = 1;
+    config_ptr->altref_strength                      = 5;
+    config_ptr->altref_nframes                       = 7;
 
     // Thresholds
     config_ptr->high_dynamic_range_input             = 0;
@@ -823,6 +839,16 @@ static EbErrorType VerifySettings(EbConfig_t *config, uint32_t channelNumber)
         return_error = EB_ErrorBadParameter;
     }
 
+    // alt-ref frames related
+    if (config->altref_strength < 0 || config->altref_strength > 6 ) {
+        fprintf(config->errorLogFile, "Error instance %u: invalid altref-strength, should be in the range [0 - 5] \n",channelNumber+1);
+        return_error = EB_ErrorBadParameter;
+    }
+
+    if (config->altref_nframes < 0 || config->altref_nframes > 15 ) {
+        fprintf(config->errorLogFile, "Error instance %u: invalid altref-nframes, should be in the range [0 - 7] \n",channelNumber+1);
+        return_error = EB_ErrorBadParameter;
+    }
 
     return return_error;
 }

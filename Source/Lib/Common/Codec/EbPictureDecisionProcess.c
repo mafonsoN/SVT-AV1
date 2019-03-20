@@ -1798,6 +1798,15 @@ void* picture_decision_kernel(void *input_ptr)
 #endif
         loopCount++;
 
+
+
+        // alt ref TEST ONLY: todo: use parameters
+        EbBool enable_alt_refs = picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs;
+        uint8_t altref_strength = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_strength;
+        uint8_t altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
+
+
+
         // Input Picture Analysis Results into the Picture Decision Reordering Queue
         // P.S. Since the prior Picture Analysis processes stage is multithreaded, inputs to the Picture Decision Process
         // can arrive out-of-display-order, so a the Picture Decision Reordering Queue is used to enforce processing of
