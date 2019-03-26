@@ -5,6 +5,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "EbDefinitions.h"
 #include "EbSystemResourceManager.h"
@@ -4928,6 +4929,7 @@ static int is_screen_content(const uint8_t *src, int use_hbd,
 
 
 #endif
+
 /************************************************
  * Picture Analysis Kernel
  * The Picture Analysis Process pads & decimates the input pictures.
@@ -4955,10 +4957,10 @@ void* picture_analysis_kernel(void *input_ptr)
     EbPictureBufferDesc_t           *input_picture_ptr;
 
     // Variance
-    uint32_t                          picture_width_in_sb;
-    uint32_t                          pictureHeighInLcu;
-    uint32_t                          sb_total_count;
-    EbAsm                          asm_type;
+    uint32_t                        picture_width_in_sb;
+    uint32_t                        pictureHeighInLcu;
+    uint32_t                        sb_total_count;
+    EbAsm                           asm_type;
 
     for (;;) {
 
@@ -4987,8 +4989,6 @@ void* picture_analysis_kernel(void *input_ptr)
         // Set picture parameters to account for subpicture, picture scantype, and set regions by resolutions
         SetPictureParametersForStatisticsGathering(
             sequence_control_set_ptr);
-
-
 
         // Pad pictures to multiple min cu size
         PadPictureToMultipleOfMinCuSizeDimensions(

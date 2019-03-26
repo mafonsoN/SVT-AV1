@@ -17,8 +17,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include "EbPictureControlSet.h"
+#include "EbSequenceControlSet.h"
+#include "EbDefinitions.h"
 
-static void adjust_filter_params(int* altref_strength, int* altref_nframes);
-static double estimate_noise(const uint8_t *src, int width, int height, int stride, int edge_thresh);
+static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr, uint8_t *altref_strength, uint8_t *altref_nframes);
+static double estimate_noise(EbByte src, uint16_t width, uint16_t height, uint16_t stride_y);
 static double highbd_estimate_noise(const uint8_t *src8, int width, int height, int stride, int bd, int edge_thresh);
-void init_temporal_filtering(int altref_strength, int altref_nframes);
+EbErrorType init_temporal_filtering(PictureParentControlSet_t *picture_control_set_ptr);

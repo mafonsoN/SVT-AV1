@@ -15,6 +15,7 @@
 #include "EbPictureDecisionResults.h"
 #include "EbReferenceObject.h"
 #include "EbSvtAv1ErrorCodes.h"
+#include "EbTemporalFiltering.h"
 
 /************************************************
  * Defines
@@ -1561,9 +1562,8 @@ void  Av1GenerateRpsInfo(
                 //Scene Change that breaks the mini gop and switch to LDP (if I scene change happens to be aligned with a complete miniGop, then we do not break the pred structure)
                 picture_control_set_ptr->showFrame = EB_TRUE;
                 picture_control_set_ptr->hasShowExisting = EB_FALSE;
-            }
-    else
-    {
+            }else
+            {
                 picture_control_set_ptr->showFrame = EB_FALSE;
                 picture_control_set_ptr->hasShowExisting = EB_FALSE;
             }
@@ -1635,6 +1635,20 @@ void  Av1GenerateRpsInfo(
         exit(0);
     }
  }
+
+char* itoa(int val, int base){
+
+    static char buf[32] = {0};
+
+    int i = 30;
+
+    for(; val && i ; --i, val /= base)
+
+        buf[i] = "0123456789abcdef"[val % base];
+
+    return &buf[i+1];
+
+}
 
 /***************************************************************************************************
  * Picture Decision Kernel
@@ -1782,6 +1796,9 @@ void* picture_decision_kernel(void *input_ptr)
     // Debug
     uint64_t                           loopCount = 0;
 
+    // Input picture
+    FILE *f_ref = NULL;
+
     for (;;) {
 
         // Get Input Full Object
@@ -1797,15 +1814,6 @@ void* picture_decision_kernel(void *input_ptr)
         picture_control_set_ptr->last_islice_picture_number = 0;
 #endif
         loopCount++;
-
-
-
-        // alt ref TEST ONLY: todo: use parameters
-        EbBool enable_alt_refs = picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs;
-        uint8_t altref_strength = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_strength;
-        uint8_t altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
-
-
 
         // Input Picture Analysis Results into the Picture Decision Reordering Queue
         // P.S. Since the prior Picture Analysis processes stage is multithreaded, inputs to the Picture Decision Process
@@ -2227,6 +2235,44 @@ void* picture_decision_kernel(void *input_ptr)
                             encode_context_ptr->terminating_sequence_flag_received = (picture_control_set_ptr->end_of_sequence_flag == EB_TRUE) ?
                                 EB_TRUE :
                                 encode_context_ptr->terminating_sequence_flag_received;
+
+
+                            // ----------------- mariana --------------------
+                            FILE *fid = NULL;
+                            int h;
+                            EbByte pic_point;
+                            char filename[20] = "temp_YUV";
+                            static char * picture_num;
+                            EbErrorType ret;
+                            EbPictureBufferDesc_t *input_picture_ptr;
+                            int bytes_written;
+
+                            if(picture_control_set_ptr->decode_order == 1){ // first P frame (ALTREF location)
+
+                                ret = init_temporal_filtering(picture_control_set_ptr);
+
+                                input_picture_ptr = picture_control_set_ptr->enhanced_picture_ptr; // source picture buffer
+
+                                // get the picture number
+                                picture_num = itoa(picture_control_set_ptr->picture_number,10);
+                                strcat(filename, picture_num);
+                                strcat(filename, ".yuv");
+
+                                // save current source picture to a YUV file
+                                if ((fid = fopen(filename, "wb")) == NULL) {
+                                    printf("Unable to open file %s to write.\n", "temp_picture.yuv");
+                                }else{
+                                    // the source picture saved in the enchanced_picture_ptr contains a border in x and y dimensions
+                                    pic_point = input_picture_ptr->buffer_y + (input_picture_ptr->origin_y*input_picture_ptr->stride_y) + input_picture_ptr->origin_x;
+                                    for (h = 0; h < input_picture_ptr->height; h++) {
+                                        fwrite(pic_point, 1, (size_t)input_picture_ptr->width, fid);
+                                        pic_point = pic_point + input_picture_ptr->stride_y;
+                                    }
+                                    fclose(fid);
+                                }
+
+                            }
+                            // ------------------------------------------------
 
                             encode_context_ptr->terminating_picture_number = (picture_control_set_ptr->end_of_sequence_flag == EB_TRUE) ?
                                 picture_control_set_ptr->picture_number :

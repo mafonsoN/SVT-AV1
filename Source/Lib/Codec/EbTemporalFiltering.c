@@ -17,12 +17,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-#include "EbDefinitions.h"
-#include "EbPictureControlSet.h"
+#include "EbTemporalFiltering.h"
 
 #define MAX_FRAMES_TO_FILTER 10
 #define EDGE_THRESHOLD 50 // from libaom
 #define SQRT_PI_BY_2 1.25331413732 // from libaom
+#define SMOOTH_THRESHOLD 16
 
 // This is an adaptation of the mehtod in the following paper:
 // Shen-Chuan Tai, Shih-Ming Yang, "A fast method for image noise
@@ -32,35 +32,37 @@
 // Return noise estimate, or -1.0 if there was a failure
 // function from libaom
 // Standard bit depht funcion (=8 bits) to estimate the noise, I don't think I need two functions for this. I can combine both
-static double estimate_noise(const uint8_t *src, int width, int height,
-                             int stride, int edge_thresh) {
+static double estimate_noise(EbByte src, uint16_t width, uint16_t height,
+                             uint16_t stride_y) {
     int64_t sum = 0;
     int64_t num = 0;
+
     for (int i = 1; i < height - 1; ++i) {
         for (int j = 1; j < width - 1; ++j) {
-            const int k = i * stride + j;
+            const int k = i * stride_y + j;
             // Sobel gradients
-            const int Gx = (src[k - stride - 1] - src[k - stride + 1]) +
-                           (src[k + stride - 1] - src[k + stride + 1]) +
+            const int Gx = (src[k - stride_y - 1] - src[k - stride_y + 1]) +
+                           (src[k + stride_y - 1] - src[k + stride_y + 1]) +
                            2 * (src[k - 1] - src[k + 1]);
-            const int Gy = (src[k - stride - 1] - src[k + stride - 1]) +
-                           (src[k - stride + 1] - src[k + stride + 1]) +
-                           2 * (src[k - stride] - src[k + stride]);
+            const int Gy = (src[k - stride_y - 1] - src[k + stride_y - 1]) +
+                           (src[k - stride_y + 1] - src[k + stride_y + 1]) +
+                           2 * (src[k - stride_y] - src[k + stride_y]);
             const int Ga = abs(Gx) + abs(Gy);
-            if (Ga < edge_thresh) {  // Smooth pixels
+            if (Ga < EDGE_THRESHOLD) {  // Only consider smooth pixels - do not consider edge pixels
                 // Find Laplacian
                 const int v =
                         4 * src[k] -
-                        2 * (src[k - 1] + src[k + 1] + src[k - stride] + src[k + stride]) +
-                        (src[k - stride - 1] + src[k - stride + 1] + src[k + stride - 1] +
-                         src[k + stride + 1]);
+                        2 * (src[k - 1] + src[k + 1] + src[k - stride_y] + src[k + stride_y]) +
+                        (src[k - stride_y - 1] + src[k - stride_y + 1] + src[k + stride_y - 1] +
+                         src[k + stride_y + 1]);
                 sum += abs(v);
                 ++num;
             }
         }
     }
     // If very few smooth pels, return -1 since the estimate is unreliable
-    if (num < 16) return -1.0;
+    if (num < SMOOTH_THRESHOLD)
+        return -1.0;
 
     const double sigma = (double)sum / (6 * num) * SQRT_PI_BY_2;
     return sigma;
@@ -104,18 +106,29 @@ static double highbd_estimate_noise(const uint8_t *src8, int width, int height,
 }
 
 // Apply buffer limits and context specific adjustments to arnr filter.
-static void adjust_filter_params(int* altref_strength, int* altref_nframes) {
+static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr, uint8_t *altref_strength, uint8_t *altref_nframes) {
 
-    int q = 30; // example - delete
-    int nframes = *altref_nframes;
-    int strength = *altref_strength, adj_strength=strength;
+    uint8_t q = 30; // example - delete
+    uint8_t nframes = *altref_nframes;
+    uint8_t strength = *altref_strength, adj_strength=strength;
     double noiselevel = 0;
+    EbByte src;
+
+    // adjust the starting point of buffer_y of the starting pixel values of the source picture
+    src = input_picture_ptr->buffer_y +
+            input_picture_ptr->origin_y*input_picture_ptr->stride_y +
+            input_picture_ptr->origin_x;
 
     // Adjust the strength based on the noise level
-    // noiselevel = estimate_noise(frame, width, height, stride, EDGE_THRESHOLD);
+    noiselevel = estimate_noise(src,
+            input_picture_ptr->width,
+            input_picture_ptr->height,
+            input_picture_ptr->stride_y);
 
     if (noiselevel > 0) {
-        // Get 4 integer adjustment levels in [-2, 1]
+        // Adjust the strength of the temporal filtering
+        // based on the amount of noise present in the frame
+        // adjustment in the integer range [-2, 1]
         int noiselevel_adj;
         if (noiselevel < 0.75)
             noiselevel_adj = -2;
@@ -152,15 +165,26 @@ static void adjust_filter_params(int* altref_strength, int* altref_nframes) {
     *altref_strength = adj_strength;
 }
 
-void init_temporal_filtering(int altref_strength, int altref_nframes, int distance) {
+EbErrorType init_temporal_filtering(PictureParentControlSet_t *picture_control_set_ptr) {
 
     int start_frame;
     int frame;
     int frames_to_blur_backward;
     int frames_to_blur_forward;
     EbPictureBufferDesc_t *frames[MAX_FRAMES_TO_FILTER] = { NULL };
+    EbBool enable_alt_refs;
+    uint8_t altref_strength, altref_nframes;
+    EbPictureBufferDesc_t *input_picture_ptr;
 
-    adjust_filter_params(&altref_strength, &altref_nframes);
+    int distance = 0;
+
+    input_picture_ptr = picture_control_set_ptr->enhanced_picture_ptr; // source picture buffer
+
+    enable_alt_refs = picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs;
+    altref_strength = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_strength;
+    altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
+
+    adjust_filter_params(input_picture_ptr, &altref_strength, &altref_nframes);
 
     //int which_arf = gf_group->arf_update_idx[gf_group->index];
 
@@ -168,12 +192,12 @@ void init_temporal_filtering(int altref_strength, int altref_nframes, int distan
     if (altref_strength == 0 && altref_nframes == 1){
         // temporal filtering is off
         // is showable frame
-        printf("Is an alt-ref filtered frame");
+        printf("It is not an alt-ref filtered frame");
     }
     else{
         // temporal filtering is on
         // is not showable frame
-        printf("Is not an alt-ref filtered frame");
+        printf("It is an alt-ref filtered frame");
     }
 
     // For even length filter there is one more frame backward
