@@ -2247,7 +2247,8 @@ void* picture_decision_kernel(void *input_ptr)
                             EbPictureBufferDesc_t *input_picture_ptr;
                             int bytes_written;
 
-                            if(picture_control_set_ptr->decode_order == 1){ // first P frame (ALTREF location)
+                            if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE
+                                && picture_control_set_ptr->decode_order == 1){ // Altrefs are enabled and this is the first P frame (ALTREF location)
 
                                 ret = init_temporal_filtering(picture_control_set_ptr);
 

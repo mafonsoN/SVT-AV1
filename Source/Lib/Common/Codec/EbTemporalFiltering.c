@@ -31,7 +31,8 @@
 // Signal Processing, 2008, St Julians, Malta.
 // Return noise estimate, or -1.0 if there was a failure
 // function from libaom
-// Standard bit depht funcion (=8 bits) to estimate the noise, I don't think I need two functions for this. I can combine both
+// Standard bit depht input (=8 bits) to estimate the noise, I don't think there needs to be two methods for this
+// Operates on the Y component only
 static double estimate_noise(EbByte src, uint16_t width, uint16_t height,
                              uint16_t stride_y) {
     int64_t sum = 0;
@@ -48,7 +49,7 @@ static double estimate_noise(EbByte src, uint16_t width, uint16_t height,
                            (src[k - stride_y + 1] - src[k + stride_y + 1]) +
                            2 * (src[k - stride_y] - src[k + stride_y]);
             const int Ga = abs(Gx) + abs(Gy);
-            if (Ga < EDGE_THRESHOLD) {  // Only consider smooth pixels - do not consider edge pixels
+            if (Ga < EDGE_THRESHOLD) {  // Do not consider edge pixels to estimate the noise
                 // Find Laplacian
                 const int v =
                         4 * src[k] -
@@ -65,6 +66,7 @@ static double estimate_noise(EbByte src, uint16_t width, uint16_t height,
         return -1.0;
 
     const double sigma = (double)sum / (6 * num) * SQRT_PI_BY_2;
+
     return sigma;
 }
 
@@ -106,13 +108,29 @@ static double highbd_estimate_noise(const uint8_t *src8, int width, int height,
 }
 
 // Apply buffer limits and context specific adjustments to arnr filter.
-static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr, uint8_t *altref_strength, uint8_t *altref_nframes) {
+static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
+                        uint64_t distance_to_key,
+                        uint8_t *altref_strength,
+                        uint8_t *altref_nframes) {
 
-    uint8_t q = 30; // example - delete
-    uint8_t nframes = *altref_nframes;
-    uint8_t strength = *altref_strength, adj_strength=strength;
-    double noiselevel = 0;
+    int q;
     EbByte src;
+    double noiselevel;
+    int nframes = *altref_nframes;
+    int strength = *altref_strength, adj_strength=strength;
+    int frames_fwd = (nframes - 1) >> 1;
+    int frames_bwd;
+
+    // TODO: Adjust the number of forward frames if the look ahead doesn't alow it
+    /*if (frames_fwd > frames_after_arf)
+        frames_fwd = frames_after_arf;*/
+
+    frames_bwd = frames_fwd;
+    // if forward frames is a even number, use one more bwd frame than forward frame
+    frames_bwd += (nframes + 1) & 0x1;
+
+    // Set the baseline active filter size.
+    nframes = frames_bwd + 1 + frames_fwd;
 
     // adjust the starting point of buffer_y of the starting pixel values of the source picture
     src = input_picture_ptr->buffer_y +
@@ -142,7 +160,13 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr, uint8
     }
     printf("[noise level: %g, strength = %d, adj_strength = %d]\n", noiselevel, strength, adj_strength);
 
-    // Adjust the strength based on active max q.
+    // TODO: does it make sense to use negative strength?
+    strength = adj_strength;
+
+    // TODO: libaom applies some more refinements to the number of filtered frames
+    // and the strength based on the quantization level and a stat called group_boost
+    // for now, this is ignored.
+    /* // Adjust the strength based on active max q.
     // (q = ) get Quantization parameter using some heuristics
     if (q > 16) {
         strength = adj_strength;
@@ -151,18 +175,17 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr, uint8
         if (strength < 0)
             strength = 0;
     }
-
     // Adjust number of frames in filter and strength based on gf boost level.
-//    if (frames > group_boost / 150) {
-//        frames = group_boost / 150;
-//        frames += !(frames & 1);
-//    }
-//    if (strength > group_boost / 300) {
-//        strength = group_boost / 300;
-//    }
+    if (nframes > group_boost / 150) {
+        nframes = group_boost / 150;
+        nframes += !(nframes & 1);
+    }
+    if (strength > group_boost / 300) {
+        strength = group_boost / 300;
+    }*/
 
-    *altref_nframes = nframes;
-    *altref_strength = adj_strength;
+    *altref_nframes = (uint8_t)nframes;
+    *altref_strength = (uint8_t)strength;
 }
 
 EbErrorType init_temporal_filtering(PictureParentControlSet_t *picture_control_set_ptr) {
@@ -176,15 +199,18 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t *picture_control_s
     uint8_t altref_strength, altref_nframes;
     EbPictureBufferDesc_t *input_picture_ptr;
 
-    int distance = 0;
+    // distance to key frame
+    uint64_t distance_to_key = picture_control_set_ptr->picture_number - picture_control_set_ptr->decode_order;
 
-    input_picture_ptr = picture_control_set_ptr->enhanced_picture_ptr; // source picture buffer
+    // source picture buffer
+    input_picture_ptr = picture_control_set_ptr->enhanced_picture_ptr;
 
-    enable_alt_refs = picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs;
+    // user-defined encoder parameters related to alt-refs
     altref_strength = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_strength;
     altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
 
-    adjust_filter_params(input_picture_ptr, &altref_strength, &altref_nframes);
+    // adjust filter parameter based on the estimated noise of the picture
+    adjust_filter_params(input_picture_ptr, distance_to_key, &altref_strength, &altref_nframes);
 
     //int which_arf = gf_group->arf_update_idx[gf_group->index];
 
@@ -205,7 +231,7 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t *picture_control_s
     frames_to_blur_backward = (altref_nframes / 2);
     frames_to_blur_forward = ((altref_nframes - 1) / 2);
 
-    start_frame = distance + frames_to_blur_forward;
+    start_frame = distance_to_key + frames_to_blur_forward;
 
     // Setup frame pointers, NULL indicates frame not included in filter.
     for (frame = 0; frame < altref_nframes; ++frame) {
