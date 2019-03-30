@@ -32,6 +32,11 @@
 #define TF_SUB_BLOCK BLOCK_16X16
 #define SUB_BH 16
 #define SUB_BW 16
+#define DEBUG 1
+
+static unsigned int index_mult[14] = {
+        0, 0, 0, 0, 49152, 39322, 32768, 28087, 24576, 21846, 19661, 17874, 0, 15124
+};
 
 static INLINE int get_filter_weight(unsigned int i,
                                     unsigned int j,
@@ -60,10 +65,197 @@ static INLINE int get_filter_weight(unsigned int i,
 
 }
 
+static INLINE int mod_index(int sum_dist,
+                            int index,
+                            int rounding,
+                            int strength,
+                            int filter_weight) {
+
+    assert(index >= 0 && index <= 13);
+    assert(index_mult[index] != 0);
+
+    int mod = (clamp(sum_dist, 0, UINT16_MAX) * index_mult[index]) >> 16;
+    mod += rounding;
+    mod >>= strength;
+
+    mod = AOMMIN(16, mod);
+
+    mod = 16 - mod;
+    mod *= filter_weight;
+
+    return mod;
+
+}
+
+static INLINE void calculate_squared_errors(const uint8_t *s,
+                                            int s_stride,
+                                            const uint8_t *p,
+                                            int p_stride,
+                                            uint16_t *diff_sse,
+                                            unsigned int w,
+                                            unsigned int h) {
+
+    int idx = 0;
+    unsigned int i, j;
+
+    for (i = 0; i < h; i++) {
+        for (j = 0; j < w; j++) {
+            const int16_t diff = s[i * s_stride + j] - p[i * p_stride + j];
+            diff_sse[idx] = diff * diff;
+            idx++;
+        }
+    }
+
+}
+
+
+void apply_filtering(const uint8_t *y_orig,
+                    int y_stride,
+                    const uint8_t *y_pred,
+                    int y_buf_stride,
+                    const uint8_t *u_orig,
+                    const uint8_t *v_orig,
+                    int uv_stride,
+                    const uint8_t *u_pred,
+                    const uint8_t *v_pred,
+                    int uv_buf_stride,
+                    unsigned int block_width,
+                    unsigned int block_height,
+                    int ss_x,
+                    int ss_y,
+                    int strength,
+                    const int *blk_fw,
+                    int use_32x32,
+                    uint32_t *y_accumulator,
+                    uint16_t *y_count,
+                    uint32_t *u_accumulator,
+                    uint16_t *u_count,
+                    uint32_t *v_accumulator,
+                    uint16_t *v_count) {
+
+    unsigned int i, j, k, m;
+    int modifier;
+    const int rounding = (1 << strength) >> 1;
+    const unsigned int uv_block_width = block_width >> ss_x;
+    const unsigned int uv_block_height = block_height >> ss_y;
+    DECLARE_ALIGNED(16, uint16_t, y_diff_sse[BLK_PELS]);
+    DECLARE_ALIGNED(16, uint16_t, u_diff_sse[BLK_PELS]);
+    DECLARE_ALIGNED(16, uint16_t, v_diff_sse[BLK_PELS]);
+
+    int idx = 0, idy;
+
+    memset(y_diff_sse, 0, BLK_PELS * sizeof(uint16_t));
+    memset(u_diff_sse, 0, BLK_PELS * sizeof(uint16_t));
+    memset(v_diff_sse, 0, BLK_PELS * sizeof(uint16_t));
+
+    // Calculate squared differences for each pixel of the block (pred-orig)
+    calculate_squared_errors(y_orig, y_stride, y_pred, y_buf_stride, y_diff_sse,
+                             block_width, block_height);
+    calculate_squared_errors(u_orig, uv_stride, u_pred, uv_buf_stride,
+                             u_diff_sse, uv_block_width, uv_block_height);
+    calculate_squared_errors(v_orig, uv_stride, v_pred, uv_buf_stride,
+                             v_diff_sse, uv_block_width, uv_block_height);
+
+    for (i = 0, k = 0, m = 0; i < block_height; i++) {
+        for (j = 0; j < block_width; j++) {
+            const int pixel_value = y_pred[i * y_buf_stride + j];
+            int filter_weight =
+                    get_filter_weight(i, j, block_height, block_width, blk_fw, use_32x32);
+
+            // non-local mean approach
+            int y_index = 0;
+
+            const int uv_r = i >> ss_y;
+            const int uv_c = j >> ss_x;
+            modifier = 0;
+
+            for (idy = -1; idy <= 1; ++idy) {
+                for (idx = -1; idx <= 1; ++idx) {
+                    const int row = (int)i + idy;
+                    const int col = (int)j + idx;
+
+                    if (row >= 0 && row < (int)block_height && col >= 0 &&
+                        col < (int)block_width) {
+                        modifier += y_diff_sse[row * (int)block_width + col];
+                        ++y_index;
+                    }
+                }
+            }
+
+            assert(y_index > 0);
+
+            modifier += u_diff_sse[uv_r * uv_block_width + uv_c];
+            modifier += v_diff_sse[uv_r * uv_block_width + uv_c];
+
+            y_index += 2;
+
+            modifier =
+                    (int)mod_index(modifier, y_index, rounding, strength, filter_weight);
+
+            y_count[k] += modifier;
+            y_accumulator[k] += modifier * pixel_value;
+
+            ++k;
+
+            // Process chroma component
+            if (!(i & ss_y) && !(j & ss_x)) {
+                const int u_pixel_value = u_pred[uv_r * uv_buf_stride + uv_c];
+                const int v_pixel_value = v_pred[uv_r * uv_buf_stride + uv_c];
+
+                // non-local mean approach
+                int cr_index = 0;
+                int u_mod = 0, v_mod = 0;
+                int y_diff = 0;
+
+                for (idy = -1; idy <= 1; ++idy) {
+                    for (idx = -1; idx <= 1; ++idx) {
+                        const int row = uv_r + idy;
+                        const int col = uv_c + idx;
+
+                        if (row >= 0 && row < (int)uv_block_height && col >= 0 &&
+                            col < (int)uv_block_width) {
+                            u_mod += u_diff_sse[row * uv_block_width + col];
+                            v_mod += v_diff_sse[row * uv_block_width + col];
+                            ++cr_index;
+                        }
+                    }
+                }
+
+                assert(cr_index > 0);
+
+                for (idy = 0; idy < 1 + ss_y; ++idy) {
+                    for (idx = 0; idx < 1 + ss_x; ++idx) {
+                        const int row = (uv_r << ss_y) + idy;
+                        const int col = (uv_c << ss_x) + idx;
+                        y_diff += y_diff_sse[row * (int)block_width + col];
+                        ++cr_index;
+                    }
+                }
+
+                u_mod += y_diff;
+                v_mod += y_diff;
+
+                u_mod =
+                        (int)mod_index(u_mod, cr_index, rounding, strength, filter_weight);
+                v_mod =
+                        (int)mod_index(v_mod, cr_index, rounding, strength, filter_weight);
+
+                u_count[m] += u_mod;
+                u_accumulator[m] += u_mod * u_pixel_value;
+                v_count[m] += v_mod;
+                v_accumulator[m] += v_mod * v_pixel_value;
+
+                ++m;
+            }
+        }
+    }
+}
+
+
 // Only used in single plane case
-void apply_filtering(uint8_t *frame1,
+void apply_filtering_single_plane(uint8_t *orig,
                     unsigned int stride,
-                    uint8_t *frame2,
+                    uint8_t *pred,
                     unsigned int block_width,
                     unsigned int block_height,
                     int strength,
@@ -79,7 +271,7 @@ void apply_filtering(uint8_t *frame1,
 
     for (i = 0, k = 0; i < block_height; i++) {
         for (j = 0; j < block_width; j++, k++) {
-            int pixel_value = *frame2;
+            int pixel_value = *pred;
             int filter_weight =
                     get_filter_weight(i, j, block_height, block_width, blk_fw, use_32x32);
 
@@ -94,8 +286,8 @@ void apply_filtering(uint8_t *frame1,
 
                     if (row >= 0 && row < (int)block_height && col >= 0 &&
                         col < (int)block_width) {
-                        int diff = frame1[byte + idy * (int)stride + idx] -
-                                   frame2[idy * (int)block_width + idx];
+                        int diff = orig[byte + idy * (int)stride + idx] -
+                                   pred[idy * (int)block_width + idx];
                         diff_sse[index] = diff * diff;
                         ++index;
                     }
@@ -110,7 +302,7 @@ void apply_filtering(uint8_t *frame1,
             modifier *= 3;
             modifier /= index;
 
-            ++frame2;
+            ++pred;
 
             modifier += rounding;
             modifier >>= strength;
@@ -131,26 +323,46 @@ void apply_filtering(uint8_t *frame1,
 }
 
 // buf_stride is the block size: 32 for Y and 16 for U and V
-static void apply_filtering_self(const uint8_t *pred,
-                                 int blk_luma_height,
-                                 int blk_luma_width,
-                                 int blk_chroma_height,
-                                 int blk_chroma_width,
-                                 uint32_t *accumulator,
-                                 uint16_t *count) {
+static void apply_filtering_central(const uint8_t *y_pred,
+                                    const uint8_t *u_pred,
+                                    const uint8_t *v_pred,
+                                    uint32_t *y_accumulator,
+                                    uint32_t *u_accumulator,
+                                    uint32_t *v_accumulator,
+                                    uint16_t *y_count,
+                                    uint16_t *u_count,
+                                    uint16_t *v_count,
+                                    int blk_height,
+                                    int blk_width) {
 
-    int filter_weight = 2;
+    unsigned int i, j, k;
+    int blk_height_y = blk_height;
+    int blk_width_y = blk_width;
+    int blk_height_ch= blk_height>>1; // only works for 420 now!
+    int blk_width_ch = blk_width>>1; // only works for 420 now!
+    int blk_stride_y = blk_width;
+    int blk_stride_ch = blk_width>>1; // only works for 420 now!
+
+    int filter_weight = 2; // TODO: defines with these constants
     const int modifier = filter_weight * 16; // TODO: defines with these constants
-    unsigned int i, j, k = 0;
-    int block_height = blk_luma_height;
-    int block_width = blk_luma_width;
-    int buf_stride = blk_luma_height;
 
-    for (i = 0; i < block_height; i++) {
-        for (j = 0; j < block_width; j++) {
-            const int pixel_value = pred[i * buf_stride + j];
-            count[k] += modifier;
-            accumulator[k] += modifier * pixel_value;
+    k = 0;
+    for (i = 0; i < blk_height_y; i++) {
+        for (j = 0; j < blk_width_y; j++) {
+            y_accumulator[k] += modifier * y_pred[i * blk_stride_y + j];
+            y_count[k] += modifier;
+            ++k;
+        }
+    }
+
+    k = 0;
+    for (i = 0; i < blk_height_ch; i++) {
+        for (j = 0; j < blk_width_ch; j++) {
+            u_accumulator[k] += modifier * u_pred[i * blk_stride_ch + j];
+            u_count[k] += modifier;
+
+            v_accumulator[k] += modifier * v_pred[i * blk_stride_ch + j];
+            v_count[k] += modifier;
             ++k;
         }
     }
@@ -172,17 +384,29 @@ static void produce_temporally_filtered_pic(EbPictureBufferDesc_t *input_picture
     int blk_row, blk_col;
     int blk_cols = (input_picture_ptr->width + BW - 1) / BW; // I think only the part of the picture
     int blk_rows = (input_picture_ptr->height + BH - 1) / BH; // that fits to the 32x32 blocks are actually filtered
-    EbByte src;
+    EbByte src_y, src_u, src_v;
     int stride_y = input_picture_ptr->stride_y;
+    int stride_ch = input_picture_ptr->strideCb;
+    int blk_width_ch = BW >> 1; // 420
+    int blk_height_ch = BW >> 1; // 420
+    int blk_y_offset = 0, blk_y_src_offset = 0, blk_ch_offset = 0, blk_ch_src_offset = 0;
 
     // index of the center frame
     index_center += (altref_nframes + 1) & 0x1;
 
     // first position of the buffer
-    src = input_picture_ptr->buffer_y +
+    src_y = input_picture_ptr->buffer_y +
           input_picture_ptr->origin_y*input_picture_ptr->stride_y +
           input_picture_ptr->origin_x;
-    
+
+    src_u = input_picture_ptr->bufferCb +
+            (input_picture_ptr->origin_y>>1)*input_picture_ptr->strideCb +
+            (input_picture_ptr->origin_x>>1);
+
+    src_v = input_picture_ptr->bufferCr +
+            (input_picture_ptr->origin_y>>1)*input_picture_ptr->strideCr +
+            (input_picture_ptr->origin_x>>1);
+
     // for each block
     for (blk_row = 0; blk_row < blk_rows; blk_row++) {
 
@@ -193,30 +417,68 @@ static void produce_temporally_filtered_pic(EbPictureBufferDesc_t *input_picture
             memset(count, 0, BLK_PELS * 3 * sizeof(count[0]));
 
             // for every frame to filter
-            for(frame_index=0; frame_index < (int)altref_nframes; frame_index++){
+            for (frame_index = 0; frame_index < (int) altref_nframes; frame_index++) {
 
                 // Step 1: motion compensation TODO: motion compensation
-                // Just for testing purposes - copy the original block (Y only now)
-                memcpy(predictor, src + blk_col * BH * stride_y + blk_row, BLK_PELS * sizeof(uint8_t));
+                // Just for testing purposes - copy the orignal block (Y only now)
+                memcpy(predictor, src_y + blk_col * BH * stride_y + blk_row, BLK_PELS * sizeof(uint8_t));
+                memcpy(predictor + BLK_PELS, src_u + blk_col * BH * stride_ch + blk_row, BLK_PELS * sizeof(uint8_t));
+                memcpy(predictor + (BLK_PELS << 1), src_v + blk_col * BH * stride_ch + blk_row, BLK_PELS * sizeof(uint8_t));
 
                 // Step 2: temporal filtering using the motion compensated blocks
 
                 // if frame to process is the center frame
                 if (frame_index == 0) { // delete
-                //if (frame_index == index_center) {
+                    //if (frame_index == index_center) {
 
-                    apply_filtering_self(predictor,
-                                         BH,
-                                         BW,
-                                         blk_chroma_height,
-                                         blk_chroma_width,
-                                         accumulator,
-                                         count);
+                    apply_filtering_central(predictor,
+                                            predictor + BLK_PELS,
+                                            predictor + (BLK_PELS << 1),
+                                            accumulator,
+                                            accumulator + BLK_PELS,
+                                            accumulator + (BLK_PELS << 1),
+                                            count,
+                                            count + BLK_PELS,
+                                            count + (BLK_PELS << 1),
+                                            BH,
+                                            BW);
+                }else{
 
+//                    apply_filtering(y_orig,
+//                                    y_stride,
+//                                    y_pred,
+//                                    y_buf_stride,
+//                                    u_orig,
+//                                    v_orig,
+//                                    uv_stride,
+//                                    u_pred,
+//                                    v_pred,
+//                                    uv_buf_stride,
+//                                    block_width,
+//                                    block_height,
+//                                    ss_x,
+//                                    ss_y,
+//                                    strength,
+//                                    blk_fw,
+//                                    use_32x32,
+//                                    y_accumulator,
+//                                    y_count,
+//                                    u_accumulator,
+//                                    u_count,
+//                                    v_accumulator,
+//                                    v_count)
                 }
-
             }
+            // this is how libaom was implementing the blocks indexes (I did differently in the memcpy above)
+            blk_y_offset += BW;
+            blk_y_src_offset += BW;
+            blk_ch_offset += blk_width_ch;
+            blk_ch_src_offset += blk_width_ch;
         }
+        blk_y_offset += BH * stride_y - BW * blk_cols;
+        blk_y_src_offset += BH * stride_y - BW * blk_cols;
+        blk_ch_offset += blk_height_ch * stride_ch - blk_width_ch * blk_cols;
+        blk_ch_src_offset += stride_ch - blk_width_ch * blk_cols;
     }
 
 }
@@ -263,6 +525,10 @@ static double estimate_noise(EbByte src, uint16_t width, uint16_t height,
         return -1.0;
 
     const double sigma = (double)sum / (6 * num) * SQRT_PI_BY_2;
+
+#if DEBUG
+    printf("Estimated noise level: %lf\n", sigma);
+#endif
 
     return sigma;
 }
@@ -344,6 +610,8 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
         // Adjust the strength of the temporal filtering
         // based on the amount of noise present in the frame
         // adjustment in the integer range [-2, 1]
+        // if noiselevel < 0, it means that the estimation was
+        // unsuccessful and therefore keep the strength as it was set
         int noiselevel_adj;
         if (noiselevel < 0.75)
             noiselevel_adj = -2;
@@ -355,9 +623,11 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
             noiselevel_adj = 1;
         adj_strength += noiselevel_adj;
     }
+#if DEBUG
     printf("[noise level: %g, strength = %d, adj_strength = %d]\n", noiselevel, strength, adj_strength);
+#endif
 
-    // TODO: does it make sense to use negative strength?
+    // TODO: does it make sense to use negative strength after it has been adjusted?
     strength = adj_strength;
 
     // TODO: libaom applies some more refinements to the number of filtered frames
@@ -415,12 +685,16 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t *picture_control_s
     if (altref_strength == 0 && altref_nframes == 1){
         // temporal filtering is off
         // is showable frame
+#if DEBUG
         printf("It is not an alt-ref filtered frame");
+#endif
     }
     else{
         // temporal filtering is on
         // is not showable frame
+#if DEBUG
         printf("It is an alt-ref filtered frame");
+#endif
     }
 
     // For even length filter there is one more frame backward

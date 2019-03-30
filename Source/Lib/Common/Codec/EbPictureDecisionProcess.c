@@ -2263,11 +2263,22 @@ void* picture_decision_kernel(void *input_ptr)
                                 if ((fid = fopen(filename, "wb")) == NULL) {
                                     printf("Unable to open file %s to write.\n", "temp_picture.yuv");
                                 }else{
+
                                     // the source picture saved in the enchanced_picture_ptr contains a border in x and y dimensions
                                     pic_point = input_picture_ptr->buffer_y + (input_picture_ptr->origin_y*input_picture_ptr->stride_y) + input_picture_ptr->origin_x;
                                     for (h = 0; h < input_picture_ptr->height; h++) {
                                         fwrite(pic_point, 1, (size_t)input_picture_ptr->width, fid);
                                         pic_point = pic_point + input_picture_ptr->stride_y;
+                                    }
+                                    pic_point = input_picture_ptr->bufferCb + ((input_picture_ptr->origin_y>>1)*input_picture_ptr->strideCb) + (input_picture_ptr->origin_x>>1);
+                                    for (h = 0; h < input_picture_ptr->height>>1; h++) {
+                                        fwrite(pic_point, 1, (size_t)input_picture_ptr->width>>1, fid);
+                                        pic_point = pic_point + input_picture_ptr->strideCb;
+                                    }
+                                    pic_point = input_picture_ptr->bufferCr + ((input_picture_ptr->origin_y>>1)*input_picture_ptr->strideCr) + (input_picture_ptr->origin_x>>1);
+                                    for (h = 0; h < input_picture_ptr->height>>1; h++) {
+                                        fwrite(pic_point, 1, (size_t)input_picture_ptr->width>>1, fid);
+                                        pic_point = pic_point + input_picture_ptr->strideCr;
                                     }
                                     fclose(fid);
                                 }
