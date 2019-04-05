@@ -34,6 +34,21 @@
 #define SUB_BW 16
 #define DEBUG 1
 
+#define OD_DIVU_DMAX (1024)
+#define OD_DIVU_SMALL(_x, _d)                                     \
+  ((uint32_t)((OD_DIVU_SMALL_CONSTS[(_d)-1][0] * (uint64_t)(_x) + \
+               OD_DIVU_SMALL_CONSTS[(_d)-1][1]) >>                \
+              32) >>                                              \
+   (OD_ILOG_NZ(_d) - 1))
+
+#define OD_DIVU(_x, _d) \
+  (((_d) < OD_DIVU_DMAX) ? (OD_DIVU_SMALL((_x), (_d))) : ((_x) / (_d)))
+
+
+static unsigned int index_mult[14] = {
+        0, 0, 0, 0, 49152, 39322, 32768, 28087, 24576, 21846, 19661, 17874, 0, 15124
+};
+
 void copy_block_and_remove_stride(EbByte dst, EbByte src, int width, int height, int stride ){
 
     int h;
@@ -43,6 +58,51 @@ void copy_block_and_remove_stride(EbByte dst, EbByte src, int width, int height,
         memcpy(dst_cpy, src_cpy, width * sizeof(uint8_t));
         dst_cpy += width;
         src_cpy += stride;
+    }
+
+}
+
+void print_block_uint32(uint32_t *src, int width, int height, int stride){
+
+    int i, j, k=0;
+
+    for(i=0; i<height; i++){
+        for(j=0; j<width; j++){
+            printf("%d ", src[k]);
+            k++;
+        }
+        printf("\n");
+        k += stride - width;
+    }
+
+}
+
+void print_block_uint16(uint16_t *src, int width, int height, int stride){
+
+    int i, j, k=0;
+
+    for(i=0; i<height; i++){
+        for(j=0; j<width; j++){
+            printf("%d ", src[k]);
+            k++;
+        }
+        printf("\n");
+        k += stride - width;
+    }
+
+}
+
+void print_block_uint8(EbByte src, int width, int height, int stride){
+
+    int i, j, k=0;
+
+    for(i=0; i<height; i++){
+        for(j=0; j<width; j++){
+            printf("%d ", src[k]);
+            k++;
+        }
+        printf("\n");
+        k += stride - width;
     }
 
 }
@@ -81,11 +141,18 @@ void save_YUV_to_file(char *filename, EbByte buffer_y, EbByte buffer_u, EbByte b
     }
 }
 
-static unsigned int index_mult[14] = {
-        0, 0, 0, 0, 49152, 39322, 32768, 28087, 24576, 21846, 19661, 17874, 0, 15124
-};
-
-static INLINE int get_filter_weight(unsigned int i,
+// Get sub-block filter weights using
+// blk_fw - block filter weight
+// -------------------------
+// |           |           |
+// | blk_fw[0] | blk_fw[1] |
+// |           |           |
+// |-----------|-----------|
+// |           |           |
+// | blk_fw[2] | blk_fw[3] |
+// |           |           |
+// --------------------------
+static INLINE int get_subblock_filter_weight(unsigned int i,
                                     unsigned int j,
                                     unsigned int block_height,
                                     unsigned int block_width,
@@ -164,10 +231,10 @@ void apply_filtering(EbByte *src,
                     int *stride_pred,
                     unsigned int block_width,
                     unsigned int block_height,
-                    int ss_x,
-                    int ss_y,
+                    int ss_x, // chroma sub-sampling in x
+                    int ss_y, // chroma sub-sampling in y
                     int strength,
-                    const int *blk_fw,
+                    const int *blk_fw, // sub-block filter weights
                     int use_32x32) {
 
     unsigned int i, j, k, m;
@@ -200,9 +267,10 @@ void apply_filtering(EbByte *src,
 
     for (i = 0, k = 0, m = 0; i < block_height; i++) {
         for (j = 0; j < block_width; j++) {
-            const int pixel_value = pred_y[i * stride_src[0] + j];
-            int filter_weight =
-                    get_filter_weight(i, j, block_height, block_width, blk_fw, use_32x32);
+
+            const int pixel_value = pred_y[i * stride_pred[0] + j];
+
+            int filter_weight = get_subblock_filter_weight(i, j, block_height, block_width, blk_fw, use_32x32);
 
             // non-local mean approach
             int y_index = 0;
@@ -231,8 +299,10 @@ void apply_filtering(EbByte *src,
 
             y_index += 2;
 
-            modifier =
-                    (int)mod_index(modifier, y_index, rounding, strength, filter_weight);
+            modifier = (int)mod_index(modifier, y_index, rounding, strength, filter_weight);
+
+            if(modifier == 0)
+                printf("modified = 0");
 
             count_y[k] += modifier;
             accum_y[k] += modifier * pixel_value;
@@ -293,74 +363,74 @@ void apply_filtering(EbByte *src,
 
 
 // Only used in single plane case
-void apply_filtering_single_plane(uint8_t *orig,
-                    unsigned int stride,
-                    uint8_t *pred,
-                    unsigned int block_width,
-                    unsigned int block_height,
-                    int strength,
-                    const int *blk_fw,
-                    int use_32x32,
-                    unsigned int *accumulator,
-                    uint16_t *count) {
-
-    unsigned int i, j, k;
-    int modifier;
-    int byte = 0;
-    const int rounding = strength > 0 ? 1 << (strength - 1) : 0;
-
-    for (i = 0, k = 0; i < block_height; i++) {
-        for (j = 0; j < block_width; j++, k++) {
-            int pixel_value = *pred;
-            int filter_weight =
-                    get_filter_weight(i, j, block_height, block_width, blk_fw, use_32x32);
-
-            // non-local mean approach
-            int diff_sse[9] = { 0 };
-            int idx, idy, index = 0;
-
-            for (idy = -1; idy <= 1; ++idy) {
-                for (idx = -1; idx <= 1; ++idx) {
-                    int row = (int)i + idy;
-                    int col = (int)j + idx;
-
-                    if (row >= 0 && row < (int)block_height && col >= 0 &&
-                        col < (int)block_width) {
-                        int diff = orig[byte + idy * (int)stride + idx] -
-                                   pred[idy * (int)block_width + idx];
-                        diff_sse[index] = diff * diff;
-                        ++index;
-                    }
-                }
-            }
-
-            assert(index > 0);
-
-            modifier = 0;
-            for (idx = 0; idx < 9; ++idx) modifier += diff_sse[idx];
-
-            modifier *= 3;
-            modifier /= index;
-
-            ++pred;
-
-            modifier += rounding;
-            modifier >>= strength;
-
-            if (modifier > 16) modifier = 16;
-
-            modifier = 16 - modifier;
-            modifier *= filter_weight;
-
-            count[k] += modifier;
-            accumulator[k] += modifier * pixel_value;
-
-            byte++;
-        }
-
-        byte += stride - block_width;
-    }
-}
+//void apply_filtering_single_plane(uint8_t *orig,
+//                    unsigned int stride,
+//                    uint8_t *pred,
+//                    unsigned int block_width,
+//                    unsigned int block_height,
+//                    int strength,
+//                    const int *blk_fw,
+//                    int use_32x32,
+//                    unsigned int *accumulator,
+//                    uint16_t *count) {
+//
+//    unsigned int i, j, k;
+//    int modifier;
+//    int byte = 0;
+//    const int rounding = strength > 0 ? 1 << (strength - 1) : 0;
+//
+//    for (i = 0, k = 0; i < block_height; i++) {
+//        for (j = 0; j < block_width; j++, k++) {
+//            int pixel_value = *pred;
+//            int filter_weight =
+//                    get_filter_weight(i, j, block_height, block_width, blk_fw, use_32x32);
+//
+//            // non-local mean approach
+//            int diff_sse[9] = { 0 };
+//            int idx, idy, index = 0;
+//
+//            for (idy = -1; idy <= 1; ++idy) {
+//                for (idx = -1; idx <= 1; ++idx) {
+//                    int row = (int)i + idy;
+//                    int col = (int)j + idx;
+//
+//                    if (row >= 0 && row < (int)block_height && col >= 0 &&
+//                        col < (int)block_width) {
+//                        int diff = orig[byte + idy * (int)stride + idx] -
+//                                   pred[idy * (int)block_width + idx];
+//                        diff_sse[index] = diff * diff;
+//                        ++index;
+//                    }
+//                }
+//            }
+//
+//            assert(index > 0);
+//
+//            modifier = 0;
+//            for (idx = 0; idx < 9; ++idx) modifier += diff_sse[idx];
+//
+//            modifier *= 3;
+//            modifier /= index;
+//
+//            ++pred;
+//
+//            modifier += rounding;
+//            modifier >>= strength;
+//
+//            if (modifier > 16) modifier = 16;
+//
+//            modifier = 16 - modifier;
+//            modifier *= filter_weight;
+//
+//            count[k] += modifier;
+//            accumulator[k] += modifier * pixel_value;
+//
+//            byte++;
+//        }
+//
+//        byte += stride - block_width;
+//    }
+//}
 
 // buf_stride is the block size: 32 for Y and 16 for U and V
 static void apply_filtering_central(EbByte *pred,
@@ -409,8 +479,22 @@ static void apply_filtering_central(EbByte *pred,
 
 }
 
+char* itoa2(int val, int base){
+
+    static char buf[32] = {0};
+
+    int i = 30;
+
+    for(; val && i ; --i, val /= base)
+
+        buf[i] = "0123456789abcdef"[val % base];
+
+    return &buf[i+1];
+
+}
+
 // Produce the filtered alt-ref picture
-static void produce_temporally_filtered_pic(EbPictureBufferDesc_t *input_picture_ptr,
+static void produce_temporally_filtered_pic(EbPictureBufferDesc_t **list_input_picture_ptr,
                                             uint8_t altref_strength,
                                             uint8_t altref_nframes) {
 
@@ -421,41 +505,50 @@ static void produce_temporally_filtered_pic(EbPictureBufferDesc_t *input_picture
     uint32_t *accum[3] = { accumulator, accumulator + BLK_PELS, accumulator + (BLK_PELS<<1) };
     uint16_t *count[3] = { counter, counter + BLK_PELS, counter + (BLK_PELS<<1) };
     EbByte pred[3] = { predictor, predictor + BLK_PELS, predictor + (BLK_PELS<<1) };
-    const int blk_chroma_height = BH >> 1; // TODO: implement for 420 now and extend it later
-    const int blk_chroma_width = BW >> 1;
-    int index_center = (altref_nframes - 1) >> 1;
+    int index_center;
     int blk_row, blk_col;
-    int blk_cols = (input_picture_ptr->width + BW - 1) / BW; // I think only the part of the picture
-    int blk_rows = (input_picture_ptr->height + BH - 1) / BH; // that fits to the 32x32 blocks are actually filtered
-    EbByte src[3];
-    int stride[3] = { input_picture_ptr->stride_y, input_picture_ptr->strideCb, input_picture_ptr->strideCr };
     int stride_pred[3] = {BW, BW>>1, BW>>1};
-    int blk_width_ch = BW >> 1; // 420
-    int blk_height_ch = BW >> 1; // 420
+    uint16_t blk_width_ch = BW >> 1; // 420 // TODO: implement for 420 now and extend it later
+    uint16_t blk_height_ch = BW >> 1; // 420
     int blk_y_offset = 0, blk_y_src_offset = 0, blk_ch_offset = 0, blk_ch_src_offset = 0;
+    EbByte src[3], src_altref_index[3];
+    int i, j, k;
+    EbPictureBufferDesc_t *input_picture_ptr_central;
 
     // index of the center frame
-    index_center += (altref_nframes + 1) & 0x1;
+    index_center = altref_nframes/2;
+
+    input_picture_ptr_central = list_input_picture_ptr[index_center];
+
+    int blk_cols = (input_picture_ptr_central->width + BW - 1) / BW; // I think only the part of the picture
+    int blk_rows = (input_picture_ptr_central->height + BH - 1) / BH; // that fits to the 32x32 blocks are actually filtered
+
+    int stride[3] = { input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr };
+
+    // allocate memory for the alt-ref buffer - to be replaced by some other final structure
+    EbByte alt_ref_buffer_y = (EbByte) malloc(input_picture_ptr_central->lumaSize * sizeof(uint8_t));
+    EbByte alt_ref_buffer_u = (EbByte) malloc(input_picture_ptr_central->chromaSize * sizeof(uint8_t));
+    EbByte alt_ref_buffer_v = (EbByte) malloc(input_picture_ptr_central->chromaSize * sizeof(uint8_t));
 
 #if DEBUG
-    save_YUV_to_file("input_frame.yuv", input_picture_ptr->buffer_y, input_picture_ptr->bufferCb, input_picture_ptr->bufferCr,
-                     input_picture_ptr->width, input_picture_ptr->height,
-                     input_picture_ptr->stride_y, input_picture_ptr->strideCb, input_picture_ptr->strideCr,
-                     input_picture_ptr->origin_y, input_picture_ptr->origin_x);
+    save_YUV_to_file("input_frame.yuv", input_picture_ptr_central->buffer_y, input_picture_ptr_central->bufferCb, input_picture_ptr_central->bufferCr,
+                     input_picture_ptr_central->width, input_picture_ptr_central->height,
+                     input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr,
+                     input_picture_ptr_central->origin_y, input_picture_ptr_central->origin_x);
 #endif
 
     // first position of the buffer
-    src[0] = input_picture_ptr->buffer_y +
-          input_picture_ptr->origin_y*input_picture_ptr->stride_y +
-          input_picture_ptr->origin_x;
+    src_altref_index[0] = list_input_picture_ptr[index_center]->buffer_y +
+             list_input_picture_ptr[index_center]->origin_y*list_input_picture_ptr[index_center]->stride_y +
+             list_input_picture_ptr[index_center]->origin_x;
 
-    src[1] = input_picture_ptr->bufferCb +
-            (input_picture_ptr->origin_y>>1)*input_picture_ptr->strideCb +
-            (input_picture_ptr->origin_x>>1);
+    src_altref_index[1] = list_input_picture_ptr[index_center]->bufferCb +
+             (list_input_picture_ptr[index_center]->origin_y>>1)*list_input_picture_ptr[index_center]->strideCb +
+             (list_input_picture_ptr[index_center]->origin_x>>1);
 
-    src[2] = input_picture_ptr->bufferCr +
-            (input_picture_ptr->origin_y>>1)*input_picture_ptr->strideCr +
-            (input_picture_ptr->origin_x>>1);
+    src_altref_index[2] = list_input_picture_ptr[index_center]->bufferCr +
+             (list_input_picture_ptr[index_center]->origin_y>>1)*list_input_picture_ptr[index_center]->strideCr +
+             (list_input_picture_ptr[index_center]->origin_x>>1);
 
     // for each block
     for (blk_row = 0; blk_row < blk_rows; blk_row++) {
@@ -466,25 +559,94 @@ static void produce_temporally_filtered_pic(EbPictureBufferDesc_t *input_picture
             memset(accumulator, 0, BLK_PELS * 3 * sizeof(accumulator[0]));
             memset(counter, 0, BLK_PELS * 3 * sizeof(counter[0]));
 
-            // for every frame to filter
-            for (frame_index = 0; frame_index < (int) altref_nframes; frame_index++) {
+            int blk_fw[4] = { 2, 2, 2, 2};
+            int use_32x32 = 0;
 
+            // for every frame to filter
+            for (frame_index = 0; frame_index < altref_nframes; frame_index++) {
+
+                // first position of the buffer
+                src[0] = list_input_picture_ptr[frame_index]->buffer_y +
+                        list_input_picture_ptr[frame_index]->origin_y*list_input_picture_ptr[frame_index]->stride_y +
+                        list_input_picture_ptr[frame_index]->origin_x;
+
+                src[1] = list_input_picture_ptr[frame_index]->bufferCb +
+                         (list_input_picture_ptr[frame_index]->origin_y>>1)*list_input_picture_ptr[frame_index]->strideCb +
+                         (list_input_picture_ptr[frame_index]->origin_x>>1);
+
+                src[2] = list_input_picture_ptr[frame_index]->bufferCr +
+                         (list_input_picture_ptr[frame_index]->origin_y>>1)*list_input_picture_ptr[frame_index]->strideCr +
+                         (list_input_picture_ptr[frame_index]->origin_x>>1);
+
+#if DEBUG
+                save_YUV_to_file("input_frame.yuv", src[0], src[1], src[2],
+                                 input_picture_ptr_central->width, input_picture_ptr_central->height,
+                                 input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr,
+                                 0, 0);
+#endif
+
+                src[0] = src[0] + blk_y_src_offset;
+                src[1] = src[1] + blk_ch_src_offset;
+                src[2] = src[2] + blk_ch_src_offset;
+
+                src_altref_index[0] = src_altref_index[0] + blk_y_src_offset;
+                src_altref_index[1] = src_altref_index[1] + blk_ch_src_offset;
+                src_altref_index[2] = src_altref_index[2] + blk_ch_src_offset;
+
+                // ------------
                 // Step 1: motion compensation TODO: motion compensation
-                // Just for testing purposes - the prediction is the original block
+                // ------------
+
+                // if frame to process is the center frame
+                if (frame_index == index_center) {
+
+                    // skip MC (central frame)
+
+                    blk_fw[0] = blk_fw[1] = blk_fw[2] = blk_fw[3] = 2;
+                    use_32x32 = 1;
+
+                }else{
+
+                    // apply MC
+
+                }
+
+                // Just for testing purposes until the MC block is available - the prediction is the original block
                 copy_block_and_remove_stride(pred[0], src[0], BW, BH, stride[0]);
                 copy_block_and_remove_stride(pred[1], src[1], BW>>1, BH>>1, stride[1]);
                 copy_block_and_remove_stride(pred[2], src[2], BW>>1, BH>>1, stride[2]);
 
 #if DEBUG
-                save_YUV_to_file("predictor.yuv", pred[0], pred[1], pred[2],
-                                    BW, BH, BW, BW>>1, BW>>1, 0, 0);
+
+                char filename1[30] = "pred_block_";
+                char block_number1[4];
+                char frame_index_str[4];
+                snprintf(block_number1, 4, "%d", blk_row*blk_cols + blk_col);
+                snprintf(frame_index_str, 4, "%d", frame_index);
+                strcat(filename1, block_number1);
+                strcat(filename1, "_");
+                strcat(filename1, frame_index_str);
+                strcat(filename1, ".yuv");
+                save_YUV_to_file(filename1, pred[0], pred[1], pred[2],
+                                    BW, BH,
+                                    BW, blk_width_ch, blk_height_ch,
+                                    0, 0);
+
+                printf("PRED\n");
+                printf("Y:\n");
+                print_block_uint8(pred[0], 32, 32, 32);
+                printf("U:\n");
+                print_block_uint8(pred[1], 16, 16, 16);
+                printf("V:\n");
+                print_block_uint8(pred[2], 16, 16, 16);
 #endif
 
+                // ------------
                 // Step 2: temporal filtering using the motion compensated blocks
+                // ------------
 
                 // if frame to process is the center frame
-                if (frame_index == 0) { // delete
-                    //if (frame_index == index_center) {
+                if (frame_index == index_center) {
 
                     apply_filtering_central(pred,
                                             accum,
@@ -492,16 +654,9 @@ static void produce_temporally_filtered_pic(EbPictureBufferDesc_t *input_picture
                                             BH,
                                             BW);
 
-                    save_YUV_to_file("predictor2.yuv", pred[0], pred[1], pred[2],
-                                     BW, BH, BW, BW>>1, BW>>1, 0, 0);
-
                 }else{
 
-                    // example
-                    int blk_fw[4] = { 2 };
-                    int use_32x32 = 0;
-
-                    apply_filtering(src,
+                    apply_filtering(src_altref_index,
                                     pred,
                                     accum,
                                     count,
@@ -512,10 +667,76 @@ static void produce_temporally_filtered_pic(EbPictureBufferDesc_t *input_picture
                                     1,
                                     1,
                                     altref_strength,
-                                    blk_fw,
-                                    use_32x32);
+                                    blk_fw, // depends on the error of the MC step
+                                    use_32x32); // depends on the error of the MC step
+
                 }
             }
+
+#if DEBUG
+            printf("ACCUM\n");
+            printf("Y:\n");
+            print_block_uint32(accum[0], 32, 32, 32);
+            printf("U:\n");
+            print_block_uint32(accum[1], 16, 16, 16);
+            printf("V:\n");
+            print_block_uint32(accum[2], 16, 16, 16);
+
+            printf("COUNT\n");
+            printf("Y:\n");
+            print_block_uint16(count[0], 32, 32, 32);
+            printf("U:\n");
+            print_block_uint16(count[1], 16, 16, 16);
+            printf("V:\n");
+            print_block_uint16(count[2], 16, 16, 16);
+#endif
+
+            // Normalize filter output to produce AltRef frame
+            // Process luma
+            int byte = blk_y_offset;
+            for (i = 0, k = 0; i < BH; i++) {
+                for (j = 0; j < BW; j++, k++) {
+
+//                    alt_ref_buffer_y[byte] = (uint8_t)OD_DIVU(accum[0][k] + (count[0][k] >> 1), count[0][k]);
+                    alt_ref_buffer_y[byte] = (accum[0][k] + (count[0][k] >> 1))/count[0][k];
+//                    printf("accum = %d, count = %d and dst = %d\n", accum[0][k], count[0][k], alt_ref_buffer_y[byte]);
+                    // move to next pixel
+                    byte++;
+                }
+                byte += stride[0] - BW;
+            }
+            // Process chroma
+            byte = blk_ch_offset;
+            for (i = 0, k = 0; i < blk_height_ch; i++) {
+                for (j = 0; j < blk_width_ch; j++, k++) {
+                    // U
+//                    alt_ref_buffer_u[byte] = (uint8_t)OD_DIVU(accum[1][k] + (count[1][k] >> 1), count[1][k]);
+                    alt_ref_buffer_u[byte] = (accum[1][k] + (count[1][k] >> 1))/count[1][k];
+                    // V
+//                    alt_ref_buffer_v[byte] = (uint8_t)OD_DIVU(accum[1][m] + (count[1][m] >> 1), count[1][m]);
+                    alt_ref_buffer_v[byte] = (accum[2][k] + (count[2][k] >> 1))/count[2][k];
+                    // move to next pixel
+                    byte++;
+                }
+                byte += stride[1] - (BW>>1);
+            }
+
+#if DEBUG
+            char filename[30] = "filtered_block_";
+            char block_number[4];
+            snprintf(block_number, 4, "%d", blk_row*blk_cols + blk_col);
+            strcat(filename, block_number);
+            strcat(filename, ".yuv");
+            save_YUV_to_file(filename, alt_ref_buffer_y+blk_y_offset, alt_ref_buffer_u+blk_ch_offset, alt_ref_buffer_v+blk_ch_offset,
+                             BW, BH,
+                             input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr,
+                             0, 0);
+
+            if(blk_row*blk_cols + blk_col == 60){
+                printf("block60");
+            }
+#endif
+
             // this is how libaom was implementing the blocks indexes (I did differently in the memcpy above)
             blk_y_offset += BW;
             blk_y_src_offset += BW;
@@ -525,8 +746,15 @@ static void produce_temporally_filtered_pic(EbPictureBufferDesc_t *input_picture
         blk_y_offset += BH * stride[0] - BW * blk_cols;
         blk_y_src_offset += BH * stride[0] - BW * blk_cols;
         blk_ch_offset += blk_height_ch * stride[1] - blk_width_ch * blk_cols;
-        blk_ch_src_offset += stride[1] - blk_width_ch * blk_cols;
+        blk_ch_src_offset += blk_height_ch * stride[1] - blk_width_ch * blk_cols;
     }
+
+#if DEBUG
+    save_YUV_to_file("filtered_frame.yuv", alt_ref_buffer_y, alt_ref_buffer_u, alt_ref_buffer_v,
+                     input_picture_ptr_central->width, input_picture_ptr_central->height,
+                     input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr,
+                     0, 0);
+#endif
 
 }
 
@@ -702,7 +930,7 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
     *altref_strength = (uint8_t)strength;
 }
 
-EbErrorType init_temporal_filtering(PictureParentControlSet_t *picture_control_set_ptr) {
+EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_control_set_ptr) {
 
     int start_frame;
     int frame;
@@ -712,16 +940,25 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t *picture_control_s
     EbBool enable_alt_refs;
     uint8_t altref_strength, altref_nframes;
     EbPictureBufferDesc_t *input_picture_ptr;
+    // second position assuming a size of 3 frames for testing purposes
+    PictureParentControlSet_t *picture_control_set_ptr_central = list_picture_control_set_ptr[1];
 
     // distance to key frame
-    uint64_t distance_to_key = picture_control_set_ptr->picture_number - picture_control_set_ptr->decode_order;
+    uint64_t distance_to_key = picture_control_set_ptr_central->picture_number - picture_control_set_ptr_central->decode_order;
 
-    // source picture buffer
-    input_picture_ptr = picture_control_set_ptr->enhanced_picture_ptr;
+    // source central frame picture buffer
+    input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
+
+    // populate source frames picture buffer list
+    // TODO: using fixed 3 frames just for testing
+    EbPictureBufferDesc_t *list_input_picture_ptr[3] = {NULL};
+    for(int i=0; i<3; i++){
+        list_input_picture_ptr[i] = list_picture_control_set_ptr[i]->enhanced_picture_ptr;
+    }
 
     // user-defined encoder parameters related to alt-refs
-    altref_strength = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_strength;
-    altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
+    altref_strength = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_strength;
+    altref_nframes = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_nframes;
 
     // adjust filter parameter based on the estimated noise of the picture
     adjust_filter_params(input_picture_ptr, distance_to_key, &altref_strength, &altref_nframes);
@@ -733,14 +970,14 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t *picture_control_s
         // temporal filtering is off
         // is showable frame
 #if DEBUG
-        printf("It is not an alt-ref filtered frame");
+        printf("It is not an alt-ref filtered frame\n");
 #endif
     }
     else{
         // temporal filtering is on
         // is not showable frame
 #if DEBUG
-        printf("It is an alt-ref filtered frame");
+        printf("It is an alt-ref filtered frame\n");
 #endif
     }
 
@@ -758,7 +995,7 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t *picture_control_s
         //frames[frames_to_blur - 1 - frame] = &buf->img;
     }
 
-    produce_temporally_filtered_pic(input_picture_ptr, altref_strength, altref_nframes);
+    produce_temporally_filtered_pic(list_input_picture_ptr, altref_strength, altref_nframes);
 
     // Initialize errorperbit, sadperbit16 and sadperbit4.
     // rdmult = av1_compute_rd_mult_based_on_qindex(cpi, ARNR_FILT_QINDEX);
@@ -770,8 +1007,4 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t *picture_control_s
     //temporal_filter_iterate_c(cpi, frames, frames_to_blur, frames_to_blur_backward, strength, &sf);
 
     return EB_ErrorNone;
-}
-
-void init_altRefs(){
-
 }

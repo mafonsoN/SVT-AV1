@@ -1796,8 +1796,11 @@ void* picture_decision_kernel(void *input_ptr)
     // Debug
     uint64_t                           loopCount = 0;
 
+    // ----- Alt-Refs
     // Input picture
     FILE *f_ref = NULL;
+    PictureParentControlSet_t *list_picture_control_set_ptr[3];
+    int count_alt_refs = 0;
 
     for (;;) {
 
@@ -2237,7 +2240,7 @@ void* picture_decision_kernel(void *input_ptr)
                                 encode_context_ptr->terminating_sequence_flag_received;
 
 
-                            // ----------------- mariana --------------------
+                            // ----------------- Alt-Refs --------------------
                             FILE *fid = NULL;
                             int h;
                             EbByte pic_point;
@@ -2248,9 +2251,16 @@ void* picture_decision_kernel(void *input_ptr)
                             int bytes_written;
 
                             if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE
-                                && picture_control_set_ptr->decode_order == 1){ // Altrefs are enabled and this is the first P frame (ALTREF location)
+                                && (picture_control_set_ptr->picture_number == 15 ||
+                                    picture_control_set_ptr->picture_number == 16 ||
+                                    picture_control_set_ptr->picture_number == 17 )){ // Altrefs are enabled and this is the first P frame (ALTREF location)
 
-                                ret = init_temporal_filtering(picture_control_set_ptr);
+                                list_picture_control_set_ptr[count_alt_refs] = picture_control_set_ptr;
+                                count_alt_refs++;
+
+                                if(picture_control_set_ptr->picture_number == 17){
+                                    ret = init_temporal_filtering(list_picture_control_set_ptr);
+                                }
 
                                 input_picture_ptr = picture_control_set_ptr->enhanced_picture_ptr; // source picture buffer
 
