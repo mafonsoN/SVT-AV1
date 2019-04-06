@@ -18,6 +18,7 @@
 #include <string.h>
 #include <assert.h>
 #include "EbTemporalFiltering.h"
+#include "EbComputeSAD.h"
 
 #define MAX_FRAMES_TO_FILTER 10
 #define EDGE_THRESHOLD 50
@@ -61,6 +62,7 @@ void copy_block_and_remove_stride(EbByte dst, EbByte src, int width, int height,
     }
 
 }
+
 
 void print_block_uint32(uint32_t *src, int width, int height, int stride){
 
@@ -237,7 +239,7 @@ void apply_filtering(EbByte *src,
                     const int *blk_fw, // sub-block filter weights
                     int use_32x32) {
 
-    unsigned int i, j, k, m;
+    unsigned int i, j, k, m, idx, idy;
     int modifier;
     const int rounding = (1 << strength) >> 1;
     const unsigned int uv_block_width = block_width >> ss_x;
@@ -245,8 +247,6 @@ void apply_filtering(EbByte *src,
     DECLARE_ALIGNED(16, uint16_t, y_diff_sse[BLK_PELS]);
     DECLARE_ALIGNED(16, uint16_t, u_diff_sse[BLK_PELS]);
     DECLARE_ALIGNED(16, uint16_t, v_diff_sse[BLK_PELS]);
-
-    int idx = 0, idy;
 
     memset(y_diff_sse, 0, BLK_PELS * sizeof(uint16_t));
     memset(u_diff_sse, 0, BLK_PELS * sizeof(uint16_t));
@@ -537,19 +537,6 @@ static void produce_temporally_filtered_pic(EbPictureBufferDesc_t **list_input_p
                      input_picture_ptr_central->origin_y, input_picture_ptr_central->origin_x);
 #endif
 
-    // first position of the buffer
-    src_altref_index[0] = list_input_picture_ptr[index_center]->buffer_y +
-             list_input_picture_ptr[index_center]->origin_y*list_input_picture_ptr[index_center]->stride_y +
-             list_input_picture_ptr[index_center]->origin_x;
-
-    src_altref_index[1] = list_input_picture_ptr[index_center]->bufferCb +
-             (list_input_picture_ptr[index_center]->origin_y>>1)*list_input_picture_ptr[index_center]->strideCb +
-             (list_input_picture_ptr[index_center]->origin_x>>1);
-
-    src_altref_index[2] = list_input_picture_ptr[index_center]->bufferCr +
-             (list_input_picture_ptr[index_center]->origin_y>>1)*list_input_picture_ptr[index_center]->strideCr +
-             (list_input_picture_ptr[index_center]->origin_x>>1);
-
     // for each block
     for (blk_row = 0; blk_row < blk_rows; blk_row++) {
 
@@ -565,7 +552,7 @@ static void produce_temporally_filtered_pic(EbPictureBufferDesc_t **list_input_p
             // for every frame to filter
             for (frame_index = 0; frame_index < altref_nframes; frame_index++) {
 
-                // first position of the buffer
+                // first position of the frame buffer according to frame index
                 src[0] = list_input_picture_ptr[frame_index]->buffer_y +
                         list_input_picture_ptr[frame_index]->origin_y*list_input_picture_ptr[frame_index]->stride_y +
                         list_input_picture_ptr[frame_index]->origin_x;
@@ -578,20 +565,47 @@ static void produce_temporally_filtered_pic(EbPictureBufferDesc_t **list_input_p
                          (list_input_picture_ptr[frame_index]->origin_y>>1)*list_input_picture_ptr[frame_index]->strideCr +
                          (list_input_picture_ptr[frame_index]->origin_x>>1);
 
+                // first position of the frame buffer according to the index center
+                src_altref_index[0] = list_input_picture_ptr[index_center]->buffer_y +
+                                      list_input_picture_ptr[index_center]->origin_y*list_input_picture_ptr[index_center]->stride_y +
+                                      list_input_picture_ptr[index_center]->origin_x;
+
+                src_altref_index[1] = list_input_picture_ptr[index_center]->bufferCb +
+                                      (list_input_picture_ptr[index_center]->origin_y>>1)*list_input_picture_ptr[index_center]->strideCb +
+                                      (list_input_picture_ptr[index_center]->origin_x>>1);
+
+                src_altref_index[2] = list_input_picture_ptr[index_center]->bufferCr +
+                                      (list_input_picture_ptr[index_center]->origin_y>>1)*list_input_picture_ptr[index_center]->strideCr +
+                                      (list_input_picture_ptr[index_center]->origin_x>>1);
+
 #if DEBUG
-                save_YUV_to_file("input_frame.yuv", src[0], src[1], src[2],
+                char filename2[30] = "input_frame_";
+                char frame_index_str1[4];
+                snprintf(frame_index_str1, 4, "%d", frame_index);
+                strcat(filename2, frame_index_str1);
+                strcat(filename2, ".yuv");
+                save_YUV_to_file(filename2, src[0], src[1], src[2],
                                  input_picture_ptr_central->width, input_picture_ptr_central->height,
                                  input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr,
                                  0, 0);
 #endif
 
-                src[0] = src[0] + blk_y_src_offset;
-                src[1] = src[1] + blk_ch_src_offset;
-                src[2] = src[2] + blk_ch_src_offset;
+//                src[0] = src[0] + blk_y_src_offset;
+//                src[1] = src[1] + blk_ch_src_offset;
+//                src[2] = src[2] + blk_ch_src_offset;
 
                 src_altref_index[0] = src_altref_index[0] + blk_y_src_offset;
                 src_altref_index[1] = src_altref_index[1] + blk_ch_src_offset;
                 src_altref_index[2] = src_altref_index[2] + blk_ch_src_offset;
+
+                // Move to the top left of the search region
+                int x_top_left_search_region = -4;
+                int y_top_left_search_region = -4;
+                int search_region_index_y = blk_y_src_offset + x_top_left_search_region + y_top_left_search_region * stride[0];
+                int search_region_index_ch = blk_ch_src_offset + (x_top_left_search_region>>1) + (y_top_left_search_region>>1) * stride[1];
+                uint64_t level2_best_sad;                  // output parameter, Level2 SAD at (searchRegionNumberInWidth, searchRegionNumberInHeight)
+                int16_t  x_Level2_search_center;           // output parameter, Level2 xMV at (searchRegionNumberInWidth, searchRegionNumberInHeight)
+                int16_t  y_Level2_search_center;
 
                 // ------------
                 // Step 1: motion compensation TODO: motion compensation
@@ -607,17 +621,35 @@ static void produce_temporally_filtered_pic(EbPictureBufferDesc_t **list_input_p
 
                 }else{
 
-                    // apply MC
+                    sad_loop_kernel(
+                            src_altref_index[0],
+                            (uint32_t)stride[0],
+                            src[0] + search_region_index_y,
+                            (uint32_t)stride[0],
+                            BW, BH,
+                            /* results */
+                            &level2_best_sad,
+                            &x_Level2_search_center,
+                            &y_Level2_search_center,
+                            /* range */
+                            (uint32_t)stride[0],
+                            8, // search area set to 8x8 just for testing
+                            8
+                    );
+
+                    printf("best SAD = %d, x search center = %d, y search center = %d\n", (int)level2_best_sad, x_Level2_search_center, y_Level2_search_center);
 
                 }
 
                 // Just for testing purposes until the MC block is available - the prediction is the original block
-                copy_block_and_remove_stride(pred[0], src[0], BW, BH, stride[0]);
-                copy_block_and_remove_stride(pred[1], src[1], BW>>1, BH>>1, stride[1]);
-                copy_block_and_remove_stride(pred[2], src[2], BW>>1, BH>>1, stride[2]);
+                int shift_y = search_region_index_y + y_Level2_search_center*stride[0] + x_Level2_search_center;
+                int shift_ch = search_region_index_ch + (y_Level2_search_center>>1)*stride[1] + (x_Level2_search_center>>1);
+
+                copy_block_and_remove_stride(pred[0], src[0] + shift_y, BW, BH, stride[0]);
+                copy_block_and_remove_stride(pred[1], src[1] + shift_ch, BW>>1, BH>>1, stride[1]);
+                copy_block_and_remove_stride(pred[2], src[2] + shift_ch, BW>>1, BH>>1, stride[2]);
 
 #if DEBUG
-
                 char filename1[30] = "pred_block_";
                 char block_number1[4];
                 char frame_index_str[4];
@@ -632,13 +664,13 @@ static void produce_temporally_filtered_pic(EbPictureBufferDesc_t **list_input_p
                                     BW, blk_width_ch, blk_height_ch,
                                     0, 0);
 
-                printf("PRED\n");
-                printf("Y:\n");
-                print_block_uint8(pred[0], 32, 32, 32);
-                printf("U:\n");
-                print_block_uint8(pred[1], 16, 16, 16);
-                printf("V:\n");
-                print_block_uint8(pred[2], 16, 16, 16);
+//                printf("PRED\n");
+//                printf("Y:\n");
+//                print_block_uint8(pred[0], 32, 32, 32);
+//                printf("U:\n");
+//                print_block_uint8(pred[1], 16, 16, 16);
+//                printf("V:\n");
+//                print_block_uint8(pred[2], 16, 16, 16);
 #endif
 
                 // ------------
@@ -674,21 +706,21 @@ static void produce_temporally_filtered_pic(EbPictureBufferDesc_t **list_input_p
             }
 
 #if DEBUG
-            printf("ACCUM\n");
-            printf("Y:\n");
-            print_block_uint32(accum[0], 32, 32, 32);
-            printf("U:\n");
-            print_block_uint32(accum[1], 16, 16, 16);
-            printf("V:\n");
-            print_block_uint32(accum[2], 16, 16, 16);
-
-            printf("COUNT\n");
-            printf("Y:\n");
-            print_block_uint16(count[0], 32, 32, 32);
-            printf("U:\n");
-            print_block_uint16(count[1], 16, 16, 16);
-            printf("V:\n");
-            print_block_uint16(count[2], 16, 16, 16);
+//            printf("ACCUM\n");
+//            printf("Y:\n");
+//            print_block_uint32(accum[0], 32, 32, 32);
+//            printf("U:\n");
+//            print_block_uint32(accum[1], 16, 16, 16);
+//            printf("V:\n");
+//            print_block_uint32(accum[2], 16, 16, 16);
+//
+//            printf("COUNT\n");
+//            printf("Y:\n");
+//            print_block_uint16(count[0], 32, 32, 32);
+//            printf("U:\n");
+//            print_block_uint16(count[1], 16, 16, 16);
+//            printf("V:\n");
+//            print_block_uint16(count[2], 16, 16, 16);
 #endif
 
             // Normalize filter output to produce AltRef frame
