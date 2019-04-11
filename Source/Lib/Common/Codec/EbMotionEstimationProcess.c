@@ -379,8 +379,6 @@ EbErrorType ComputeDecimatedZzSad(
 }
 
 
-
-
 /************************************************
  * Motion Analysis Kernel
  * The Motion Analysis performs  Motion Estimation
