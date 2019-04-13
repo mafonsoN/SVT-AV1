@@ -80,6 +80,31 @@ uint32_t stage1ModesArray[9] = { EB_INTRA_HORIZONTAL, EB_INTRA_VERTICAL, EB_INTR
 #define REFERENCE_PIC_LIST_0  0
 #define REFERENCE_PIC_LIST_1  1
 
+// delete when done debugging
+void save_Y_to_file2(char *filename, EbByte buffer_y,
+                     uint16_t width, uint16_t height,
+                     uint16_t stride_y,
+                     uint16_t origin_y, uint16_t origin_x){
+
+    FILE *fid = NULL;
+    EbByte pic_point;
+    int h;
+
+    // save current source picture to a YUV file
+    if ((fid = fopen(filename, "wb")) == NULL) {
+        printf("Unable to open file %s to write.\n", "temp_picture.yuv");
+    }else{
+
+        // the source picture saved in the enchanced_picture_ptr contains a border in x and y dimensions
+        pic_point = buffer_y + (origin_y*stride_y) + origin_x;
+        for (h = 0; h < height; h++) {
+            fwrite(pic_point, 1, (size_t)width, fid);
+            pic_point = pic_point + stride_y;
+        }
+        fclose(fid);
+    }
+}
+
 /*******************************************
 * Compute8x4SAD_Default
 *   Unoptimized 8x4 SAD
@@ -6639,6 +6664,9 @@ EbErrorType MotionEstimateLcu(
 #else
     numOfListToSearch = (picture_control_set_ptr->slice_type == P_SLICE) || (picture_control_set_ptr->temporal_layer_index == 0) ? (uint32_t)REF_LIST_0 : (uint32_t)REF_LIST_1;
 #endif
+    if(context_ptr->me_alt_ref == EB_TRUE){
+        numOfListToSearch = 0;
+    }
 
 #if NSQ_OPTIMASATION 
     EbBool is_nsq_table_used = (picture_control_set_ptr->pic_depth_mode <= PIC_ALL_C_DEPTH_MODE &&
@@ -6674,6 +6702,23 @@ EbErrorType MotionEstimateLcu(
             refPicPtr = (EbPictureBufferDesc_t*)referenceObject->inputPaddedPicturePtr;
             quarterRefPicPtr = (EbPictureBufferDesc_t*)referenceObject->quarterDecimatedPicturePtr;
             sixteenthRefPicPtr = (EbPictureBufferDesc_t*)referenceObject->sixteenthDecimatedPicturePtr;
+
+            if(context_ptr->me_alt_ref == EB_TRUE) {
+                // Alt-refs debug
+                save_Y_to_file2("ref_frame.yuv", refPicPtr->buffer_y, refPicPtr->stride_y,
+                               refPicPtr->height + 2 * refPicPtr->origin_x,
+                               refPicPtr->stride_y, 0, 0);
+
+                // Alt-refs debug - x1/2
+                save_Y_to_file2("ref_frame_quarter.yuv", quarterRefPicPtr->buffer_y, quarterRefPicPtr->stride_y,
+                               quarterRefPicPtr->height + 2 * quarterRefPicPtr->origin_x,
+                               quarterRefPicPtr->stride_y, 0, 0);
+
+                // Alt-refs debug - x1/4
+                save_Y_to_file2("ref_frame_sixteenth.yuv", sixteenthRefPicPtr->buffer_y, sixteenthRefPicPtr->stride_y,
+                               sixteenthRefPicPtr->height + 2 * sixteenthRefPicPtr->origin_x,
+                               sixteenthRefPicPtr->stride_y, 0, 0);
+            }
 
 #if BASE_LAYER_REF
             if (picture_control_set_ptr->temporal_layer_index > 0 || listIndex == 0 || ((ref0Poc != ref1Poc) && (listIndex == 1))) {
@@ -7139,7 +7184,6 @@ EbErrorType MotionEstimateLcu(
                         context_ptr->p_best_ssd16x64 = &(context_ptr->p_sb_best_ssd[listIndex][refPicIndex][ME_TIER_ZERO_PU_16x64_0]);
 #endif
 
-
                         open_loop_me_fullpel_search_sblock(
                             context_ptr,
                             listIndex,
@@ -7148,8 +7192,6 @@ EbErrorType MotionEstimateLcu(
                             search_area_width,
                             search_area_height,
                             asm_type);
-
-
 
                     }
                     else {
@@ -7210,6 +7252,12 @@ EbErrorType MotionEstimateLcu(
                         // Interpolate the search region for Half-Pel Refinements
                         // H - AVC Style
 
+                        int16_t x_mv_64x64 = _MVXT(context_ptr->p_best_mv64x64[0]);
+                        int16_t y_mv_64x64 = _MVYT(context_ptr->p_best_mv64x64[0]);
+
+                        int16_t x_mv_16x16_0 = _MVXT(context_ptr->p_best_mv16x16[0]);
+                        int16_t y_mv_16x16_0 = _MVYT(context_ptr->p_best_mv16x16[0]);
+
                         InterpolateSearchRegionAVC(
                             context_ptr,
                             listIndex,
@@ -7219,7 +7267,6 @@ EbErrorType MotionEstimateLcu(
                             (uint32_t)search_area_height + (BLOCK_SIZE_64 - 1),
                             8,
                             asm_type);
-
 
                         // Half-Pel Refinement [8 search positions]
                         HalfPelSearch_LCU(
@@ -7250,6 +7297,12 @@ EbErrorType MotionEstimateLcu(
                             enableHalfPel32x32,
                             enableHalfPel16x16,
                             enableHalfPel8x8);
+
+                        x_mv_64x64 = _MVXT(context_ptr->p_best_mv64x64[0]);
+                        y_mv_64x64 = _MVYT(context_ptr->p_best_mv64x64[0]);
+
+                        x_mv_16x16_0 = _MVXT(context_ptr->p_best_mv16x16[0]);
+                        y_mv_16x16_0 = _MVYT(context_ptr->p_best_mv16x16[0]);
 
 #if M0_ME_QUARTER_PEL_SEARCH
                         // Quarter-Pel Refinement [8 search positions]

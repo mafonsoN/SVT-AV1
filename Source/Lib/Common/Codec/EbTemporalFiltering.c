@@ -31,9 +31,9 @@
 #define SMOOTH_THRESHOLD 16
 // Block size used in temporal filtering
 #define TF_BLOCK BLOCK_32X32
-#define BH 32
-#define BW 32
-#define BLK_PELS 1024  // Pixels in the block
+#define BH 64
+#define BW 64
+#define BLK_PELS 4096  // Pixels in the block
 #define THR_SHIFT 2
 #define TF_SUB_BLOCK BLOCK_16X16
 #define SUB_BH 16
@@ -98,12 +98,6 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
 
     int lcuRow;
 
-    //set type to P frame
-    picture_control_set_ptr_central->slice_type = P_SLICE;
-
-    // Call ME context initializer
-    MeContextCtor(&(context_ptr->me_context_ptr));
-
     // Modify picture control set
     context_ptr->me_context_ptr->alt_ref_reference_ptr = (EbPaReferenceObject_t*)picture_control_set_ptr_frame->pa_reference_picture_wrapper_ptr->object_ptr;
     context_ptr->me_context_ptr->me_alt_ref = EB_TRUE;
@@ -141,8 +135,10 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
         EB_MEMCPY((&(context_ptr->me_context_ptr->sb_buffer[lcuRow * BLOCK_SIZE_64])), (&(input_picture_ptr_central->buffer_y[bufferIndex + lcuRow * input_picture_ptr_central->stride_y])), BLOCK_SIZE_64 * sizeof(uint8_t));
     }
 
-    printf("sb_buffer:\n");
-    print_block_uint8(context_ptr->me_context_ptr->sb_buffer, 64, 64, 64);
+#if DEBUG
+//    printf("sb_buffer:\n");
+//    print_block_uint8(context_ptr->me_context_ptr->sb_buffer, 64, 64, 64);
+#endif
 
     {
         // TODO: find out what this code does
@@ -157,8 +153,8 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
         }
     }
 
-    // TODO: find out what this pointer is
     context_ptr->me_context_ptr->sb_src_ptr = &(padded_pic_ptr->buffer_y[bufferIndex]);
+    context_ptr->me_context_ptr->sb_src_stride = padded_pic_ptr->stride_y;
 
     // Load the 1/4 decimated SB from the 1/4 decimated input to the 1/4 intermediate SB buffer
     bufferIndex = (quarter_pic_ptr->origin_y + (sb_origin_y >> 1)) * quarter_pic_ptr->stride_y + quarter_pic_ptr->origin_x + (sb_origin_x >> 1);
@@ -167,8 +163,10 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
         EB_MEMCPY((&(context_ptr->me_context_ptr->quarter_sb_buffer[lcuRow * context_ptr->me_context_ptr->quarter_sb_buffer_stride])), (&(quarter_pic_ptr->buffer_y[bufferIndex + lcuRow * quarter_pic_ptr->stride_y])), (sb_width >> 1) * sizeof(uint8_t));
     }
 
-    printf("quarter_sb_buffer:\n");
-    print_block_uint8(context_ptr->me_context_ptr->quarter_sb_buffer, 32, 32, 32);
+#if DEBUG
+//    printf("quarter_sb_buffer:\n");
+//    print_block_uint8(context_ptr->me_context_ptr->quarter_sb_buffer, 32, 32, 32);
+#endif
 
     // Load the 1/16 decimated SB from the 1/16 decimated input to the 1/16 intermediate SB buffer
     bufferIndex = (sixteenth_pic_ptr->origin_y + (sb_origin_y >> 2)) * sixteenth_pic_ptr->stride_y + sixteenth_pic_ptr->origin_x + (sb_origin_x >> 2);
@@ -184,8 +182,10 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
         }
     }
 
-    printf("sixteenth_sb_buffer:\n");
-    print_block_uint8(context_ptr->me_context_ptr->sixteenth_sb_buffer, 16, 16, 16);
+#if DEBUG
+//    printf("sixteenth_sb_buffer:\n");
+//    print_block_uint8(context_ptr->me_context_ptr->sixteenth_sb_buffer, 16, 16, 16);
+#endif
 
 }
 
@@ -405,10 +405,10 @@ void apply_filtering(EbByte *src,
 
             y_index += 2;
 
-            modifier = (int)mod_index(modifier, y_index, rounding, strength, filter_weight);
+            modifier = mod_index(modifier, y_index, rounding, strength, filter_weight);
 
-            if(modifier == 0)
-                printf("modified = 0");
+//            if(modifier == 0)
+//                printf("modified = 0");
 
             count_y[k] += modifier;
             accum_y[k] += modifier * pixel_value;
@@ -453,8 +453,8 @@ void apply_filtering(EbByte *src,
                 u_mod += y_diff;
                 v_mod += y_diff;
 
-                u_mod = (int)mod_index(u_mod, cr_index, rounding, strength, filter_weight);
-                v_mod = (int)mod_index(v_mod, cr_index, rounding, strength, filter_weight);
+                u_mod = mod_index(u_mod, cr_index, rounding, strength, filter_weight);
+                v_mod = mod_index(v_mod, cr_index, rounding, strength, filter_weight);
 
                 count_u[m] += u_mod;
                 accum_u[m] += u_mod * u_pixel_value;
@@ -466,77 +466,6 @@ void apply_filtering(EbByte *src,
         }
     }
 }
-
-
-// Only used in single plane case
-//void apply_filtering_single_plane(uint8_t *orig,
-//                    unsigned int stride,
-//                    uint8_t *pred,
-//                    unsigned int block_width,
-//                    unsigned int block_height,
-//                    int strength,
-//                    const int *blk_fw,
-//                    int use_32x32,
-//                    unsigned int *accumulator,
-//                    uint16_t *count) {
-//
-//    unsigned int i, j, k;
-//    int modifier;
-//    int byte = 0;
-//    const int rounding = strength > 0 ? 1 << (strength - 1) : 0;
-//
-//    for (i = 0, k = 0; i < block_height; i++) {
-//        for (j = 0; j < block_width; j++, k++) {
-//            int pixel_value = *pred;
-//            int filter_weight =
-//                    get_filter_weight(i, j, block_height, block_width, blk_fw, use_32x32);
-//
-//            // non-local mean approach
-//            int diff_sse[9] = { 0 };
-//            int idx, idy, index = 0;
-//
-//            for (idy = -1; idy <= 1; ++idy) {
-//                for (idx = -1; idx <= 1; ++idx) {
-//                    int row = (int)i + idy;
-//                    int col = (int)j + idx;
-//
-//                    if (row >= 0 && row < (int)block_height && col >= 0 &&
-//                        col < (int)block_width) {
-//                        int diff = orig[byte + idy * (int)stride + idx] -
-//                                   pred[idy * (int)block_width + idx];
-//                        diff_sse[index] = diff * diff;
-//                        ++index;
-//                    }
-//                }
-//            }
-//
-//            assert(index > 0);
-//
-//            modifier = 0;
-//            for (idx = 0; idx < 9; ++idx) modifier += diff_sse[idx];
-//
-//            modifier *= 3;
-//            modifier /= index;
-//
-//            ++pred;
-//
-//            modifier += rounding;
-//            modifier >>= strength;
-//
-//            if (modifier > 16) modifier = 16;
-//
-//            modifier = 16 - modifier;
-//            modifier *= filter_weight;
-//
-//            count[k] += modifier;
-//            accumulator[k] += modifier * pixel_value;
-//
-//            byte++;
-//        }
-//
-//        byte += stride - block_width;
-//    }
-//}
 
 // buf_stride is the block size: 32 for Y and 16 for U and V
 static void apply_filtering_central(EbByte *pred,
@@ -626,6 +555,14 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
     EbByte alt_ref_buffer_u = (EbByte) malloc(input_picture_ptr_central->chromaSize * sizeof(uint8_t));
     EbByte alt_ref_buffer_v = (EbByte) malloc(input_picture_ptr_central->chromaSize * sizeof(uint8_t));
 
+#if VANILA_ME==0
+    MotionEstimationContext_t *me_context_ptr;
+    // Call ME context initializer
+    me_context_ptr = (MotionEstimationContext_t*)malloc(sizeof(MotionEstimationContext_t));
+    MeContextCtor(&(me_context_ptr->me_context_ptr));
+    MeContext_t *context_ptr = me_context_ptr->me_context_ptr;
+#endif
+
 #if DEBUG
 
     save_YUV_to_file("input_frame.yuv", input_picture_ptr_central->buffer_y, input_picture_ptr_central->bufferCb, input_picture_ptr_central->bufferCr,
@@ -701,12 +638,13 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
 
                 int16_t  x_Level2_search_center;           // output parameter, Level2 xMV at (searchRegionNumberInWidth, searchRegionNumberInHeight)
                 int16_t  y_Level2_search_center;
+                x_Level2_search_center = 4;
+                y_Level2_search_center = 4;
                 int x_top_left_search_region = -4;
                 int y_top_left_search_region = -4;
                 int search_region_index_y = blk_y_src_offset + x_top_left_search_region + y_top_left_search_region * stride[0];
                 int search_region_index_ch = blk_ch_src_offset + (x_top_left_search_region>>1) + (y_top_left_search_region>>1) * stride[1];
                 uint64_t level2_best_sad;                  // output parameter, Level2 SAD at (searchRegionNumberInWidth, searchRegionNumberInHeight)
-                MotionEstimationContext_t *context_ptr;
 
                 // if frame to process is the center frame
                 if (frame_index == index_center) {
@@ -722,8 +660,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                 }else{
 
 #if VANILA_ME
-                    // Move to the top left of the search region
-
+                    // Move to the top left of the search region and search within a 8x8 region
                     sad_loop_kernel(
                             src_altref_index[0],
                             (uint32_t)stride[0],
@@ -740,10 +677,11 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                             8
                     );
 
-                    printf("best SAD = %d, x search center = %d, y search center = %d\n", (int)level2_best_sad, x_Level2_search_center, y_Level2_search_center);
+                    printf("block #%d, best SAD = %d, x search center = %d, y search center = %d\n", blk_row*blk_cols + blk_col, (int)level2_best_sad, x_Level2_search_center, y_Level2_search_center);
+
 #else
-                    EB_MALLOC(MotionEstimationContext_t*, context_ptr, sizeof(MotionEstimationContext_t), EB_N_PTR);
-                    create_ME_context_and_picture_control(context_ptr,
+
+                    create_ME_context_and_picture_control(me_context_ptr,
                                                             list_picture_control_set_ptr[frame_index],
                                                             list_picture_control_set_ptr[index_center],
                                                             input_picture_ptr_central,
@@ -751,17 +689,16 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                                                             blk_col,
                                                             blk_cols);
 
+#if DEBUG
                     EbPaReferenceObject_t  *referenceObject;  // input parameter, reference Object Ptr
                     EbPictureBufferDesc_t  *refPicPtr;
                     EbPictureBufferDesc_t  *quarterRefPicPtr;
                     EbPictureBufferDesc_t  *sixteenthRefPicPtr;
 
-//                    referenceObject = (EbPaReferenceObject_t*)picture_control_set_ptr_central->pa_reference_picture_wrapper_ptr->object_ptr;
-//                    referenceObject = (EbPaReferenceObject_t*)picture_control_set_ptr_central->alt_ref_reference_ptr;
-                    referenceObject = context_ptr->me_context_ptr->alt_ref_reference_ptr;
-                    refPicPtr = (EbPictureBufferDesc_t*)referenceObject->inputPaddedPicturePtr;
-                    quarterRefPicPtr = (EbPictureBufferDesc_t*)referenceObject->quarterDecimatedPicturePtr;
-                    sixteenthRefPicPtr = (EbPictureBufferDesc_t*)referenceObject->sixteenthDecimatedPicturePtr;
+                    referenceObject = context_ptr->alt_ref_reference_ptr;
+                    refPicPtr = referenceObject->inputPaddedPicturePtr;
+                    quarterRefPicPtr = referenceObject->quarterDecimatedPicturePtr;
+                    sixteenthRefPicPtr = referenceObject->sixteenthDecimatedPicturePtr;
 
                     // Alt-refs debug
                     save_Y_to_file("ref_frame.yuv", refPicPtr->buffer_y, refPicPtr->stride_y, refPicPtr->height + 2*refPicPtr->origin_x,
@@ -774,15 +711,72 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                     // Alt-refs debug - x1/4
                     save_Y_to_file("ref_frame_sixteenth.yuv", sixteenthRefPicPtr->buffer_y, sixteenthRefPicPtr->stride_y, sixteenthRefPicPtr->height + 2*sixteenthRefPicPtr->origin_x,
                                    sixteenthRefPicPtr->stride_y, 0, 0);
+#endif
+                    if(blk_col==2 && blk_row==1){
+                        printf("here\n");
+                    }
 
                     MotionEstimateLcu(
                             picture_control_set_ptr_central, // source picture control set -> references come from here
                             (uint32_t)blk_row*blk_cols + blk_col,
                             (uint32_t)blk_col*64, // x block
                             (uint32_t)blk_row*64, // y block
-                            context_ptr->me_context_ptr,
+                            context_ptr,
                             list_input_picture_ptr[index_center] // source picture
                             );
+
+                    int16_t x_mv_64x64 = _MVXT(context_ptr->p_best_mv64x64[0]);
+                    int16_t y_mv_64x64 = _MVYT(context_ptr->p_best_mv64x64[0]);
+
+                    int16_t x_mv_16x16_0 = _MVXT(context_ptr->p_best_mv16x16[0]);
+                    int16_t y_mv_16x16_0 = _MVYT(context_ptr->p_best_mv16x16[0]);
+
+                    int16_t x_mv_16x16_1 = _MVXT(context_ptr->p_best_mv16x16[1]);
+                    int16_t y_mv_16x16_1 = _MVYT(context_ptr->p_best_mv16x16[1]);
+
+                    int16_t x_mv_16x16_2 = _MVXT(context_ptr->p_best_mv16x16[2]);
+                    int16_t y_mv_16x16_2 = _MVYT(context_ptr->p_best_mv16x16[2]);
+
+                    int16_t x_mv_16x16_3 = _MVXT(context_ptr->p_best_mv16x16[3]);
+                    int16_t y_mv_16x16_3 = _MVYT(context_ptr->p_best_mv16x16[3]);
+
+//                    int16_t x_mv = x_mv_64x64;
+//                    int16_t y_mv = y_mv_64x64;
+//
+//                    uint8_t  *buf1[8];
+//                    uint8_t  *buf2[8];
+//
+//                    uint32_t  buf1Stride[8];
+//                    uint32_t  buf2Stride[8];
+//
+//                    SetQuarterPelRefinementInputsOnTheFly(
+//                            context_ptr->integer_buffer_ptr[0][0] + (ME_FILTER_TAP >> 1) + ((ME_FILTER_TAP >> 1) * context_ptr->interpolated_full_stride[0][0]),
+//                            context_ptr->interpolated_full_stride[0][0],
+//                            context_ptr->pos_b_buffer,
+//                            context_ptr->pos_h_buffer,
+//                            context_ptr->pos_j_buffer,
+//                            context_ptr->interpolated_stride,
+//                            x_mv,
+//                            y_mv,
+//                            buf1, buf1Stride,
+//                            buf2, buf2Stride);
+//
+//                    PU_QuarterPelRefinementOnTheFly(
+//                            context_ptr,
+//                            context_ptr->p_best_ssd64x64,
+//                            0,
+//                            buf1, buf1Stride,
+//                            buf2, buf2Stride,
+//                            32, 32,
+//                            x_search_area_origin,
+//                            y_search_area_origin,
+//                            asm_type,
+//                            context_ptr->p_best_sad64x64,
+//                            context_ptr->p_best_mv64x64,
+//                            context_ptr->psub_pel_direction64x64);
+
+                    free(context_ptr);
+
 #endif
                 }
 
@@ -808,6 +802,16 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                                     BW, BH,
                                     BW, blk_width_ch, blk_height_ch,
                                     0, 0);
+
+                char filename3[30] = "input_block_";
+                strcat(filename3, block_number1);
+                strcat(filename3, "_");
+                strcat(filename3, frame_index_str);
+                strcat(filename3, ".yuv");
+                save_YUV_to_file(filename3, src[0] + blk_y_src_offset, src[1] + blk_ch_src_offset, src[2] + blk_ch_src_offset,
+                                 BW, BH,
+                                 stride[0], stride[1], stride[1],
+                                 0, 0);
 
 //                printf("PRED\n");
 //                printf("Y:\n");
@@ -932,6 +936,10 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                      input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr,
                      0, 0);
 #endif
+
+    free(alt_ref_buffer_y);
+    free(alt_ref_buffer_u);
+    free(alt_ref_buffer_v);
 
     return EB_ErrorNone;
 }

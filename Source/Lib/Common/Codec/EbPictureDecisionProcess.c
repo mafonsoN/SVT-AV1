@@ -2248,7 +2248,6 @@ void* picture_decision_kernel(void *input_ptr)
                             static char * picture_num;
                             EbErrorType ret;
                             EbPictureBufferDesc_t *input_picture_ptr;
-                            int bytes_written;
 
                             if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE
                                 && (picture_control_set_ptr->picture_number == 15 ||
