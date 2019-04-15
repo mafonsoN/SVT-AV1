@@ -22,4 +22,4 @@
 #include "EbDefinitions.h"
 #include "EbBitstreamUnit.h"
 
-EbErrorType init_temporal_filtering(PictureParentControlSet_t **picture_control_set_ptr);
+EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_control_set_ptr);

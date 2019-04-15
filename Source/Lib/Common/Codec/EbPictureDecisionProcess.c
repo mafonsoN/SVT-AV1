@@ -1796,11 +1796,11 @@ void* picture_decision_kernel(void *input_ptr)
     // Debug
     uint64_t                           loopCount = 0;
 
-    // ----- Alt-Refs
-    // Input picture
-    FILE *f_ref = NULL;
+    // ----- Alt-Refs variables
+    // TODO: nframes is set to 3 for testing purposes - replace 3 by altref_nframes -> allocated dynamically
     PictureParentControlSet_t *list_picture_control_set_ptr[3];
     int count_alt_refs = 0;
+    // -----
 
     for (;;) {
 
@@ -2241,14 +2241,10 @@ void* picture_decision_kernel(void *input_ptr)
 
 
                             // ----------------- Alt-Refs --------------------
-                            FILE *fid = NULL;
-                            int h;
-                            EbByte pic_point;
-                            char filename[20] = "temp_YUV";
-                            static char * picture_num;
-                            EbErrorType ret;
-                            EbPictureBufferDesc_t *input_picture_ptr;
 
+                            EbErrorType ret;
+
+                            // TODO: testing purposes only - stategy to define which frames are alt-refs will be placed here
                             if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE
                                 && (picture_control_set_ptr->picture_number == 15 ||
                                     picture_control_set_ptr->picture_number == 16 ||
@@ -2259,37 +2255,6 @@ void* picture_decision_kernel(void *input_ptr)
 
                                 if(picture_control_set_ptr->picture_number == 17){
                                     ret = init_temporal_filtering(list_picture_control_set_ptr);
-                                }
-
-                                input_picture_ptr = picture_control_set_ptr->enhanced_picture_ptr; // source picture buffer
-
-                                // get the picture number
-                                picture_num = itoa(picture_control_set_ptr->picture_number,10);
-                                strcat(filename, picture_num);
-                                strcat(filename, ".yuv");
-
-                                // save current source picture to a YUV file
-                                if ((fid = fopen(filename, "wb")) == NULL) {
-                                    printf("Unable to open file %s to write.\n", "temp_picture.yuv");
-                                }else{
-
-                                    // the source picture saved in the enchanced_picture_ptr contains a border in x and y dimensions
-                                    pic_point = input_picture_ptr->buffer_y + (input_picture_ptr->origin_y*input_picture_ptr->stride_y) + input_picture_ptr->origin_x;
-                                    for (h = 0; h < input_picture_ptr->height; h++) {
-                                        fwrite(pic_point, 1, (size_t)input_picture_ptr->width, fid);
-                                        pic_point = pic_point + input_picture_ptr->stride_y;
-                                    }
-                                    pic_point = input_picture_ptr->bufferCb + ((input_picture_ptr->origin_y>>1)*input_picture_ptr->strideCb) + (input_picture_ptr->origin_x>>1);
-                                    for (h = 0; h < input_picture_ptr->height>>1; h++) {
-                                        fwrite(pic_point, 1, (size_t)input_picture_ptr->width>>1, fid);
-                                        pic_point = pic_point + input_picture_ptr->strideCb;
-                                    }
-                                    pic_point = input_picture_ptr->bufferCr + ((input_picture_ptr->origin_y>>1)*input_picture_ptr->strideCr) + (input_picture_ptr->origin_x>>1);
-                                    for (h = 0; h < input_picture_ptr->height>>1; h++) {
-                                        fwrite(pic_point, 1, (size_t)input_picture_ptr->width>>1, fid);
-                                        pic_point = pic_point + input_picture_ptr->strideCr;
-                                    }
-                                    fclose(fid);
                                 }
 
                             }

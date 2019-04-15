@@ -30,21 +30,15 @@
 #define SQRT_PI_BY_2 1.25331413732
 #define SMOOTH_THRESHOLD 16
 // Block size used in temporal filtering
-#define TF_BLOCK BLOCK_32X32
 #define BH 64
 #define BW 64
 #define BLK_PELS 4096  // Pixels in the block
-#define THR_SHIFT 2
-#define TF_SUB_BLOCK BLOCK_16X16
-#define SUB_BH 16
-#define SUB_BW 16
 
 // Debug-specific defines
 #define DEBUG 1
 #define VANILA_ME 0
 
 #define _MM_HINT_T2  1
-
 #define OD_DIVU_DMAX (1024)
 #define OD_DIVU_SMALL(_x, _d)                                     \
   ((uint32_t)((OD_DIVU_SMALL_CONSTS[(_d)-1][0] * (uint64_t)(_x) + \
@@ -136,8 +130,10 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
     }
 
 #if DEBUG
+#if 0
 //    printf("sb_buffer:\n");
 //    print_block_uint8(context_ptr->me_context_ptr->sb_buffer, 64, 64, 64);
+#endif
 #endif
 
     {
@@ -164,8 +160,10 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
     }
 
 #if DEBUG
+#if 0
 //    printf("quarter_sb_buffer:\n");
 //    print_block_uint8(context_ptr->me_context_ptr->quarter_sb_buffer, 32, 32, 32);
+#endif
 #endif
 
     // Load the 1/16 decimated SB from the 1/16 decimated input to the 1/16 intermediate SB buffer
@@ -183,8 +181,10 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
     }
 
 #if DEBUG
+#if 0
 //    printf("sixteenth_sb_buffer:\n");
 //    print_block_uint8(context_ptr->me_context_ptr->sixteenth_sb_buffer, 16, 16, 16);
+#endif
 #endif
 
 }
@@ -407,9 +407,6 @@ void apply_filtering(EbByte *src,
 
             modifier = mod_index(modifier, y_index, rounding, strength, filter_weight);
 
-//            if(modifier == 0)
-//                printf("modified = 0");
-
             count_y[k] += modifier;
             accum_y[k] += modifier * pixel_value;
 
@@ -624,16 +621,12 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                                  0, 0);
 #endif
 
-//                src[0] = src[0] + blk_y_src_offset;
-//                src[1] = src[1] + blk_ch_src_offset;
-//                src[2] = src[2] + blk_ch_src_offset;
-
                 src_altref_index[0] = src_altref_index[0] + blk_y_src_offset;
                 src_altref_index[1] = src_altref_index[1] + blk_ch_src_offset;
                 src_altref_index[2] = src_altref_index[2] + blk_ch_src_offset;
 
                 // ------------
-                // Step 1: motion compensation TODO: motion compensation
+                // Step 1: motion compensation
                 // ------------
 
                 int16_t  x_Level2_search_center;           // output parameter, Level2 xMV at (searchRegionNumberInWidth, searchRegionNumberInHeight)
@@ -728,24 +721,23 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                     int16_t x_mv_64x64 = _MVXT(context_ptr->p_best_mv64x64[0]);
                     int16_t y_mv_64x64 = _MVYT(context_ptr->p_best_mv64x64[0]);
 
-                    int16_t x_mv_16x16_0 = _MVXT(context_ptr->p_best_mv16x16[0]);
-                    int16_t y_mv_16x16_0 = _MVYT(context_ptr->p_best_mv16x16[0]);
+                    int16_t x_mv_32x32_0 = _MVXT(context_ptr->p_best_mv32x32[0]);
+                    int16_t y_mv_32x32_0 = _MVYT(context_ptr->p_best_mv32x32[0]);
 
-                    int16_t x_mv_16x16_1 = _MVXT(context_ptr->p_best_mv16x16[1]);
-                    int16_t y_mv_16x16_1 = _MVYT(context_ptr->p_best_mv16x16[1]);
+                    int16_t x_mv_32x32_1 = _MVXT(context_ptr->p_best_mv32x32[1]);
+                    int16_t y_mv_32x32_1 = _MVYT(context_ptr->p_best_mv32x32[1]);
 
-                    int16_t x_mv_16x16_2 = _MVXT(context_ptr->p_best_mv16x16[2]);
-                    int16_t y_mv_16x16_2 = _MVYT(context_ptr->p_best_mv16x16[2]);
+                    int16_t x_mv_32x32_2 = _MVXT(context_ptr->p_best_mv32x32[2]);
+                    int16_t y_mv_32x32_2 = _MVYT(context_ptr->p_best_mv32x32[2]);
 
-                    int16_t x_mv_16x16_3 = _MVXT(context_ptr->p_best_mv16x16[3]);
-                    int16_t y_mv_16x16_3 = _MVYT(context_ptr->p_best_mv16x16[3]);
+                    int16_t x_mv_32x32_3 = _MVXT(context_ptr->p_best_mv32x32[3]);
+                    int16_t y_mv_32x32_3 = _MVYT(context_ptr->p_best_mv32x32[3]);
 
+#if 0
 //                    int16_t x_mv = x_mv_64x64;
 //                    int16_t y_mv = y_mv_64x64;
-//
 //                    uint8_t  *buf1[8];
 //                    uint8_t  *buf2[8];
-//
 //                    uint32_t  buf1Stride[8];
 //                    uint32_t  buf2Stride[8];
 //
@@ -774,8 +766,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
 //                            context_ptr->p_best_sad64x64,
 //                            context_ptr->p_best_mv64x64,
 //                            context_ptr->psub_pel_direction64x64);
-
-                    free(context_ptr);
+#endif
 
 #endif
                 }
@@ -789,9 +780,20 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                 copy_block_and_remove_stride(pred[2], src[2] + shift_ch, BW>>1, BH>>1, stride[2]);
 
 #if DEBUG
-                char filename1[30] = "pred_block_";
-                char block_number1[4];
+
+                char filename3[30] = "input_block_";
                 char frame_index_str[4];
+                char block_number1[4];
+                strcat(filename3, block_number1);
+                strcat(filename3, "_");
+                strcat(filename3, frame_index_str);
+                strcat(filename3, ".yuv");
+                save_YUV_to_file(filename3, src[0] + blk_y_src_offset, src[1] + blk_ch_src_offset, src[2] + blk_ch_src_offset,
+                                 BW, BH,
+                                 stride[0], stride[1], stride[1],
+                                 0, 0);
+
+                char filename1[30] = "pred_block_";
                 snprintf(block_number1, 4, "%d", blk_row*blk_cols + blk_col);
                 snprintf(frame_index_str, 4, "%d", frame_index);
                 strcat(filename1, block_number1);
@@ -803,23 +805,15 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                                     BW, blk_width_ch, blk_height_ch,
                                     0, 0);
 
-                char filename3[30] = "input_block_";
-                strcat(filename3, block_number1);
-                strcat(filename3, "_");
-                strcat(filename3, frame_index_str);
-                strcat(filename3, ".yuv");
-                save_YUV_to_file(filename3, src[0] + blk_y_src_offset, src[1] + blk_ch_src_offset, src[2] + blk_ch_src_offset,
-                                 BW, BH,
-                                 stride[0], stride[1], stride[1],
-                                 0, 0);
-
-//                printf("PRED\n");
-//                printf("Y:\n");
-//                print_block_uint8(pred[0], 32, 32, 32);
-//                printf("U:\n");
-//                print_block_uint8(pred[1], 16, 16, 16);
-//                printf("V:\n");
-//                print_block_uint8(pred[2], 16, 16, 16);
+#if 0
+                printf("PRED\n");
+                printf("Y:\n");
+                print_block_uint8(pred[0], 32, 32, 32);
+                printf("U:\n");
+                print_block_uint8(pred[1], 16, 16, 16);
+                printf("V:\n");
+                print_block_uint8(pred[2], 16, 16, 16);
+#endif
 #endif
 
                 // ------------
@@ -855,21 +849,23 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
             }
 
 #if DEBUG
-//            printf("ACCUM\n");
-//            printf("Y:\n");
-//            print_block_uint32(accum[0], 32, 32, 32);
-//            printf("U:\n");
-//            print_block_uint32(accum[1], 16, 16, 16);
-//            printf("V:\n");
-//            print_block_uint32(accum[2], 16, 16, 16);
-//
-//            printf("COUNT\n");
-//            printf("Y:\n");
-//            print_block_uint16(count[0], 32, 32, 32);
-//            printf("U:\n");
-//            print_block_uint16(count[1], 16, 16, 16);
-//            printf("V:\n");
-//            print_block_uint16(count[2], 16, 16, 16);
+#if 0
+            printf("ACCUM\n");
+            printf("Y:\n");
+            print_block_uint32(accum[0], 32, 32, 32);
+            printf("U:\n");
+            print_block_uint32(accum[1], 16, 16, 16);
+            printf("V:\n");
+            print_block_uint32(accum[2], 16, 16, 16);
+
+            printf("COUNT\n");
+            printf("Y:\n");
+            print_block_uint16(count[0], 32, 32, 32);
+            printf("U:\n");
+            print_block_uint16(count[1], 16, 16, 16);
+            printf("V:\n");
+            print_block_uint16(count[2], 16, 16, 16);
+#endif
 #endif
 
             // Normalize filter output to produce AltRef frame
@@ -941,6 +937,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
     free(alt_ref_buffer_u);
     free(alt_ref_buffer_v);
 
+    free(me_context_ptr);
+
     return EB_ErrorNone;
 }
 
@@ -986,10 +984,6 @@ static double estimate_noise(EbByte src, uint16_t width, uint16_t height,
         return -1.0;
 
     const double sigma = (double)sum / (6 * num) * SQRT_PI_BY_2;
-
-#if DEBUG
-    printf("Estimated noise level: %lf\n", sigma);
-#endif
 
     return sigma;
 }
@@ -1063,9 +1057,9 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
 
     // Adjust the strength based on the noise level
     noiselevel = estimate_noise(src,
-            input_picture_ptr->width,
-            input_picture_ptr->height,
-            input_picture_ptr->stride_y);
+                                input_picture_ptr->width,
+                                input_picture_ptr->height,
+                                input_picture_ptr->stride_y);
 
     if (noiselevel > 0) {
         // Adjust the strength of the temporal filtering
@@ -1085,7 +1079,7 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
         adj_strength += noiselevel_adj;
     }
 #if DEBUG
-    printf("[noise level: %g, strength = %d, adj_strength = %d]\n", noiselevel, strength, adj_strength);
+    printf("[DEBUG] noise level: %g, strength = %d, adj_strength = %d\n", noiselevel, strength, adj_strength);
 #endif
 
     // TODO: does it make sense to use negative strength after it has been adjusted?
@@ -1118,10 +1112,8 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
 
 EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_control_set_ptr) {
 
-    int start_frame;
     int frame;
-    int frames_to_blur_backward;
-    int frames_to_blur_forward;
+    uint64_t frames_to_blur_backward, frames_to_blur_forward, start_frame;
     EbPictureBufferDesc_t *frames[MAX_FRAMES_TO_FILTER] = { NULL };
     EbBool enable_alt_refs;
     uint8_t altref_strength, altref_nframes;
@@ -1136,7 +1128,7 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_con
     input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
 
     // populate source frames picture buffer list
-    // TODO: using fixed 3 frames just for testing
+    // TODO: using fixed 3 frames just for testing purposes - replace by altref_nframes (allocated dynamically)
     EbPictureBufferDesc_t *list_input_picture_ptr[3] = {NULL};
     for(int i=0; i<3; i++){
         list_input_picture_ptr[i] = list_picture_control_set_ptr[i]->enhanced_picture_ptr;
@@ -1169,8 +1161,8 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_con
 
     // For even length filter there is one more frame backward
     // than forward: e.g. len=6 ==> bbbAff, len=7 ==> bbbAfff.
-    frames_to_blur_backward = (altref_nframes / 2);
-    frames_to_blur_forward = ((altref_nframes - 1) / 2);
+    frames_to_blur_backward = (uint64_t)(altref_nframes / 2);
+    frames_to_blur_forward = (uint64_t)((altref_nframes - 1) / 2);
 
     start_frame = distance_to_key + frames_to_blur_forward;
 
