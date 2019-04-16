@@ -18,6 +18,27 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+void UniPredAverging(
+        MeContext_t           *context_ptr,
+        MePredUnit_t          *me_candidate,
+        uint32_t              pu_index,
+        uint8_t               *sourcePic,
+        uint32_t              lumaStride,
+        uint8_t               firstFracPos,
+        uint32_t              pu_width,
+        uint32_t              pu_height,
+        uint8_t               *firstRefInteger,
+        uint8_t               *firstRefPosB,
+        uint8_t               *firstRefPosH,
+        uint8_t               *firstRefPosJ,
+        uint32_t              refBufferStride,
+        uint32_t              refBufferFullList0Stride,
+        uint8_t               *firstRefTempDst,
+        uint8_t               **comp_blk_ptr,
+        uint32_t              *comp_blk_ptr_stride,
+        EbAsm                 asm_type);
+
     extern EbErrorType MotionEstimateLcu(
         PictureParentControlSet_t   *picture_control_set_ptr,
         uint32_t                       sb_index,

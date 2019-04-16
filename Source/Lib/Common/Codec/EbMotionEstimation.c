@@ -5343,6 +5343,102 @@ static void QuarterPelCompensation(
 * Requirement (x86 only): dst->stride_y   % 16 = 0 when pu_width %16 = 0
 * Requirement (x86 only): dst->chromaStride % 16 = 0 when pu_width %32 = 0
 *******************************************************************************/
+void UniPredAverging(
+        MeContext_t           *context_ptr,
+        MePredUnit_t          *me_candidate,
+        uint32_t              pu_index,
+        uint8_t               *sourcePic,
+        uint32_t              lumaStride,
+        uint8_t               firstFracPos,
+        uint32_t              pu_width,
+        uint32_t              pu_height,
+        uint8_t               *firstRefInteger,
+        uint8_t               *firstRefPosB,
+        uint8_t               *firstRefPosH,
+        uint8_t               *firstRefPosJ,
+        uint32_t              refBufferStride,
+        uint32_t              refBufferFullList0Stride,
+        uint8_t               *firstRefTempDst,
+        uint8_t               **comp_blk_ptr,
+        uint32_t              *comp_blk_ptr_stride,
+        EbAsm                 asm_type)
+{
+
+    uint8_t                  *ptrList0;
+    uint32_t                  ptrList0Stride;
+
+    // Buffer Selection and quater-pel compensation on the fly
+    if (subPositionType[firstFracPos] != 2) {
+
+        SelectBuffer(
+                pu_index,
+                firstFracPos,
+                pu_width,
+                pu_height,
+                firstRefInteger,
+                firstRefPosB,
+                firstRefPosH,
+                firstRefPosJ,
+                refBufferStride,
+                refBufferFullList0Stride,
+                comp_blk_ptr,
+                comp_blk_ptr_stride,
+                asm_type);
+
+    }
+    else {
+
+        QuarterPelCompensation(
+                pu_index,
+                firstFracPos,
+                pu_width,
+                pu_height,
+                firstRefInteger,
+                firstRefPosB,
+                firstRefPosH,
+                firstRefPosJ,
+                refBufferStride,
+                refBufferFullList0Stride,
+                firstRefTempDst,
+                BLOCK_SIZE_64,
+                asm_type);
+
+        *comp_blk_ptr = firstRefTempDst;
+        *comp_blk_ptr_stride = BLOCK_SIZE_64;
+    }
+
+    // bi-pred luma
+    me_candidate->distortion = (context_ptr->fractionalSearchMethod == SUB_SAD_SEARCH) ?
+                    NxMSadAveragingKernel_funcPtrArray[asm_type][pu_width >> 3](sourcePic,
+                                                                                lumaStride << 1,
+                                                                                *comp_blk_ptr,
+                                                                                *comp_blk_ptr_stride << 1,
+                                                                                *comp_blk_ptr,
+                                                                                *comp_blk_ptr_stride << 1,
+                                                                                pu_height >> 1,
+                                                                                pu_width) << 1 :
+                   NxMSadAveragingKernel_funcPtrArray[asm_type][pu_width >> 3](sourcePic,
+                                                                               lumaStride,
+                                                                               *comp_blk_ptr,
+                                                                               *comp_blk_ptr_stride,
+                                                                               *comp_blk_ptr,
+                                                                               *comp_blk_ptr_stride,
+                                                                               pu_height,
+                                                                               pu_width);
+
+}
+
+/*******************************************************************************
+* Requirement: pu_width      = 8, 16, 24, 32, 48 or 64
+* Requirement: pu_height % 2 = 0
+* Requirement: skip         = 0 or 1
+* Requirement (x86 only): temp_buf % 16 = 0
+* Requirement (x86 only): (dst->buffer_y  + dstLumaIndex  ) % 16 = 0 when pu_width %16 = 0
+* Requirement (x86 only): (dst->bufferCb + dstChromaIndex) % 16 = 0 when pu_width %32 = 0
+* Requirement (x86 only): (dst->bufferCr + dstChromaIndex) % 16 = 0 when pu_width %32 = 0
+* Requirement (x86 only): dst->stride_y   % 16 = 0 when pu_width %16 = 0
+* Requirement (x86 only): dst->chromaStride % 16 = 0 when pu_width %32 = 0
+*******************************************************************************/
 uint32_t BiPredAverging(
 #if M0_SAD_HALF_QUARTER_PEL_BIPRED_SEARCH
     MeContext_t           *context_ptr,
@@ -6703,6 +6799,7 @@ EbErrorType MotionEstimateLcu(
             quarterRefPicPtr = (EbPictureBufferDesc_t*)referenceObject->quarterDecimatedPicturePtr;
             sixteenthRefPicPtr = (EbPictureBufferDesc_t*)referenceObject->sixteenthDecimatedPicturePtr;
 
+#if 0
             if(context_ptr->me_alt_ref == EB_TRUE) {
                 // Alt-refs debug
                 save_Y_to_file2("ref_frame.yuv", refPicPtr->buffer_y, refPicPtr->stride_y,
@@ -6719,6 +6816,7 @@ EbErrorType MotionEstimateLcu(
                                sixteenthRefPicPtr->height + 2 * sixteenthRefPicPtr->origin_x,
                                sixteenthRefPicPtr->stride_y, 0, 0);
             }
+#endif
 
 #if BASE_LAYER_REF
             if (picture_control_set_ptr->temporal_layer_index > 0 || listIndex == 0 || ((ref0Poc != ref1Poc) && (listIndex == 1))) {
