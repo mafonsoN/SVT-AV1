@@ -2236,6 +2236,104 @@ void InterpolateSearchRegionAVC(
 
 
 /*******************************************
+* InterpolateSearchRegion AVC
+*   interpolates the search area
+*   the whole search area is interpolated 15 times
+*   for each sub position an interpolation is done
+*   15 buffers are required for the storage of the interpolated samples.
+*   F0: {-4, 54, 16, -2}
+*   F1: {-4, 36, 36, -4}
+*   F2: {-2, 16, 54, -4}
+********************************************/
+void interpolate_search_region_AVC_chroma(
+        MeContext_t             *context_ptr,         // input/output parameter, ME context ptr, used to get/set interpolated search area Ptr
+        uint32_t                listIndex,            // Refrence picture list index
+        uint8_t                 *searchRegionBuffer,  // input parameter, search region index, used to point to reference samples
+        uint32_t                stride,               // input parameter, reference Picture stride
+        uint32_t                search_area_width,    // input parameter, search area width
+        uint32_t                search_area_height,   // input parameter, search area height
+        uint32_t                inputBitDepth,        // input parameter, input sample bit depth
+        EbAsm                   asm_type)
+{
+
+    //      0    1    2    3
+    // 0    A    a    b    c
+    // 1    d    e    f    g
+    // 2    h    i    j    k
+    // 3    n    p    q    r
+
+    // Position  Frac-pos Y  Frac-pos X  Horizontal filter  Vertical filter
+    // A         0           0           -                  -
+    // a         0           1           F0                 -
+    // b         0           2           F1                 -
+    // c         0           3           F2                 -
+    // d         1           0           -                  F0
+    // e         1           1           F0                 F0
+    // f         1           2           F1                 F0
+    // g         1           3           F2                 F0
+    // h         2           0           -                  F1
+    // i         2           1           F0                 F1
+    // j         2           2           F1                 F1
+    // k         2           3           F2                 F1
+    // n         3           0           -                  F2
+    // p         3           1           F0                 F2
+    // q         3           2           F1                 F2
+    // r         3           3           F2                 F2
+
+    // Start a b c
+
+    // The Search area needs to be a multiple of 8 to align with the ASM kernel
+    // Also the search area must be oversized by 2 to account for edge conditions
+    uint32_t searchAreaWidthForAsm = ROUND_UP_MUL_8(search_area_width + 2);
+
+    (void)inputBitDepth;
+    // Half pel interpolation of the search region using f1 -> pos_b_buffer
+    if (searchAreaWidthForAsm) {
+
+        avc_style_uni_pred_luma_if_function_ptr_array[asm_type][2](
+                searchRegionBuffer - (ME_FILTER_TAP >> 1) * stride - (ME_FILTER_TAP >> 1) + 1,
+                stride,
+                context_ptr->pos_b_buffer_ch[0],
+                context_ptr->interpolated_stride_ch,
+                searchAreaWidthForAsm,
+                search_area_height + ME_FILTER_TAP,
+                context_ptr->avctemp_buffer,
+                EB_FALSE,
+                2);
+    }
+
+    // Half pel interpolation of the search region using f1 -> pos_h_buffer
+    if (searchAreaWidthForAsm) {
+        avc_style_uni_pred_luma_if_function_ptr_array[asm_type][8](
+                searchRegionBuffer - (ME_FILTER_TAP >> 1) * stride - 1 + stride,
+                stride,
+                context_ptr->pos_h_buffer[listIndex][0],
+                context_ptr->interpolated_stride,
+                searchAreaWidthForAsm,
+                search_area_height + 1,
+                context_ptr->avctemp_buffer,
+                EB_FALSE,
+                2);
+    }
+
+    if (searchAreaWidthForAsm) {
+        // Half pel interpolation of the search region using f1 -> pos_j_buffer
+        avc_style_uni_pred_luma_if_function_ptr_array[asm_type][8](
+                context_ptr->pos_b_buffer[listIndex][0] + context_ptr->interpolated_stride,
+                context_ptr->interpolated_stride,
+                context_ptr->pos_j_buffer[listIndex][0],
+                context_ptr->interpolated_stride,
+                searchAreaWidthForAsm,
+                search_area_height + 1,
+                context_ptr->avctemp_buffer,
+                EB_FALSE,
+                2);
+    }
+
+}
+
+
+/*******************************************
 * PU_HalfPelRefinement
 *   performs Half Pel refinement for one PU
 *******************************************/
@@ -5343,12 +5441,8 @@ static void QuarterPelCompensation(
 * Requirement (x86 only): dst->stride_y   % 16 = 0 when pu_width %16 = 0
 * Requirement (x86 only): dst->chromaStride % 16 = 0 when pu_width %32 = 0
 *******************************************************************************/
-void UniPredAverging(
-        MeContext_t           *context_ptr,
-        MePredUnit_t          *me_candidate,
+void uni_pred_averaging(
         uint32_t              pu_index,
-        uint8_t               *sourcePic,
-        uint32_t              lumaStride,
         uint8_t               firstFracPos,
         uint32_t              pu_width,
         uint32_t              pu_height,
@@ -5406,25 +5500,6 @@ void UniPredAverging(
         *comp_blk_ptr = firstRefTempDst;
         *comp_blk_ptr_stride = BLOCK_SIZE_64;
     }
-
-    // bi-pred luma
-    me_candidate->distortion = (context_ptr->fractionalSearchMethod == SUB_SAD_SEARCH) ?
-                    NxMSadAveragingKernel_funcPtrArray[asm_type][pu_width >> 3](sourcePic,
-                                                                                lumaStride << 1,
-                                                                                *comp_blk_ptr,
-                                                                                *comp_blk_ptr_stride << 1,
-                                                                                *comp_blk_ptr,
-                                                                                *comp_blk_ptr_stride << 1,
-                                                                                pu_height >> 1,
-                                                                                pu_width) << 1 :
-                   NxMSadAveragingKernel_funcPtrArray[asm_type][pu_width >> 3](sourcePic,
-                                                                               lumaStride,
-                                                                               *comp_blk_ptr,
-                                                                               *comp_blk_ptr_stride,
-                                                                               *comp_blk_ptr,
-                                                                               *comp_blk_ptr_stride,
-                                                                               pu_height,
-                                                                               pu_width);
 
 }
 
@@ -7214,6 +7289,17 @@ EbErrorType MotionEstimateLcu(
             context_ptr->integer_buffer_ptr[listIndex][0] = &(refPicPtr->buffer_y[searchRegionIndex]);
             context_ptr->interpolated_full_stride[listIndex][0] = refPicPtr->stride_y;
 
+            // Alt-Refs: initialize integer_ch_buffer_ptr and interpolated_ch_full_stride here
+            if(context_ptr->me_alt_ref == EB_TRUE){
+
+                uint16_t searchRegionIndex_cb = (xTopLeftSearchRegion>>1)+(yTopLeftSearchRegion>>1)*refPicPtr->strideCb;
+                uint16_t searchRegionIndex_cr = (xTopLeftSearchRegion>>1)+(yTopLeftSearchRegion>>1)*refPicPtr->strideCr;
+                context_ptr->integer_buffer_ptr_ch[0] = &(refPicPtr->bufferCb[searchRegionIndex_cb]);
+                context_ptr->integer_buffer_ptr_ch[1] = &(refPicPtr->bufferCr[searchRegionIndex_cr]);
+                context_ptr->interpolated_full_stride_ch = refPicPtr->strideCb;
+
+            }
+
             // Move to the top left of the search region
             xTopLeftSearchRegion = (int16_t)(refPicPtr->origin_x + sb_origin_x) + x_search_area_origin;
             yTopLeftSearchRegion = (int16_t)(refPicPtr->origin_y + sb_origin_y) + y_search_area_origin;
@@ -7350,12 +7436,6 @@ EbErrorType MotionEstimateLcu(
                         // Interpolate the search region for Half-Pel Refinements
                         // H - AVC Style
 
-                        int16_t x_mv_64x64 = _MVXT(context_ptr->p_best_mv64x64[0]);
-                        int16_t y_mv_64x64 = _MVYT(context_ptr->p_best_mv64x64[0]);
-
-                        int16_t x_mv_16x16_0 = _MVXT(context_ptr->p_best_mv16x16[0]);
-                        int16_t y_mv_16x16_0 = _MVYT(context_ptr->p_best_mv16x16[0]);
-
                         InterpolateSearchRegionAVC(
                             context_ptr,
                             listIndex,
@@ -7395,12 +7475,6 @@ EbErrorType MotionEstimateLcu(
                             enableHalfPel32x32,
                             enableHalfPel16x16,
                             enableHalfPel8x8);
-
-                        x_mv_64x64 = _MVXT(context_ptr->p_best_mv64x64[0]);
-                        y_mv_64x64 = _MVYT(context_ptr->p_best_mv64x64[0]);
-
-                        x_mv_16x16_0 = _MVXT(context_ptr->p_best_mv16x16[0]);
-                        y_mv_16x16_0 = _MVYT(context_ptr->p_best_mv16x16[0]);
 
 #if M0_ME_QUARTER_PEL_SEARCH
                         // Quarter-Pel Refinement [8 search positions]

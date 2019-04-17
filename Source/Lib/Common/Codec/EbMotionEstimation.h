@@ -19,12 +19,8 @@
 extern "C" {
 #endif
 
-void UniPredAverging(
-        MeContext_t           *context_ptr,
-        MePredUnit_t          *me_candidate,
+void uni_pred_averaging(
         uint32_t              pu_index,
-        uint8_t               *sourcePic,
-        uint32_t              lumaStride,
         uint8_t               firstFracPos,
         uint32_t              pu_width,
         uint32_t              pu_height,

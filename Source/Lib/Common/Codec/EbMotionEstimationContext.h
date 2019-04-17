@@ -15,8 +15,10 @@ extern "C" {
 
     // Max Search Area
 #if SCENE_CONTENT_SETTINGS
-#define MAX_SEARCH_AREA_WIDTH       MAX_PICTURE_WIDTH_SIZE  + (PAD_VALUE << 1)
-#define MAX_SEARCH_AREA_HEIGHT      MAX_PICTURE_HEIGHT_SIZE + (PAD_VALUE << 1)
+#define MAX_SEARCH_AREA_WIDTH          MAX_PICTURE_WIDTH_SIZE  + (PAD_VALUE << 1)
+#define MAX_SEARCH_AREA_HEIGHT         MAX_PICTURE_HEIGHT_SIZE + (PAD_VALUE << 1)
+#define MAX_SEARCH_AREA_WIDTH_CH       MAX_SEARCH_AREA_WIDTH>>1
+#define MAX_SEARCH_AREA_HEIGHT_CH      MAX_SEARCH_AREA_HEIGHT>>1
 
 #else
 #define MAX_SEARCH_AREA_WIDTH       1350 // This should be a function for the MAX HME L0 * the multiplications per layers and per Hierarchichal structures
@@ -430,9 +432,21 @@ extern "C" {
         uint16_t                      hme_level2_search_area_in_height_array[EB_HME_SEARCH_AREA_ROW_MAX_COUNT];
         uint8_t                       update_hme_search_center_flag;
 
-        // Context for Alt-Ref ME
+        // ------- Context for Alt-Ref ME ------
+
         EbBool                        me_alt_ref;
         void                          *alt_ref_reference_ptr;
+
+        // chroma sub-pel buffers (2 buffers each - for Cb and Cr) and stride info
+        uint8_t                       *integer_buffer_ptr_ch[2];
+        uint8_t                       *pos_b_buffer_ch[2];
+        uint8_t                       *pos_h_buffer_ch[2];
+        uint8_t                       *pos_j_buffer_ch[2];
+        uint8_t                       *one_d_intermediate_results_buf_ch[2];
+        uint32_t                      interpolated_stride_ch;
+        uint32_t                      interpolated_full_stride_ch;
+
+        // -------
 
     } MeContext_t;
 

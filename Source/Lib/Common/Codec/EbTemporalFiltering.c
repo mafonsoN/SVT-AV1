@@ -528,24 +528,21 @@ static void apply_filtering_central(EbByte *pred,
 // relationship between pu_index and row and col of the 32x32 sub-blocks
 static const uint32_t subblock_xy[4][2] = { {0,0}, {0,1}, {1,0}, {1,1} };
 
-void uni_motion_compensation(MeContext_t* context_ptr, EbByte pred){
+void uni_motion_compensation(MeContext_t* context_ptr, EbByte pred, EbAsm asm_type){
 
-    uint32_t                          puShiftXIndex;
-    uint32_t                          puShiftYIndex;
-    uint32_t                          puLcuBufferIndex;
-    int16_t                           firstRefPosX;
-    int16_t                           firstRefPosY;
-    int16_t                           firstRefIntegPosx;
-    int16_t                           firstRefIntegPosy;
-    uint8_t                           firstRefFracPosx;
-    uint8_t                           firstRefFracPosy;
-    uint8_t                           firstRefFracPos;
-    int32_t                           xfirstSearchIndex;
-    int32_t                           yfirstSearchIndex;
-    int32_t                           firstSearchRegionIndexPosInteg;
-    int32_t                           firstSearchRegionIndexPosb;
-    int32_t                           firstSearchRegionIndexPosh;
-    int32_t                           firstSearchRegionIndexPosj;
+    int16_t                           first_ref_pos_x;
+    int16_t                           first_ref_pos_y;
+    int16_t                           first_ref_integ_pos_x;
+    int16_t                           first_ref_integ_pos_y;
+    uint8_t                           first_ref_frac_pos_x;
+    uint8_t                           first_ref_frac_pos_y;
+    uint8_t                           first_ref_frac_pos;
+    int32_t                           x_first_search_index;
+    int32_t                           y_first_search_index;
+    int32_t                           first_search_region_index_pos_integ;
+    int32_t                           first_search_region_index_pos_b;
+    int32_t                           first_search_region_index_pos_h;
+    int32_t                           first_search_region_index_pos_j;
     EbByte                            pred_ptr;
     int row, col;
 
@@ -554,54 +551,48 @@ void uni_motion_compensation(MeContext_t* context_ptr, EbByte pred){
         row = subblock_xy[pu_index-1][0];
         col = subblock_xy[pu_index-1][1];
 
-        int add = row*SUB_BH*BW + col*SUB_BW;
-        pred_ptr = pred + add;
-
-        puShiftXIndex = puSearchIndexMap[pu_index][0];
-        puShiftYIndex = puSearchIndexMap[pu_index][1];
-
-        puLcuBufferIndex = puShiftXIndex + puShiftYIndex * context_ptr->sb_src_stride;
+        pred_ptr = pred + row*SUB_BH*BW + col*SUB_BW;
 
         // motion vectors
-        firstRefPosX = _MVXT(context_ptr->p_best_mv32x32[pu_index-1]);
-        firstRefPosY = _MVYT(context_ptr->p_best_mv32x32[pu_index-1]);
+        first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[pu_index-1]);
+        first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[pu_index-1]);
 
-        firstRefIntegPosx = (firstRefPosX >> 2);
-        firstRefIntegPosy = (firstRefPosY >> 2);
-        firstRefFracPosx = (uint8_t)firstRefPosX & 0x03;
-        firstRefFracPosy = (uint8_t)firstRefPosY & 0x03;
+        first_ref_integ_pos_x = (first_ref_pos_x >> 2);
+        first_ref_integ_pos_y = (first_ref_pos_y >> 2);
+        first_ref_frac_pos_x = (uint8_t)(first_ref_pos_x & 0x03);
+        first_ref_frac_pos_y = (uint8_t)(first_ref_pos_y & 0x03);
 
-        firstRefFracPos = (uint8_t)(firstRefFracPosx + (firstRefFracPosy << 2));
+        first_ref_frac_pos = (uint8_t)(first_ref_frac_pos_x + (first_ref_frac_pos_y << 2));
 
-        xfirstSearchIndex = (int32_t)firstRefIntegPosx - context_ptr->x_search_area_origin[0][0];
-        yfirstSearchIndex = (int32_t)firstRefIntegPosy - context_ptr->y_search_area_origin[0][0];
-        firstSearchRegionIndexPosInteg = (int32_t)(xfirstSearchIndex + (ME_FILTER_TAP >> 1)) + (int32_t)context_ptr->interpolated_full_stride[0][0] * (int32_t)(yfirstSearchIndex + (ME_FILTER_TAP >> 1));
-        firstSearchRegionIndexPosb = (int32_t)(xfirstSearchIndex + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(yfirstSearchIndex + (ME_FILTER_TAP >> 1));
-        firstSearchRegionIndexPosh = (int32_t)(xfirstSearchIndex + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(yfirstSearchIndex + (ME_FILTER_TAP >> 1) - 1);
-        firstSearchRegionIndexPosj = (int32_t)(xfirstSearchIndex + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(yfirstSearchIndex + (ME_FILTER_TAP >> 1) - 1);
+        x_first_search_index = (int32_t)first_ref_integ_pos_x - context_ptr->x_search_area_origin[0][0];
+        y_first_search_index = (int32_t)first_ref_integ_pos_y - context_ptr->y_search_area_origin[0][0];
+        first_search_region_index_pos_integ = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1)) + (int32_t)context_ptr->interpolated_full_stride[0][0] * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
+        first_search_region_index_pos_b = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
+        first_search_region_index_pos_h = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
+        first_search_region_index_pos_j = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
 
+        // compensate Y
         uint8_t *comp_block;
         uint32_t comp_block_stride;
-        UniPredAverging(context_ptr,
-                       &(context_ptr->me_candidate[0].pu[pu_index]),
-                       pu_index, // pu_index
-                       &(context_ptr->sb_src_ptr[puLcuBufferIndex]),
-                       context_ptr->sb_src_stride,
-                       firstRefFracPos,
-                       SUB_BW, // pu_width
-                       SUB_BH, // pu_height
-                       &(context_ptr->integer_buffer_ptr[0][0][firstSearchRegionIndexPosInteg]),
-                       &(context_ptr->pos_b_buffer[0][0][firstSearchRegionIndexPosb]),
-                       &(context_ptr->pos_h_buffer[0][0][firstSearchRegionIndexPosh]),
-                       &(context_ptr->pos_j_buffer[0][0][firstSearchRegionIndexPosj]),
-                       context_ptr->interpolated_stride,
-                       context_ptr->interpolated_full_stride[0][0],
-                       &(context_ptr->one_d_intermediate_results_buf0[0]),
-                       &comp_block,
-                       &comp_block_stride,
-                       0);
+        uni_pred_averaging(pu_index, // pu_index
+                           first_ref_frac_pos,
+                           SUB_BW, // pu_width
+                           SUB_BH, // pu_height
+                           &(context_ptr->integer_buffer_ptr[0][0][first_search_region_index_pos_integ]),
+                           &(context_ptr->pos_b_buffer[0][0][first_search_region_index_pos_b]),
+                           &(context_ptr->pos_h_buffer[0][0][first_search_region_index_pos_h]),
+                           &(context_ptr->pos_j_buffer[0][0][first_search_region_index_pos_j]),
+                           context_ptr->interpolated_stride,
+                           context_ptr->interpolated_full_stride[0][0],
+                           &(context_ptr->one_d_intermediate_results_buf0[0]),
+                           &comp_block,
+                           &comp_block_stride,
+                           asm_type);
 
         copy_block(pred_ptr, BW, comp_block, comp_block_stride, 32, 32);
+
+        // TODO: compensate Cb and Cr
+
 
     }
 
@@ -637,6 +628,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
 
     picture_control_set_ptr_central = list_picture_control_set_ptr[index_center];
     input_picture_ptr_central = list_input_picture_ptr[index_center];
+
+    EbAsm asm_type = picture_control_set_ptr_central->sequence_control_set_ptr->encode_context_ptr->asm_type;
 
     int blk_cols = (input_picture_ptr_central->width + BW - 1) / BW; // I think only the part of the picture
     int blk_rows = (input_picture_ptr_central->height + BH - 1) / BH; // that fits to the 32x32 blocks are actually filtered
@@ -833,46 +826,12 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                     int16_t x_mv_32x32_3 = _MVXT(context_ptr->p_best_mv32x32[3]);
                     int16_t y_mv_32x32_3 = _MVYT(context_ptr->p_best_mv32x32[3]);
 
-                    uni_motion_compensation(context_ptr, pred[0]);
+                    uni_motion_compensation(context_ptr, pred[0], asm_type);
 
-                    // TODO: at the moment just copying the chroma from the centra frame -> future: compensate chroma
+                    // TODO: at the moment just copying the chroma from the central frame -> future: compensate chroma
                     copy_block_and_remove_stride(pred[1], src[1] + blk_ch_src_offset, BW>>1, BH>>1, stride[1]);
                     copy_block_and_remove_stride(pred[2], src[2] + blk_ch_src_offset, BW>>1, BH>>1, stride[2]);
 
-#if 0
-//                    int16_t x_mv = x_mv_64x64;
-//                    int16_t y_mv = y_mv_64x64;
-//                    uint8_t  *buf1[8];
-//                    uint8_t  *buf2[8];
-//                    uint32_t  buf1Stride[8];
-//                    uint32_t  buf2Stride[8];
-//
-//                    SetQuarterPelRefinementInputsOnTheFly(
-//                            context_ptr->integer_buffer_ptr[0][0] + (ME_FILTER_TAP >> 1) + ((ME_FILTER_TAP >> 1) * context_ptr->interpolated_full_stride[0][0]),
-//                            context_ptr->interpolated_full_stride[0][0],
-//                            context_ptr->pos_b_buffer,
-//                            context_ptr->pos_h_buffer,
-//                            context_ptr->pos_j_buffer,
-//                            context_ptr->interpolated_stride,
-//                            x_mv,
-//                            y_mv,
-//                            buf1, buf1Stride,
-//                            buf2, buf2Stride);
-//
-//                    PU_QuarterPelRefinementOnTheFly(
-//                            context_ptr,
-//                            context_ptr->p_best_ssd64x64,
-//                            0,
-//                            buf1, buf1Stride,
-//                            buf2, buf2Stride,
-//                            32, 32,
-//                            x_search_area_origin,
-//                            y_search_area_origin,
-//                            asm_type,
-//                            context_ptr->p_best_sad64x64,
-//                            context_ptr->p_best_mv64x64,
-//                            context_ptr->psub_pel_direction64x64);
-#endif
 #endif
                 }
 
