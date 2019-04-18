@@ -21,6 +21,7 @@ extern "C" {
 
 void uni_pred_averaging(
         uint32_t              pu_index,
+        EbBool                chroma,
         uint8_t               firstFracPos,
         uint32_t              pu_width,
         uint32_t              pu_height,
@@ -34,6 +35,20 @@ void uni_pred_averaging(
         uint8_t               **comp_blk_ptr,
         uint32_t              *comp_blk_ptr_stride,
         EbAsm                 asm_type);
+
+void interpolate_search_region_AVC_chroma(
+        MeContext_t             *context_ptr,
+        uint8_t                 *search_region_buffer_cb,
+        uint8_t                 *search_region_buffer_cr,
+        uint8_t                 **pos_b_buffer_ch,
+        uint8_t                 **pos_h_buffer_ch,
+        uint8_t                 **pos_j_buffer_ch,
+        uint32_t                interpolated_stride_ch,
+        uint32_t                interpolated_full_stride_ch,
+        uint32_t                search_area_width,
+        uint32_t                search_area_height,
+        uint32_t                input_bit_depth,
+        EbAsm                   asm_type);
 
     extern EbErrorType MotionEstimateLcu(
         PictureParentControlSet_t   *picture_control_set_ptr,

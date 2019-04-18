@@ -104,20 +104,6 @@ EbErrorType MeContextCtor(
 
     }
 
-    // ---- chroma half-pel chroma buffers for Alt-Ref frame TODO: 422/444 support
-    if((*object_dbl_ptr)->me_alt_ref == EB_TRUE){
-        (*object_dbl_ptr)->interpolated_stride_ch = MAX_SEARCH_AREA_WIDTH_CH;
-        EB_MALLOC(uint8_t *, (*object_dbl_ptr)->pos_b_buffer_ch[0], sizeof(uint8_t) * (*object_dbl_ptr)->interpolated_stride_ch * MAX_SEARCH_AREA_HEIGHT_CH, EB_N_PTR);
-        EB_MALLOC(uint8_t *, (*object_dbl_ptr)->pos_h_buffer_ch[0], sizeof(uint8_t) * (*object_dbl_ptr)->interpolated_stride_ch * MAX_SEARCH_AREA_HEIGHT_CH, EB_N_PTR);
-        EB_MALLOC(uint8_t *, (*object_dbl_ptr)->pos_j_buffer_ch[0], sizeof(uint8_t) * (*object_dbl_ptr)->interpolated_stride_ch * MAX_SEARCH_AREA_HEIGHT_CH, EB_N_PTR);
-        EB_MALLOC(uint8_t *, (*object_dbl_ptr)->pos_b_buffer_ch[1], sizeof(uint8_t) * (*object_dbl_ptr)->interpolated_stride_ch * MAX_SEARCH_AREA_HEIGHT_CH, EB_N_PTR);
-        EB_MALLOC(uint8_t *, (*object_dbl_ptr)->pos_h_buffer_ch[1], sizeof(uint8_t) * (*object_dbl_ptr)->interpolated_stride_ch * MAX_SEARCH_AREA_HEIGHT_CH, EB_N_PTR);
-        EB_MALLOC(uint8_t *, (*object_dbl_ptr)->pos_j_buffer_ch[1], sizeof(uint8_t) * (*object_dbl_ptr)->interpolated_stride_ch * MAX_SEARCH_AREA_HEIGHT_CH, EB_N_PTR);
-        EB_MALLOC(EbByte, (*object_dbl_ptr)->one_d_intermediate_results_buf_ch[0], sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1), EB_N_PTR);
-        EB_MALLOC(EbByte, (*object_dbl_ptr)->one_d_intermediate_results_buf_ch[1], sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1), EB_N_PTR);
-    }
-    // ----
-
     EB_MALLOC(EbByte, (*object_dbl_ptr)->one_d_intermediate_results_buf0, sizeof(uint8_t)*BLOCK_SIZE_64*BLOCK_SIZE_64, EB_N_PTR);
 
     EB_MALLOC(EbByte, (*object_dbl_ptr)->one_d_intermediate_results_buf1, sizeof(uint8_t)*BLOCK_SIZE_64*BLOCK_SIZE_64, EB_N_PTR);

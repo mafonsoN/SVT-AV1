@@ -2247,12 +2247,16 @@ void InterpolateSearchRegionAVC(
 ********************************************/
 void interpolate_search_region_AVC_chroma(
         MeContext_t             *context_ptr,         // input/output parameter, ME context ptr, used to get/set interpolated search area Ptr
-        uint32_t                listIndex,            // Refrence picture list index
-        uint8_t                 *searchRegionBuffer,  // input parameter, search region index, used to point to reference samples
-        uint32_t                stride,               // input parameter, reference Picture stride
+        uint8_t                 *search_region_buffer_cb,  // input parameter, search region buffer cb, used to point to reference samples
+        uint8_t                 *search_region_buffer_cr,  // input parameter, search region buffer cr, used to point to reference samples
+        uint8_t                 **pos_b_buffer_ch,
+        uint8_t                 **pos_h_buffer_ch,
+        uint8_t                 **pos_j_buffer_ch,
+        uint32_t                interpolated_stride_ch,
+        uint32_t                interpolated_full_stride_ch,               // input parameter, reference Picture stride
         uint32_t                search_area_width,    // input parameter, search area width
         uint32_t                search_area_height,   // input parameter, search area height
-        uint32_t                inputBitDepth,        // input parameter, input sample bit depth
+        uint32_t                input_bit_depth,        // input parameter, input sample bit depth
         EbAsm                   asm_type)
 {
 
@@ -2286,15 +2290,27 @@ void interpolate_search_region_AVC_chroma(
     // Also the search area must be oversized by 2 to account for edge conditions
     uint32_t searchAreaWidthForAsm = ROUND_UP_MUL_8(search_area_width + 2);
 
-    (void)inputBitDepth;
+    (void)input_bit_depth;
     // Half pel interpolation of the search region using f1 -> pos_b_buffer
     if (searchAreaWidthForAsm) {
 
+        // Cb
         avc_style_uni_pred_luma_if_function_ptr_array[asm_type][2](
-                searchRegionBuffer - (ME_FILTER_TAP >> 1) * stride - (ME_FILTER_TAP >> 1) + 1,
-                stride,
-                context_ptr->pos_b_buffer_ch[0],
-                context_ptr->interpolated_stride_ch,
+                search_region_buffer_cb - (ME_FILTER_TAP >> 1) * interpolated_full_stride_ch - (ME_FILTER_TAP >> 1) + 1,
+                interpolated_full_stride_ch,
+                pos_b_buffer_ch[0],
+                interpolated_stride_ch,
+                searchAreaWidthForAsm,
+                search_area_height + ME_FILTER_TAP,
+                context_ptr->avctemp_buffer,
+                EB_FALSE,
+                2);
+        // Cr
+        avc_style_uni_pred_luma_if_function_ptr_array[asm_type][2](
+                search_region_buffer_cr - (ME_FILTER_TAP >> 1) * interpolated_full_stride_ch - (ME_FILTER_TAP >> 1) + 1,
+                interpolated_full_stride_ch,
+                pos_b_buffer_ch[1],
+                interpolated_stride_ch,
                 searchAreaWidthForAsm,
                 search_area_height + ME_FILTER_TAP,
                 context_ptr->avctemp_buffer,
@@ -2304,11 +2320,24 @@ void interpolate_search_region_AVC_chroma(
 
     // Half pel interpolation of the search region using f1 -> pos_h_buffer
     if (searchAreaWidthForAsm) {
+
+        // Cb
         avc_style_uni_pred_luma_if_function_ptr_array[asm_type][8](
-                searchRegionBuffer - (ME_FILTER_TAP >> 1) * stride - 1 + stride,
-                stride,
-                context_ptr->pos_h_buffer[listIndex][0],
-                context_ptr->interpolated_stride,
+                search_region_buffer_cb - (ME_FILTER_TAP >> 1) * interpolated_full_stride_ch - 1 + interpolated_full_stride_ch,
+                interpolated_full_stride_ch,
+                pos_h_buffer_ch[0],
+                interpolated_stride_ch,
+                searchAreaWidthForAsm,
+                search_area_height + 1,
+                context_ptr->avctemp_buffer,
+                EB_FALSE,
+                2);
+        // Cr
+        avc_style_uni_pred_luma_if_function_ptr_array[asm_type][8](
+                search_region_buffer_cr - (ME_FILTER_TAP >> 1) * interpolated_full_stride_ch - 1 + interpolated_full_stride_ch,
+                interpolated_full_stride_ch,
+                pos_h_buffer_ch[1],
+                interpolated_stride_ch,
                 searchAreaWidthForAsm,
                 search_area_height + 1,
                 context_ptr->avctemp_buffer,
@@ -2316,13 +2345,26 @@ void interpolate_search_region_AVC_chroma(
                 2);
     }
 
+    // Half pel interpolation of the search region using f1 -> pos_j_buffer
     if (searchAreaWidthForAsm) {
-        // Half pel interpolation of the search region using f1 -> pos_j_buffer
+
+        // Cb
         avc_style_uni_pred_luma_if_function_ptr_array[asm_type][8](
-                context_ptr->pos_b_buffer[listIndex][0] + context_ptr->interpolated_stride,
-                context_ptr->interpolated_stride,
-                context_ptr->pos_j_buffer[listIndex][0],
-                context_ptr->interpolated_stride,
+                pos_b_buffer_ch[0] + interpolated_stride_ch,
+                interpolated_stride_ch,
+                pos_j_buffer_ch[0],
+                interpolated_stride_ch,
+                searchAreaWidthForAsm,
+                search_area_height + 1,
+                context_ptr->avctemp_buffer,
+                EB_FALSE,
+                2);
+        // Cr
+        avc_style_uni_pred_luma_if_function_ptr_array[asm_type][8](
+                pos_b_buffer_ch[1] + interpolated_stride_ch,
+                interpolated_stride_ch,
+                pos_j_buffer_ch[1],
+                interpolated_stride_ch,
                 searchAreaWidthForAsm,
                 search_area_height + 1,
                 context_ptr->avctemp_buffer,
@@ -5430,6 +5472,183 @@ static void QuarterPelCompensation(
     return;
 }
 
+// TODO: Alt-refs - change previous SelectBuffer and QuarterPelCompensation to be applicable for both chroma and luma
+static void select_buffer(
+        uint32_t                 pu_index,                         //[IN]
+        EbBool                   chroma,
+        uint8_t                  fracPosition,                     //[IN]
+        uint32_t                 pu_width,                         //[IN] Refrence picture list index
+        uint32_t                 pu_height,                        //[IN] Refrence picture index in the list
+        uint8_t                  *pos_Full,                        //[IN]
+        uint8_t                  *pos_b,                           //[IN]
+        uint8_t                  *pos_h,                           //[IN]
+        uint8_t                  *pos_j,                           //[IN]
+        uint32_t                 refHalfStride,                    //[IN]
+        uint32_t                 refBufferFullStride,
+        uint8_t                  **dst_ptr,                        //[OUT]
+        uint32_t                 *DstPtrStride,                    //[OUT]
+        EbAsm                    asm_type)
+{
+
+    (void)asm_type;
+    (void)pu_width;
+    (void)pu_height;
+
+    uint32_t puShiftXIndex;
+    uint32_t puShiftYIndex;
+
+    if(chroma == EB_TRUE){
+        puShiftXIndex = (puSearchIndexMap[pu_index][0])>>1;
+        puShiftYIndex = (puSearchIndexMap[pu_index][1])>>1;
+    }else{
+        puShiftXIndex = puSearchIndexMap[pu_index][0];
+        puShiftYIndex = puSearchIndexMap[pu_index][1];
+    }
+
+    uint32_t ref_stride = refHalfStride;
+
+    //for each one of the 8 positions, we need to determine the 2 buffers to  do averaging
+    uint8_t  *buf1 = pos_Full;
+
+    switch (fracPosition)
+    {
+        case 0: // integer
+            buf1 = pos_Full;
+            ref_stride = refBufferFullStride;
+            break;
+        case 2: // b
+            buf1 = pos_b;
+            break;
+        case 8: // h
+            buf1 = pos_h;
+            break;
+        case 10: // j
+            buf1 = pos_j;
+            break;
+        default:
+            break;
+    }
+
+    buf1 = buf1 + puShiftXIndex + puShiftYIndex * ref_stride;
+
+    *dst_ptr = buf1;
+    *DstPtrStride = ref_stride;
+
+    return;
+}
+
+// TODO: Alt-refs - change previous SelectBuffer and QuarterPelCompensation to be applicable for both chroma and luma
+static void quarter_pel_compensation(
+        uint32_t                 pu_index,                         //[IN]
+        EbBool                   chroma,
+        uint8_t                  fracPosition,                     //[IN]
+        uint32_t                 pu_width,                         //[IN] Refrence picture list index
+        uint32_t                 pu_height,                        //[IN] Refrence picture index in the list
+        uint8_t                  *pos_Full,                        //[IN]
+        uint8_t                  *pos_b,                           //[IN]
+        uint8_t                  *pos_h,                           //[IN]
+        uint8_t                  *pos_j,                           //[IN]
+        uint32_t                 refHalfStride,                    //[IN]
+        uint32_t                 refBufferFullStride,
+        uint8_t                  *Dst,                             //[IN]
+        uint32_t                 DstStride,                        //[IN]
+        EbAsm                    asm_type)
+{
+
+    uint32_t puShiftXIndex;
+    uint32_t puShiftYIndex;
+
+    if(chroma == EB_TRUE){
+        puShiftXIndex = (puSearchIndexMap[pu_index][0])>>1;
+        puShiftYIndex = (puSearchIndexMap[pu_index][1])>>1;
+    }else{
+        puShiftXIndex = puSearchIndexMap[pu_index][0];
+        puShiftYIndex = puSearchIndexMap[pu_index][1];
+    }
+
+    uint32_t refStride1 = refHalfStride;
+    uint32_t refStride2 = refHalfStride;
+
+    //for each one of the 8 positions, we need to determine the 2 buffers to  do averaging
+    uint8_t  *buf1 = pos_Full;
+    uint8_t  *buf2 = pos_Full;
+
+    switch (fracPosition)
+    {
+        case 1: // a
+            buf1 = pos_Full;
+            buf2 = pos_b;
+            refStride1 = refBufferFullStride;
+            break;
+
+        case 3: // c
+            buf1 = pos_b;
+            buf2 = pos_Full + 1;
+            refStride2 = refBufferFullStride;
+            break;
+
+        case 4: // d
+            buf1 = pos_Full;
+            buf2 = pos_h;
+            refStride1 = refBufferFullStride;
+            break;
+
+        case 5: // e
+            buf1 = pos_b;
+            buf2 = pos_h;
+            break;
+
+        case 6: // f
+            buf1 = pos_b;
+            buf2 = pos_j;
+            break;
+
+        case 7: // g
+            buf1 = pos_b;
+            buf2 = pos_h + 1;
+            break;
+
+        case 9: // i
+            buf1 = pos_h;
+            buf2 = pos_j;
+            break;
+
+        case 11: // k
+            buf1 = pos_j;
+            buf2 = pos_h + 1;
+            break;
+
+        case 12: // L
+            buf1 = pos_h;
+            buf2 = pos_Full + refBufferFullStride;
+            refStride2 = refBufferFullStride;
+            break;
+
+        case 13: // m
+            buf1 = pos_h;
+            buf2 = pos_b + refHalfStride;
+            break;
+
+        case 14: // n
+            buf1 = pos_j;
+            buf2 = pos_b + refHalfStride;
+            break;
+        case 15: // 0
+            buf1 = pos_h + 1;
+            buf2 = pos_b + refHalfStride;
+            break;
+        default:
+            break;
+    }
+
+    buf1 = buf1 + puShiftXIndex + puShiftYIndex * refStride1;
+    buf2 = buf2 + puShiftXIndex + puShiftYIndex * refStride2;
+
+    picture_average_array[asm_type](buf1, refStride1, buf2, refStride2, Dst, DstStride, pu_width, pu_height);
+
+    return;
+}
+
 /*******************************************************************************
 * Requirement: pu_width      = 8, 16, 24, 32, 48 or 64
 * Requirement: pu_height % 2 = 0
@@ -5443,6 +5662,7 @@ static void QuarterPelCompensation(
 *******************************************************************************/
 void uni_pred_averaging(
         uint32_t              pu_index,
+        EbBool                chroma,
         uint8_t               firstFracPos,
         uint32_t              pu_width,
         uint32_t              pu_height,
@@ -5458,44 +5678,43 @@ void uni_pred_averaging(
         EbAsm                 asm_type)
 {
 
-    uint8_t                  *ptrList0;
-    uint32_t                  ptrList0Stride;
-
     // Buffer Selection and quater-pel compensation on the fly
     if (subPositionType[firstFracPos] != 2) {
 
-        SelectBuffer(
-                pu_index,
-                firstFracPos,
-                pu_width,
-                pu_height,
-                firstRefInteger,
-                firstRefPosB,
-                firstRefPosH,
-                firstRefPosJ,
-                refBufferStride,
-                refBufferFullList0Stride,
-                comp_blk_ptr,
-                comp_blk_ptr_stride,
-                asm_type);
+        select_buffer(
+                    pu_index,
+                    chroma,
+                    firstFracPos,
+                    pu_width,
+                    pu_height,
+                    firstRefInteger,
+                    firstRefPosB,
+                    firstRefPosH,
+                    firstRefPosJ,
+                    refBufferStride,
+                    refBufferFullList0Stride,
+                    comp_blk_ptr,
+                    comp_blk_ptr_stride,
+                    asm_type);
 
     }
     else {
 
-        QuarterPelCompensation(
-                pu_index,
-                firstFracPos,
-                pu_width,
-                pu_height,
-                firstRefInteger,
-                firstRefPosB,
-                firstRefPosH,
-                firstRefPosJ,
-                refBufferStride,
-                refBufferFullList0Stride,
-                firstRefTempDst,
-                BLOCK_SIZE_64,
-                asm_type);
+        quarter_pel_compensation(
+                                pu_index,
+                                chroma,
+                                firstFracPos,
+                                pu_width,
+                                pu_height,
+                                firstRefInteger,
+                                firstRefPosB,
+                                firstRefPosH,
+                                firstRefPosJ,
+                                refBufferStride,
+                                refBufferFullList0Stride,
+                                firstRefTempDst,
+                                BLOCK_SIZE_64,
+                                asm_type);
 
         *comp_blk_ptr = firstRefTempDst;
         *comp_blk_ptr_stride = BLOCK_SIZE_64;
@@ -6726,6 +6945,31 @@ static void hme_mv_center_check(
     *ysc = search_center_y;
 }
 
+static void save_Y_to_file(char *filename, EbByte buffer_y,
+                    uint16_t width, uint16_t height,
+                    uint16_t stride_y,
+                    uint16_t origin_y, uint16_t origin_x){
+
+    FILE *fid = NULL;
+    EbByte pic_point;
+    int h;
+
+    // save current source picture to a YUV file
+    if ((fid = fopen(filename, "wb")) == NULL) {
+        printf("Unable to open file %s to write.\n", "temp_picture.yuv");
+    }else{
+
+        // the source picture saved in the enchanced_picture_ptr contains a border in x and y dimensions
+        pic_point = buffer_y + (origin_y*stride_y) + origin_x;
+        for (h = 0; h < height; h++) {
+            fwrite(pic_point, 1, (size_t)width, fid);
+            pic_point = pic_point + stride_y;
+        }
+        fclose(fid);
+    }
+}
+
+
 /*******************************************
 * MotionEstimateLcu
 *   performs ME (LCU)
@@ -7289,16 +7533,9 @@ EbErrorType MotionEstimateLcu(
             context_ptr->integer_buffer_ptr[listIndex][0] = &(refPicPtr->buffer_y[searchRegionIndex]);
             context_ptr->interpolated_full_stride[listIndex][0] = refPicPtr->stride_y;
 
-            // Alt-Refs: initialize integer_ch_buffer_ptr and interpolated_ch_full_stride here
-            if(context_ptr->me_alt_ref == EB_TRUE){
-
-                uint16_t searchRegionIndex_cb = (xTopLeftSearchRegion>>1)+(yTopLeftSearchRegion>>1)*refPicPtr->strideCb;
-                uint16_t searchRegionIndex_cr = (xTopLeftSearchRegion>>1)+(yTopLeftSearchRegion>>1)*refPicPtr->strideCr;
-                context_ptr->integer_buffer_ptr_ch[0] = &(refPicPtr->bufferCb[searchRegionIndex_cb]);
-                context_ptr->integer_buffer_ptr_ch[1] = &(refPicPtr->bufferCr[searchRegionIndex_cr]);
-                context_ptr->interpolated_full_stride_ch = refPicPtr->strideCb;
-
-            }
+//            save_Y_to_file("integer_buffer_luma.yuv", context_ptr->integer_buffer_ptr[0][0],
+//                           context_ptr->interpolated_full_stride[0][0], 288,
+//                           context_ptr->interpolated_full_stride[0][0], 0, 0);
 
             // Move to the top left of the search region
             xTopLeftSearchRegion = (int16_t)(refPicPtr->origin_x + sb_origin_x) + x_search_area_origin;
@@ -7445,6 +7682,7 @@ EbErrorType MotionEstimateLcu(
                             (uint32_t)search_area_height + (BLOCK_SIZE_64 - 1),
                             8,
                             asm_type);
+
 
                         // Half-Pel Refinement [8 search positions]
                         HalfPelSearch_LCU(

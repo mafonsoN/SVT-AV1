@@ -17,8 +17,8 @@ extern "C" {
 #if SCENE_CONTENT_SETTINGS
 #define MAX_SEARCH_AREA_WIDTH          MAX_PICTURE_WIDTH_SIZE  + (PAD_VALUE << 1)
 #define MAX_SEARCH_AREA_HEIGHT         MAX_PICTURE_HEIGHT_SIZE + (PAD_VALUE << 1)
-#define MAX_SEARCH_AREA_WIDTH_CH       MAX_SEARCH_AREA_WIDTH>>1
-#define MAX_SEARCH_AREA_HEIGHT_CH      MAX_SEARCH_AREA_HEIGHT>>1
+#define MAX_SEARCH_AREA_WIDTH_CH       MAX_PICTURE_WIDTH_SIZE_CH  + PAD_VALUE
+#define MAX_SEARCH_AREA_HEIGHT_CH      MAX_PICTURE_HEIGHT_SIZE_CH  + PAD_VALUE
 
 #else
 #define MAX_SEARCH_AREA_WIDTH       1350 // This should be a function for the MAX HME L0 * the multiplications per layers and per Hierarchichal structures
@@ -436,15 +436,6 @@ extern "C" {
 
         EbBool                        me_alt_ref;
         void                          *alt_ref_reference_ptr;
-
-        // chroma sub-pel buffers (2 buffers each - for Cb and Cr) and stride info
-        uint8_t                       *integer_buffer_ptr_ch[2];
-        uint8_t                       *pos_b_buffer_ch[2];
-        uint8_t                       *pos_h_buffer_ch[2];
-        uint8_t                       *pos_j_buffer_ch[2];
-        uint8_t                       *one_d_intermediate_results_buf_ch[2];
-        uint32_t                      interpolated_stride_ch;
-        uint32_t                      interpolated_full_stride_ch;
 
         // -------
 

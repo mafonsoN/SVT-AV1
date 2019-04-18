@@ -2697,6 +2697,8 @@ void(*ErrorHandler)(
 //***Encoding Parameters***
 #define MAX_PICTURE_WIDTH_SIZE                      4672u
 #define MAX_PICTURE_HEIGHT_SIZE                     2560u
+#define MAX_PICTURE_WIDTH_SIZE_CH                   2336u
+#define MAX_PICTURE_HEIGHT_SIZE_CH                  1280u
 #define INTERNAL_BIT_DEPTH                          8 // to be modified
 #define MAX_SAMPLE_VALUE                            ((1 << INTERNAL_BIT_DEPTH) - 1)
 #define MAX_SAMPLE_VALUE_10BIT                      0x3FF
