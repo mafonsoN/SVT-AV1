@@ -1797,8 +1797,7 @@ void* picture_decision_kernel(void *input_ptr)
     uint64_t                           loopCount = 0;
 
     // ----- Alt-Refs variables
-    // TODO: nframes is set to 3 for testing purposes - replace 3 by altref_nframes -> allocated dynamically
-    PictureParentControlSet_t *list_picture_control_set_ptr[3];
+    PictureParentControlSet_t *list_picture_control_set_ptr[ALTREF_MAX_NFRAMES];
     int count_alt_refs = 0;
     // -----
 
@@ -2242,19 +2241,19 @@ void* picture_decision_kernel(void *input_ptr)
 
                             // ----------------- Alt-Refs --------------------
 
-                            EbErrorType ret;
-
                             // TODO: testing purposes only - stategy to define which frames are alt-refs will be placed here
+                            int alt_ref_central_loc = 16;
+                            int altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
+                            int pic_number_to_save = alt_ref_central_loc - altref_nframes/2 + count_alt_refs;
+
                             if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE
-                                && (picture_control_set_ptr->picture_number == 15 ||
-                                    picture_control_set_ptr->picture_number == 16 ||
-                                    picture_control_set_ptr->picture_number == 17 )){ // Altrefs are enabled and this is the first P frame (ALTREF location)
+                                && picture_control_set_ptr->picture_number == pic_number_to_save ){ // Altrefs are enabled and this is the first P frame (ALTREF location)
 
                                 list_picture_control_set_ptr[count_alt_refs] = picture_control_set_ptr;
                                 count_alt_refs++;
 
-                                if(picture_control_set_ptr->picture_number == 17){
-                                    ret = init_temporal_filtering(list_picture_control_set_ptr);
+                                if(picture_control_set_ptr->picture_number == alt_ref_central_loc + altref_nframes/2){
+                                    EbErrorType ret = init_temporal_filtering(list_picture_control_set_ptr);
                                 }
 
                             }

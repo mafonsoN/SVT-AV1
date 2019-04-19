@@ -22,4 +22,6 @@
 #include "EbDefinitions.h"
 #include "EbBitstreamUnit.h"
 
+#define ALTREF_MAX_NFRAMES 10
+
 EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_control_set_ptr);

@@ -26,7 +26,6 @@
 #include "EbLambdaRateTables.h"
 #include "EbMcp.h"
 
-#define MAX_FRAMES_TO_FILTER 10
 #define EDGE_THRESHOLD 50
 #define SQRT_PI_BY_2 1.25331413732
 #define SMOOTH_THRESHOLD 16
@@ -527,7 +526,12 @@ static void apply_filtering_central(EbByte *pred,
 }
 
 // relationship between pu_index and row and col of the 32x32 sub-blocks
-static const uint32_t subblock_xy[4][2] = { {0,0}, {0,1}, {1,0}, {1,1} };
+static const uint32_t subblock_xy_32x32[4][2] = { {0,0}, {0,1}, {1,0}, {1,1} };
+
+static const uint32_t subblock_xy_16x16[16][2] = { {0,0}, {0,1}, {0,2}, {0,3},
+                                                   {1,0}, {1,1}, {1,2}, {1,3},
+                                                   {2,0}, {2,1}, {2,2}, {2,3},
+                                                   {3,0}, {3,1}, {3,2}, {3,3} };
 
 void uni_motion_compensation(MeContext_t* context_ptr,
                             EbPictureBufferDesc_t *pic_ptr_ref,
@@ -575,24 +579,29 @@ void uni_motion_compensation(MeContext_t* context_ptr,
     one_d_intermediate_results_buf_ch[1] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
 
     for(uint32_t pu_index = 1; pu_index <= 4; pu_index++){
+//    for(uint32_t pu_index = 5; pu_index <= 20; pu_index++){
 
-        row = subblock_xy[pu_index-1][0];
-        col = subblock_xy[pu_index-1][1];
+//        row = subblock_xy_16x16[pu_index-5][0];
+//        col = subblock_xy_16x16[pu_index-5][1];
+        row = subblock_xy_32x32[pu_index-1][0];
+        col = subblock_xy_32x32[pu_index-1][1];
 
         pred_ptr[0] = pred[0] + row*SUB_BH*BW + col*SUB_BW;
         pred_ptr[1] = pred[1] + row*(SUB_BH>>1)*(BW>>1) + col*(SUB_BH>>1);
         pred_ptr[2] = pred[2] + row*(SUB_BH>>1)*(BW>>1) + col*(SUB_BH>>1);
 
         // motion vectors
+//        first_ref_pos_x = _MVXT(context_ptr->p_best_mv16x16[pu_index-5]);
+//        first_ref_pos_y = _MVYT(context_ptr->p_best_mv16x16[pu_index-5]);
         first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[pu_index-1]);
         first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[pu_index-1]);
 
-        first_ref_integ_pos_x = (first_ref_pos_x >> 2);
+        first_ref_integ_pos_x = (first_ref_pos_x >> 2); // TODO: check if this left shift in an unsigned mv is correct
         first_ref_integ_pos_y = (first_ref_pos_y >> 2);
         first_ref_frac_pos_x = (uint8_t)(first_ref_pos_x & 0x03);
         first_ref_frac_pos_y = (uint8_t)(first_ref_pos_y & 0x03);
 
-        first_ref_frac_pos = (uint8_t)(first_ref_frac_pos_x + (first_ref_frac_pos_y << 2));
+        first_ref_frac_pos = (uint8_t)(first_ref_frac_pos_x + (first_ref_frac_pos_y << 2)); // TODO: check if this right shift in an unsigned variable is correct
 
         x_first_search_index = (int32_t)first_ref_integ_pos_x - context_ptr->x_search_area_origin[0][0];
         y_first_search_index = (int32_t)first_ref_integ_pos_y - context_ptr->y_search_area_origin[0][0];
@@ -601,7 +610,7 @@ void uni_motion_compensation(MeContext_t* context_ptr,
         first_search_region_index_pos_h = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
         first_search_region_index_pos_j = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
 
-        // ----- compensate luma
+        // ----- compensate luma ------
         uint8_t *comp_block;
         uint32_t comp_block_stride;
         uni_pred_averaging(pu_index, // pu_index
@@ -620,13 +629,17 @@ void uni_motion_compensation(MeContext_t* context_ptr,
                            &comp_block_stride,
                            asm_type);
 
+//        save_Y_to_file("sub_block_Y_MC.yuv", comp_block,
+//                   SUB_BW, SUB_BH,
+//                       comp_block_stride, 0, 0);
+
         copy_block(pred_ptr[0], BW, comp_block, comp_block_stride, SUB_BW, SUB_BH);
 
-        // ----- compensate chroma
+        // ----- compensate chroma ------
 
         // Interpolate chroma
-        int x_top_left_search_region = (int16_t)((pic_ptr_ref->origin_x + sb_origin_x)>>1) - (ME_FILTER_TAP >> 1) + ((context_ptr->x_search_area_origin[0][0])>>1);
-        int y_top_left_search_region = (int16_t)((pic_ptr_ref->origin_y + sb_origin_y)>>1) - (ME_FILTER_TAP >> 1) + ((context_ptr->y_search_area_origin[0][0])>>1);
+        int x_top_left_search_region = (int16_t)((pic_ptr_ref->origin_x + sb_origin_x)>>1) - (ME_FILTER_TAP >> 1) + ((context_ptr->x_search_area_origin[0][0])/2);
+        int y_top_left_search_region = (int16_t)((pic_ptr_ref->origin_y + sb_origin_y)>>1) - (ME_FILTER_TAP >> 1) + ((context_ptr->y_search_area_origin[0][0])/2);
         int searchRegionIndex_cb = x_top_left_search_region + y_top_left_search_region*pic_ptr_ref->strideCb;
         int searchRegionIndex_cr = x_top_left_search_region + y_top_left_search_region*pic_ptr_ref->strideCr;
 
@@ -687,8 +700,10 @@ void uni_motion_compensation(MeContext_t* context_ptr,
 #endif
 
         // Obtain compensated chroma block
-        first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[pu_index-1])>>1;
-        first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[pu_index-1])>>1;
+//        first_ref_pos_x = _MVXT(context_ptr->p_best_mv16x16[pu_index-5])/2;
+//        first_ref_pos_y = _MVYT(context_ptr->p_best_mv16x16[pu_index-5])/2;
+        first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[pu_index-1])/2;
+        first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[pu_index-1])/2;
 
         first_ref_integ_pos_x = (first_ref_pos_x >> 2);
         first_ref_integ_pos_y = (first_ref_pos_y >> 2);
@@ -697,8 +712,8 @@ void uni_motion_compensation(MeContext_t* context_ptr,
 
         first_ref_frac_pos = (uint8_t)(first_ref_frac_pos_x + (first_ref_frac_pos_y << 2));
 
-        x_first_search_index = (int32_t)first_ref_integ_pos_x - ((context_ptr->x_search_area_origin[0][0])>>1);
-        y_first_search_index = (int32_t)first_ref_integ_pos_y - ((context_ptr->x_search_area_origin[0][0])>>1);
+        x_first_search_index = (int32_t)first_ref_integ_pos_x - ((context_ptr->x_search_area_origin[0][0])/2);
+        y_first_search_index = (int32_t)first_ref_integ_pos_y - ((context_ptr->x_search_area_origin[0][0])/2);
         first_search_region_index_pos_integ = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1)) + interpolated_full_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
         first_search_region_index_pos_b = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + interpolated_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
         first_search_region_index_pos_h = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + interpolated_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
@@ -722,6 +737,10 @@ void uni_motion_compensation(MeContext_t* context_ptr,
                            asm_type);
 
         copy_block(pred_ptr[1], BW>>1, comp_block, comp_block_stride, SUB_BW>>1, SUB_BH>>1);
+
+//        save_Y_to_file("sub_block_U_MC.yuv", comp_block,
+//                       SUB_BW>>1, SUB_BH>>1,
+//                       comp_block_stride, 0, 0);
 
         // compensate V
         uni_pred_averaging(pu_index, // pu_index
@@ -940,6 +959,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                                                             blk_cols);
 
 #if DEBUG
+#if 0
                     EbPaReferenceObject_t  *referenceObject;  // input parameter, reference Object Ptr
                     EbPictureBufferDesc_t  *refPicPtr;
                     EbPictureBufferDesc_t  *quarterRefPicPtr;
@@ -962,6 +982,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                     save_Y_to_file("ref_frame_sixteenth.yuv", sixteenthRefPicPtr->buffer_y, sixteenthRefPicPtr->stride_y, sixteenthRefPicPtr->height + 2*sixteenthRefPicPtr->origin_x,
                                    sixteenthRefPicPtr->stride_y, 0, 0);
 #endif
+#endif
 
                     MotionEstimateLcu( picture_control_set_ptr_central, // source picture control set -> references come from here
                                     (uint32_t)blk_row*blk_cols + blk_col,
@@ -969,8 +990,33 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                                     (uint32_t)blk_row*BH, // y block
                                     context_ptr,
                                     list_input_picture_ptr[index_center]); // source picture
+#if 0
+                    save_YUV_to_file("sub_block_input.yuv", src[0] + blk_y_src_offset + 16*2*stride[0] + 16,
+                                     src[1] + blk_ch_src_offset + 8*2*stride[1] + 8,
+                                     src[2] + blk_ch_src_offset + 8*2*stride[2] + 8,
+                                     SUB_BW, SUB_BH,
+                                     stride[0], stride[1], stride[2],
+                                     0, 0);
 
-                    uni_motion_compensation(context_ptr, list_input_picture_ptr[index_center], pred, blk_col*BW, blk_row*BH, asm_type);
+                    save_YUV_to_file("sub_block_central.yuv", src_altref_index[0] + 16*2*stride[0] + 16,
+                                     src_altref_index[1] + 8*2*stride[1] + 8,
+                                     src_altref_index[2] + 8*2*stride[2] + 8,
+                                     SUB_BW, SUB_BH,
+                                     stride[0], stride[1], stride[2],
+                                   0, 0);
+
+                    save_Y_to_file("sub_block_input_U.yuv", src[1] + blk_ch_src_offset + 8,
+                                     SUB_BW>>1, SUB_BH>>1,
+                                     stride[1],
+                                     0, 0);
+#endif
+
+                    uni_motion_compensation(context_ptr,
+                                        list_input_picture_ptr[index_center],
+                                        pred,
+                                        (uint32_t)blk_col*BW,
+                                        (uint32_t)blk_row*BH,
+                                        asm_type);
 
 #endif
                 }
@@ -988,7 +1034,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                 strcat(filename3, ".yuv");
                 save_YUV_to_file(filename3, src[0] + blk_y_src_offset, src[1] + blk_ch_src_offset, src[2] + blk_ch_src_offset,
                                  BW, BH,
-                                 stride[0], stride[1], stride[1],
+                                 stride[0], stride[1], stride[2],
                                  0, 0);
 
                 char filename1[30] = "pred_block_";
@@ -1000,6 +1046,16 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                                     BW, BH,
                                     BW, blk_width_ch, blk_height_ch,
                                     0, 0);
+
+                char filename5[30] = "central_block_";
+                strcat(filename5, block_number1);
+                strcat(filename5, "_");
+                strcat(filename5, frame_index_str);
+                strcat(filename5, ".yuv");
+                save_YUV_to_file(filename5, src_altref_index[0], src_altref_index[1], src_altref_index[2],
+                                 BW, BH,
+                                 stride[0], stride[1], stride[2],
+                                 0, 0);
 
 #if 0
                 printf("PRED\n");
@@ -1105,9 +1161,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                              input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr,
                              0, 0);
 
-            if(blk_row*blk_cols + blk_col == 60){
-                printf("block60");
-            }
 #endif
 
             // this is how libaom was implementing the blocks indexes (I did differently in the memcpy above)
@@ -1312,12 +1365,10 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_con
 
     int frame;
     uint64_t frames_to_blur_backward, frames_to_blur_forward, start_frame;
-    EbPictureBufferDesc_t *frames[MAX_FRAMES_TO_FILTER] = { NULL };
     EbBool enable_alt_refs;
     uint8_t altref_strength, altref_nframes;
     EbPictureBufferDesc_t *input_picture_ptr;
-    // second position assuming a size of 3 frames for testing purposes
-    PictureParentControlSet_t *picture_control_set_ptr_central = list_picture_control_set_ptr[1];
+    PictureParentControlSet_t *picture_control_set_ptr_central = list_picture_control_set_ptr[0]; // picture control set of the first frame
 
     // distance to key frame
     uint64_t distance_to_key = picture_control_set_ptr_central->picture_number - picture_control_set_ptr_central->decode_order;
@@ -1325,19 +1376,18 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_con
     // source central frame picture buffer
     input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
 
-    // populate source frames picture buffer list
-    // TODO: using fixed 3 frames just for testing purposes - replace by altref_nframes (allocated dynamically)
-    EbPictureBufferDesc_t *list_input_picture_ptr[3] = {NULL};
-    for(int i=0; i<3; i++){
-        list_input_picture_ptr[i] = list_picture_control_set_ptr[i]->enhanced_picture_ptr;
-    }
-
     // user-defined encoder parameters related to alt-refs
     altref_strength = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_strength;
     altref_nframes = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_nframes;
 
     // adjust filter parameter based on the estimated noise of the picture
     adjust_filter_params(input_picture_ptr, distance_to_key, &altref_strength, &altref_nframes);
+
+    // populate source frames picture buffer list
+    EbPictureBufferDesc_t *list_input_picture_ptr[ALTREF_MAX_NFRAMES] = { NULL };
+    for(int i=0; i<altref_nframes; i++){
+        list_input_picture_ptr[i] = list_picture_control_set_ptr[i]->enhanced_picture_ptr;
+    }
 
     //int which_arf = gf_group->arf_update_idx[gf_group->index];
 
