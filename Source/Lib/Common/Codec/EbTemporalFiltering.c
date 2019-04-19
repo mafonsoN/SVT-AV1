@@ -39,8 +39,12 @@
 #define BH 64
 #define BW 64
 #define BLK_PELS 4096  // Pixels in the block
-#define SUB_BH 32
-#define SUB_BW 32
+#define SUB_BH 16
+#define SUB_BW 16
+
+#define INT_MAX 2147483647 //max value for an int
+#define INT_MIN (-2147483647-1) //min value for an int
+#define THR_SHIFT 2
 
 // Debug-specific defines
 #define DEBUG 1
@@ -57,6 +61,7 @@
 #define OD_DIVU(_x, _d) \
   (((_d) < OD_DIVU_DMAX) ? (OD_DIVU_SMALL((_x), (_d))) : ((_x) / (_d)))
 
+enum color_channel{Y, U, V};
 
 static unsigned int index_mult[14] = {
         0, 0, 0, 0, 49152, 39322, 32768, 28087, 24576, 21846, 19661, 17874, 0, 15124
@@ -102,6 +107,52 @@ void copy_block(EbByte dst, int stride_dst, EbByte src, int stride_src, int widt
     }
 
 }
+
+void get_blk_fw_from_me_err(int const *err, int const *blk_bestsme, int *use_subblocks, int *blk_fw){
+
+    int k;
+    int thresh_low = 10000;
+    int thresh_high = 20000;
+
+    int err16 = blk_bestsme[0] + blk_bestsme[1] + blk_bestsme[2] + blk_bestsme[3];
+    int max_err = INT_MIN, min_err = INT_MAX;
+
+    for (k = 0; k < 4; k++) {
+        if (min_err > blk_bestsme[k])
+            min_err = blk_bestsme[k];
+        if (max_err < blk_bestsme[k])
+            max_err = blk_bestsme[k];
+    }
+
+    if (((*err * 15 < (err16 << 4)) && max_err - min_err < 12000) ||
+        ((*err * 14 < (err16 << 4)) && max_err - min_err < 6000)) {
+
+        *use_subblocks = 0;
+        // Assign higher weight to matching MB if it's error
+        // score is lower. If not applying MC default behavior
+        // is to weight all MBs equal.
+        blk_fw[0] = *err < (thresh_low << THR_SHIFT)
+            ? 2
+            : *err < (thresh_high << THR_SHIFT) ? 1 : 0;
+
+        blk_fw[1] = blk_fw[2] = blk_fw[3] = blk_fw[0];
+
+    } else {
+
+        *use_subblocks = 1;
+
+        for (k = 0; k < 4; k++)
+        blk_fw[k] = blk_bestsme[k] < thresh_low
+        ? 2
+        : blk_bestsme[k] < thresh_high ? 1 : 0;
+
+    }
+}
+
+void get_me_sse(int const* err, int const* blk_bestsme){
+
+}
+
 
 void create_ME_context_and_picture_control(MotionEstimationContext_t *context_ptr,
                                             PictureParentControlSet_t *picture_control_set_ptr_frame,
@@ -284,9 +335,9 @@ static INLINE int get_subblock_filter_weight(unsigned int i,
                                     unsigned int block_height,
                                     unsigned int block_width,
                                     const int *blk_fw,
-                                    int use_subblock) {
+                                    int use_subblocks) {
 
-    if (use_subblock)
+    if (!use_subblocks)
         // blk_fw[0] ~ blk_fw[3] are the same.
         return blk_fw[0];
 
@@ -362,7 +413,7 @@ void apply_filtering(EbByte *src,
                     int ss_y, // chroma sub-sampling in y
                     int strength,
                     const int *blk_fw, // sub-block filter weights
-                    int use_subblock) {
+                    int use_subblocks) {
 
     unsigned int i, j, k, m;
     int idx, idy;
@@ -396,7 +447,7 @@ void apply_filtering(EbByte *src,
 
             const int pixel_value = pred_y[i * stride_pred[0] + j];
 
-            int filter_weight = get_subblock_filter_weight(i, j, block_height, block_width, blk_fw, use_subblock);
+            int filter_weight = get_subblock_filter_weight(i, j, block_height, block_width, blk_fw, use_subblocks);
 
             // non-local mean approach
             int y_index = 0;
@@ -570,6 +621,8 @@ void uni_motion_compensation(MeContext_t* context_ptr,
 
     uint32_t interpolated_stride_ch = MAX_SEARCH_AREA_WIDTH_CH;
 
+    uint32_t nIndex;
+
     // allocate chroma buffers missing in the open-loop ME operation
     input_padded_ch[0] = (uint8_t*)malloc(sizeof(uint8_t) * pic_ptr_ref->chromaSize);
     input_padded_ch[1] = (uint8_t*)malloc(sizeof(uint8_t) * pic_ptr_ref->chromaSize);
@@ -584,23 +637,30 @@ void uni_motion_compensation(MeContext_t* context_ptr,
     one_d_intermediate_results_buf_ch[0] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
     one_d_intermediate_results_buf_ch[1] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
 
-    for(uint32_t pu_index = 1; pu_index <= 4; pu_index++){
-//    for(uint32_t pu_index = 5; pu_index <= 20; pu_index++){
+//    for(uint32_t pu_index = 1; pu_index <= 4; pu_index++){
+    for(uint32_t pu_index = 5; pu_index <= 20; pu_index++){
 
-//        row = subblock_xy_16x16[pu_index-5][0];
-//        col = subblock_xy_16x16[pu_index-5][1];
-        row = subblock_xy_32x32[pu_index-1][0];
-        col = subblock_xy_32x32[pu_index-1][1];
+        row = subblock_xy_16x16[pu_index-5][0];
+        col = subblock_xy_16x16[pu_index-5][1];
+//        row = subblock_xy_32x32[pu_index-1][0];
+//        col = subblock_xy_32x32[pu_index-1][1];
 
         pred_ptr[0] = pred[0] + row*SUB_BH*BW + col*SUB_BW;
         pred_ptr[1] = pred[1] + row*(SUB_BH>>1)*(BW>>1) + col*(SUB_BH>>1);
         pred_ptr[2] = pred[2] + row*(SUB_BH>>1)*(BW>>1) + col*(SUB_BH>>1);
 
+        if (pu_index > 4) {
+            nIndex = tab16x16[pu_index - 5] + 5;
+        }
+        else {
+            nIndex = pu_index;
+        }
+
         // motion vectors
-//        first_ref_pos_x = _MVXT(context_ptr->p_best_mv16x16[pu_index-5]);
-//        first_ref_pos_y = _MVYT(context_ptr->p_best_mv16x16[pu_index-5]);
-        first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[pu_index-1]);
-        first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[pu_index-1]);
+        first_ref_pos_x = _MVXT(context_ptr->p_best_mv16x16[nIndex-5]);
+        first_ref_pos_y = _MVYT(context_ptr->p_best_mv16x16[nIndex-5]);
+//        first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[pu_index-1]);
+//        first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[pu_index-1]);
 
         first_ref_integ_pos_x = (first_ref_pos_x >> 2); // TODO: check if this left shift in an unsigned mv is correct
         first_ref_integ_pos_y = (first_ref_pos_y >> 2);
@@ -706,10 +766,10 @@ void uni_motion_compensation(MeContext_t* context_ptr,
 #endif
 
         // Obtain compensated chroma block
-//        first_ref_pos_x = _MVXT(context_ptr->p_best_mv16x16[pu_index-5])/2;
-//        first_ref_pos_y = _MVYT(context_ptr->p_best_mv16x16[pu_index-5])/2;
-        first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[pu_index-1])/2;
-        first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[pu_index-1])/2;
+        first_ref_pos_x = _MVXT(context_ptr->p_best_mv16x16[nIndex-5])/2;
+        first_ref_pos_y = _MVYT(context_ptr->p_best_mv16x16[nIndex-5])/2;
+//        first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[pu_index-1])/2;
+//        first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[pu_index-1])/2;
 
         first_ref_integ_pos_x = (first_ref_pos_x >> 2);
         first_ref_integ_pos_y = (first_ref_pos_y >> 2);
@@ -851,7 +911,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
             memset(counter, 0, BLK_PELS * COLOR_CHANNELS * sizeof(counter[0]));
 
             int blk_fw[4] = { 2, 2, 2, 2};
-            int use_subblock = 0;
+            int use_subblocks = 0;
 
             // for every frame to filter
             for (frame_index = 0; frame_index < altref_nframes; frame_index++) {
@@ -908,7 +968,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                     // skip MC (central frame)
 
                     blk_fw[0] = blk_fw[1] = blk_fw[2] = blk_fw[3] = 2;
-                    use_subblock = 1;
+                    use_subblocks = 0;
 
                     copy_block_and_remove_stride(pred[C_Y], src_central[C_Y] + blk_y_src_offset, BW, BH, stride[C_Y]);
                     copy_block_and_remove_stride(pred[C_U], src_central[C_U] + blk_ch_src_offset, BW>>1, BH>>1, stride[C_U]);
@@ -1021,6 +1081,19 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                                      0, 0);
 #endif
 
+                    // Find best match in this frame by MC
+                    int blk_bestsme[4] = { INT_MAX, INT_MAX, INT_MAX, INT_MAX };
+                    int err = 0;
+                    blk_bestsme[0] = 0; // TODO get sub_blk level sse
+                    blk_bestsme[1] = 0;
+                    blk_bestsme[2] = 0;
+                    blk_bestsme[3] = 0;
+
+                    // TODO get sse
+                    get_me_sse(&err, blk_bestsme);
+
+                    get_blk_fw_from_me_err(&err, blk_bestsme, &use_subblocks, blk_fw);
+
                     // Perform MC using the information acquired using the ME step
                     uni_motion_compensation(context_ptr,
                                         list_input_picture_ptr[index_center],
@@ -1030,6 +1103,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                                         asm_type);
 
 #endif
+
                 }
 
 #if DEBUG
@@ -1107,7 +1181,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                                     1,
                                     altref_strength,
                                     blk_fw, // depends on the error of the MC step
-                                    use_subblock); // depends on the error of the MC step
+                                    use_subblocks); // depends on the error of the MC step
 
                 }
             }
