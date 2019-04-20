@@ -39,12 +39,14 @@
 #define BH 64
 #define BW 64
 #define BLK_PELS 4096  // Pixels in the block
-#define SUB_BH 16
-#define SUB_BW 16
 
 #define INT_MAX 2147483647 //max value for an int
 #define INT_MIN (-2147483647-1) //min value for an int
-#define THR_SHIFT 2
+#define THR_SHIFT 4
+#define THRES_LOW 400 // TODO: adjust to account for using SAD instead of SSE
+#define THRES_HIGH 560 // TODO: adjust to account for using SAD instead of SSE
+#define THRES_DIFF_LOW 300
+#define THRES_DIFF_HIGH 450
 
 // Debug-specific defines
 #define DEBUG 1
@@ -61,12 +63,20 @@
 #define OD_DIVU(_x, _d) \
   (((_d) < OD_DIVU_DMAX) ? (OD_DIVU_SMALL((_x), (_d))) : ((_x) / (_d)))
 
-enum color_channel{Y, U, V};
-
+// TODO: check if this still holds for 64x64 sized-blocks
 static unsigned int index_mult[14] = {
         0, 0, 0, 0, 49152, 39322, 32768, 28087, 24576, 21846, 19661, 17874, 0, 15124
 };
 
+// relationship between pu_index and row and col of the 32x32 sub-blocks
+static const uint32_t subblock_xy_32x32[4][2] = { {0,0}, {0,1}, {1,0}, {1,1} };
+
+static const uint32_t subblock_xy_16x16[16][2] = { {0,0}, {0,1}, {0,2}, {0,3},
+                                                   {1,0}, {1,1}, {1,2}, {1,3},
+                                                   {2,0}, {2,1}, {2,2}, {2,3},
+                                                   {3,0}, {3,1}, {3,2}, {3,3} };
+
+// delete when done debugging
 void print_block_uint8(EbByte src, int width, int height, int stride){
 
     int i, j, k=0;
@@ -80,6 +90,66 @@ void print_block_uint8(EbByte src, int width, int height, int stride){
         k += stride - width;
     }
 
+}
+
+// delete when done debugging
+void save_YUV_to_file(char *filename, EbByte buffer_y, EbByte buffer_u, EbByte buffer_v,
+                      uint16_t width, uint16_t height,
+                      uint16_t stride_y, uint16_t stride_u, uint16_t stride_v,
+                      uint16_t origin_y, uint16_t origin_x){
+
+    FILE *fid = NULL;
+    EbByte pic_point;
+    int h;
+
+    // save current source picture to a YUV file
+    if ((fid = fopen(filename, "wb")) == NULL) {
+        printf("Unable to open file %s to write.\n", "temp_picture.yuv");
+    }else{
+
+        // the source picture saved in the enchanced_picture_ptr contains a border in x and y dimensions
+        pic_point = buffer_y + (origin_y*stride_y) + origin_x;
+        for (h = 0; h < height; h++) {
+            fwrite(pic_point, 1, (size_t)width, fid);
+            pic_point = pic_point + stride_y;
+        }
+        pic_point = buffer_u + ((origin_y>>1)*stride_u) + (origin_x>>1);
+        for (h = 0; h < height>>1; h++) {
+            fwrite(pic_point, 1, (size_t)width>>1, fid);
+            pic_point = pic_point + stride_u;
+        }
+        pic_point = buffer_v + ((origin_y>>1)*stride_v) + (origin_x>>1);
+        for (h = 0; h < height>>1; h++) {
+            fwrite(pic_point, 1, (size_t)width>>1, fid);
+            pic_point = pic_point + stride_v;
+        }
+        fclose(fid);
+    }
+}
+
+// delete when done debugging
+void save_Y_to_file(char *filename, EbByte buffer_y,
+                    uint16_t width, uint16_t height,
+                    uint16_t stride_y,
+                    uint16_t origin_y, uint16_t origin_x){
+
+    FILE *fid = NULL;
+    EbByte pic_point;
+    int h;
+
+    // save current source picture to a YUV file
+    if ((fid = fopen(filename, "wb")) == NULL) {
+        printf("Unable to open file %s to write.\n", "temp_picture.yuv");
+    }else{
+
+        // the source picture saved in the enchanced_picture_ptr contains a border in x and y dimensions
+        pic_point = buffer_y + (origin_y*stride_y) + origin_x;
+        for (h = 0; h < height; h++) {
+            fwrite(pic_point, 1, (size_t)width, fid);
+            pic_point = pic_point + stride_y;
+        }
+        fclose(fid);
+    }
 }
 
 void copy_block_and_remove_stride(EbByte dst, EbByte src, int width, int height, int stride ){
@@ -108,48 +178,83 @@ void copy_block(EbByte dst, int stride_dst, EbByte src, int stride_src, int widt
 
 }
 
-void get_blk_fw_from_me_err(int const *err, int const *blk_bestsme, int *use_subblocks, int *blk_fw){
+static void populate_list_with_value(int *list, int nelements, const int value){
 
-    int k;
-    int thresh_low = 10000;
-    int thresh_high = 20000;
-
-    int err16 = blk_bestsme[0] + blk_bestsme[1] + blk_bestsme[2] + blk_bestsme[3];
-    int max_err = INT_MIN, min_err = INT_MAX;
-
-    for (k = 0; k < 4; k++) {
-        if (min_err > blk_bestsme[k])
-            min_err = blk_bestsme[k];
-        if (max_err < blk_bestsme[k])
-            max_err = blk_bestsme[k];
+    for(int i=0; i<nelements; i++){
+        list[i] = value;
     }
 
-    if (((*err * 15 < (err16 << 4)) && max_err - min_err < 12000) ||
-        ((*err * 14 < (err16 << 4)) && max_err - min_err < 6000)) {
+}
 
-        *use_subblocks = 0;
-        // Assign higher weight to matching MB if it's error
-        // score is lower. If not applying MC default behavior
-        // is to weight all MBs equal.
-        blk_fw[0] = *err < (thresh_low << THR_SHIFT)
-            ? 2
-            : *err < (thresh_high << THR_SHIFT) ? 1 : 0;
+void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_subblock_sad, int *use_16x16_subblocks, int *blk_fw){
 
-        blk_fw[1] = blk_fw[2] = blk_fw[3] = blk_fw[0];
+    int blk_idx;
+
+    int me_sum_subblock_sad = 0;
+    int max_me_sad = INT_MIN, min_me_sad = INT_MAX;
+
+    for (blk_idx = 0; blk_idx < 16; blk_idx++) {
+        if (min_me_sad > me_16x16_subblock_sad[blk_idx])
+            min_me_sad = me_16x16_subblock_sad[blk_idx];
+        if (max_me_sad < me_16x16_subblock_sad[blk_idx])
+            max_me_sad = me_16x16_subblock_sad[blk_idx];
+        me_sum_subblock_sad += me_16x16_subblock_sad[blk_idx];
+    }
+
+    if (((*me_32x32_total_sad * 15 < (me_sum_subblock_sad << 4)) && max_me_sad - min_me_sad < THRES_DIFF_HIGH) ||
+        ((*me_32x32_total_sad * 14 < (me_sum_subblock_sad << 4)) && max_me_sad - min_me_sad < THRES_DIFF_LOW)) {
+
+        // do not consider MC and weighting at a sub-block level
+
+        *use_16x16_subblocks = 0;
+
+        int weight = *me_32x32_total_sad < (THRES_LOW << THR_SHIFT)
+                    ? 2
+                    : *me_32x32_total_sad < (THRES_HIGH << THR_SHIFT) ? 1 : 0;
+
+        populate_list_with_value(blk_fw, 16, weight);
 
     } else {
 
-        *use_subblocks = 1;
+        // split into sub-blocks
 
-        for (k = 0; k < 4; k++)
-        blk_fw[k] = blk_bestsme[k] < thresh_low
-        ? 2
-        : blk_bestsme[k] < thresh_high ? 1 : 0;
+        *use_16x16_subblocks = 1;
+
+        for (blk_idx = 0; blk_idx < 16; blk_idx++)
+            blk_fw[blk_idx] = me_16x16_subblock_sad[blk_idx] < THRES_LOW
+            ? 2
+            : me_16x16_subblock_sad[blk_idx] < THRES_HIGH ? 1 : 0;
 
     }
 }
 
-void get_me_sse(int const* err, int const* blk_bestsme){
+void get_ME_distortion(MeContext_t *context_ptr, int* me_32x32_total_sad, int *me_16x16_subblock_sad){
+
+    uint32_t mv_index;
+
+    *me_32x32_total_sad = 0;
+
+    // Block 32x32 distortion
+    for(uint32_t pu_index = 1; pu_index <= 4; pu_index++){
+
+        mv_index = pu_index;
+
+        // sad
+        *me_32x32_total_sad += context_ptr->p_best_sad32x32[mv_index-1];
+
+        printf("[SAD on 32x32 block = %d]\n", context_ptr->p_best_sad32x32[mv_index-1]);
+    }
+
+    // 16x16 distortion
+    for(uint32_t pu_index = 5; pu_index <= 20; pu_index++){
+
+        mv_index = tab16x16[pu_index - 5] + 5;
+
+        // sad
+        me_16x16_subblock_sad[pu_index-5] = context_ptr->p_best_sad16x16[mv_index-5];
+
+        printf("[SAD on 16x16 block = %d]\n", me_16x16_subblock_sad[pu_index-5]);
+    }
 
 }
 
@@ -260,99 +365,61 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
 
 }
 
-void save_YUV_to_file(char *filename, EbByte buffer_y, EbByte buffer_u, EbByte buffer_v,
-                      uint16_t width, uint16_t height,
-                      uint16_t stride_y, uint16_t stride_u, uint16_t stride_v,
-                      uint16_t origin_y, uint16_t origin_x){
-
-    FILE *fid = NULL;
-    EbByte pic_point;
-    int h;
-
-    // save current source picture to a YUV file
-    if ((fid = fopen(filename, "wb")) == NULL) {
-        printf("Unable to open file %s to write.\n", "temp_picture.yuv");
-    }else{
-
-        // the source picture saved in the enchanced_picture_ptr contains a border in x and y dimensions
-        pic_point = buffer_y + (origin_y*stride_y) + origin_x;
-        for (h = 0; h < height; h++) {
-            fwrite(pic_point, 1, (size_t)width, fid);
-            pic_point = pic_point + stride_y;
-        }
-        pic_point = buffer_u + ((origin_y>>1)*stride_u) + (origin_x>>1);
-        for (h = 0; h < height>>1; h++) {
-            fwrite(pic_point, 1, (size_t)width>>1, fid);
-            pic_point = pic_point + stride_u;
-        }
-        pic_point = buffer_v + ((origin_y>>1)*stride_v) + (origin_x>>1);
-        for (h = 0; h < height>>1; h++) {
-            fwrite(pic_point, 1, (size_t)width>>1, fid);
-            pic_point = pic_point + stride_v;
-        }
-        fclose(fid);
-    }
-}
-
-// delete when done debugging
-void save_Y_to_file(char *filename, EbByte buffer_y,
-                    uint16_t width, uint16_t height,
-                    uint16_t stride_y,
-                    uint16_t origin_y, uint16_t origin_x){
-
-    FILE *fid = NULL;
-    EbByte pic_point;
-    int h;
-
-    // save current source picture to a YUV file
-    if ((fid = fopen(filename, "wb")) == NULL) {
-        printf("Unable to open file %s to write.\n", "temp_picture.yuv");
-    }else{
-
-        // the source picture saved in the enchanced_picture_ptr contains a border in x and y dimensions
-        pic_point = buffer_y + (origin_y*stride_y) + origin_x;
-        for (h = 0; h < height; h++) {
-            fwrite(pic_point, 1, (size_t)width, fid);
-            pic_point = pic_point + stride_y;
-        }
-        fclose(fid);
-    }
-}
-
 // Get sub-block filter weights using
 // blk_fw - block filter weight
-// -------------------------
-// |           |           |
-// | blk_fw[0] | blk_fw[1] |
-// |           |           |
-// |-----------|-----------|
-// |           |           |
-// | blk_fw[2] | blk_fw[3] |
-// |           |           |
-// --------------------------
-static INLINE int get_subblock_filter_weight(unsigned int i,
-                                    unsigned int j,
+// TODO: ugly code, clean up
+static INLINE int get_subblock_filter_weight(unsigned int y,
+                                    unsigned int x,
                                     unsigned int block_height,
                                     unsigned int block_width,
                                     const int *blk_fw,
-                                    int use_subblocks) {
+                                    int use_16x16_subblocks) {
 
-    if (!use_subblocks)
+    if (!use_16x16_subblocks)
         // blk_fw[0] ~ blk_fw[3] are the same.
         return blk_fw[0];
 
+    const double four_thirds = 1.333333;
+
     int filter_weight = 0;
-    if (i < block_height / 2) {
-        if (j < block_width / 2)
+    if (y < block_height / 4) {
+        if (x < block_width / 4)
             filter_weight = blk_fw[0];
-        else
+        else if(x < block_width / 2)
             filter_weight = blk_fw[1];
-    } else {
-        if (j < block_width / 2)
+        else if(x < (double)block_width / four_thirds)
             filter_weight = blk_fw[2];
         else
             filter_weight = blk_fw[3];
+    } else if(y < block_height / 2){
+        if (x < block_width / 4)
+            filter_weight = blk_fw[4];
+        else if(x < block_width / 2)
+            filter_weight = blk_fw[5];
+        else if(x < (double)block_width / four_thirds)
+            filter_weight = blk_fw[6];
+        else
+            filter_weight = blk_fw[7];
+    } else if(y < block_height / 2){
+        if (x < block_width / 4)
+            filter_weight = blk_fw[8];
+        else if(x < block_width / 2)
+            filter_weight = blk_fw[9];
+        else if(x < (double)block_width / four_thirds)
+            filter_weight = blk_fw[10];
+        else
+            filter_weight = blk_fw[11];
+    } else {
+        if (x < block_width / 4)
+            filter_weight = blk_fw[12];
+        else if(x < block_width / 2)
+            filter_weight = blk_fw[13];
+        else if(x < (double)block_width / four_thirds)
+            filter_weight = blk_fw[14];
+        else
+            filter_weight = blk_fw[15];
     }
+
     return filter_weight;
 
 }
@@ -413,7 +480,7 @@ void apply_filtering(EbByte *src,
                     int ss_y, // chroma sub-sampling in y
                     int strength,
                     const int *blk_fw, // sub-block filter weights
-                    int use_subblocks) {
+                    int use_16x16_subblocks) {
 
     unsigned int i, j, k, m;
     int idx, idy;
@@ -447,7 +514,7 @@ void apply_filtering(EbByte *src,
 
             const int pixel_value = pred_y[i * stride_pred[0] + j];
 
-            int filter_weight = get_subblock_filter_weight(i, j, block_height, block_width, blk_fw, use_subblocks);
+            int filter_weight = get_subblock_filter_weight(i, j, block_height, block_width, blk_fw, use_16x16_subblocks);
 
             // non-local mean approach
             int y_index = 0;
@@ -582,36 +649,29 @@ static void apply_filtering_central(EbByte *pred,
 
 }
 
-// relationship between pu_index and row and col of the 32x32 sub-blocks
-static const uint32_t subblock_xy_32x32[4][2] = { {0,0}, {0,1}, {1,0}, {1,1} };
-
-static const uint32_t subblock_xy_16x16[16][2] = { {0,0}, {0,1}, {0,2}, {0,3},
-                                                   {1,0}, {1,1}, {1,2}, {1,3},
-                                                   {2,0}, {2,1}, {2,2}, {2,3},
-                                                   {3,0}, {3,1}, {3,2}, {3,3} };
-
 void uni_motion_compensation(MeContext_t* context_ptr,
                             EbPictureBufferDesc_t *pic_ptr_ref,
                             EbByte *pred,
                             uint32_t sb_origin_x,
                             uint32_t sb_origin_y,
+                            int use_16x16_subblocks,
                             EbAsm asm_type){
 
-    int16_t                           first_ref_pos_x;
-    int16_t                           first_ref_pos_y;
-    int16_t                           first_ref_integ_pos_x;
-    int16_t                           first_ref_integ_pos_y;
-    uint8_t                           first_ref_frac_pos_x;
-    uint8_t                           first_ref_frac_pos_y;
-    uint8_t                           first_ref_frac_pos;
-    int32_t                           x_first_search_index;
-    int32_t                           y_first_search_index;
-    int32_t                           first_search_region_index_pos_integ;
-    int32_t                           first_search_region_index_pos_b;
-    int32_t                           first_search_region_index_pos_h;
-    int32_t                           first_search_region_index_pos_j;
-    EbByte                            pred_ptr[COLOR_CHANNELS];
-    int row, col;
+    int16_t first_ref_pos_x;
+    int16_t first_ref_pos_y;
+    int16_t first_ref_integ_pos_x;
+    int16_t first_ref_integ_pos_y;
+    uint8_t first_ref_frac_pos_x;
+    uint8_t first_ref_frac_pos_y;
+    uint8_t first_ref_frac_pos;
+    int32_t x_first_search_index;
+    int32_t y_first_search_index;
+    int32_t first_search_region_index_pos_integ;
+    int32_t first_search_region_index_pos_b;
+    int32_t first_search_region_index_pos_h;
+    int32_t first_search_region_index_pos_j;
+    EbByte  pred_ptr[COLOR_CHANNELS];
+    int     row, col;
 
     uint8_t *input_padded_ch[2];
     uint8_t *pos_b_buffer_ch[2];
@@ -621,7 +681,7 @@ void uni_motion_compensation(MeContext_t* context_ptr,
 
     uint32_t interpolated_stride_ch = MAX_SEARCH_AREA_WIDTH_CH;
 
-    uint32_t nIndex;
+    uint32_t mv_index;
 
     // allocate chroma buffers missing in the open-loop ME operation
     input_padded_ch[0] = (uint8_t*)malloc(sizeof(uint8_t) * pic_ptr_ref->chromaSize);
@@ -637,30 +697,50 @@ void uni_motion_compensation(MeContext_t* context_ptr,
     one_d_intermediate_results_buf_ch[0] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
     one_d_intermediate_results_buf_ch[1] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
 
-//    for(uint32_t pu_index = 1; pu_index <= 4; pu_index++){
-    for(uint32_t pu_index = 5; pu_index <= 20; pu_index++){
+    uint32_t pu_index_min, pu_index_max;
+    uint16_t subblock_w, subblock_h;
 
-        row = subblock_xy_16x16[pu_index-5][0];
-        col = subblock_xy_16x16[pu_index-5][1];
-//        row = subblock_xy_32x32[pu_index-1][0];
-//        col = subblock_xy_32x32[pu_index-1][1];
+    if(use_16x16_subblocks){
+        // use 16x16 sub-blocks
+        pu_index_min = 5;
+        pu_index_max = 20;
+        subblock_w = 16;
+        subblock_h = 16;
+    }else{
+        // use 32x32 blocks
+        pu_index_min = 1;
+        pu_index_max = 4;
+        subblock_w = 32;
+        subblock_h = 32;
+    }
 
-        pred_ptr[0] = pred[0] + row*SUB_BH*BW + col*SUB_BW;
-        pred_ptr[1] = pred[1] + row*(SUB_BH>>1)*(BW>>1) + col*(SUB_BH>>1);
-        pred_ptr[2] = pred[2] + row*(SUB_BH>>1)*(BW>>1) + col*(SUB_BH>>1);
+    for(uint32_t pu_index = pu_index_min; pu_index <= pu_index_max; pu_index++){
 
-        if (pu_index > 4) {
-            nIndex = tab16x16[pu_index - 5] + 5;
+        if(use_16x16_subblocks) {
+            row = subblock_xy_16x16[pu_index - pu_index_min][0];
+            col = subblock_xy_16x16[pu_index - pu_index_min][1];
+        }else{
+            row = subblock_xy_32x32[pu_index - pu_index_min][0];
+            col = subblock_xy_32x32[pu_index - pu_index_min][1];
+        }
+
+        pred_ptr[0] = pred[0] + row*subblock_h*BW + col*subblock_w;
+        pred_ptr[1] = pred[1] + row*(subblock_h>>1)*(BW>>1) + col*(subblock_h>>1);
+        pred_ptr[2] = pred[2] + row*(subblock_h>>1)*(BW>>1) + col*(subblock_h>>1);
+
+        // get motion vectors
+        if (use_16x16_subblocks) {
+            mv_index = tab16x16[pu_index - pu_index_min];
+
+            first_ref_pos_x = _MVXT(context_ptr->p_best_mv16x16[mv_index]);
+            first_ref_pos_y = _MVYT(context_ptr->p_best_mv16x16[mv_index]);
         }
         else {
-            nIndex = pu_index;
-        }
+            mv_index = pu_index - pu_index_min;
 
-        // motion vectors
-        first_ref_pos_x = _MVXT(context_ptr->p_best_mv16x16[nIndex-5]);
-        first_ref_pos_y = _MVYT(context_ptr->p_best_mv16x16[nIndex-5]);
-//        first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[pu_index-1]);
-//        first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[pu_index-1]);
+            first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[mv_index]);
+            first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[mv_index]);
+        }
 
         first_ref_integ_pos_x = (first_ref_pos_x >> 2); // TODO: check if this left shift in an unsigned mv is correct
         first_ref_integ_pos_y = (first_ref_pos_y >> 2);
@@ -682,8 +762,8 @@ void uni_motion_compensation(MeContext_t* context_ptr,
         uni_pred_averaging(pu_index, // pu_index
                            EB_FALSE,
                            first_ref_frac_pos,
-                           SUB_BW, // pu_width
-                           SUB_BH, // pu_height
+                           subblock_w, // pu_width
+                           subblock_h, // pu_height
                            &(context_ptr->integer_buffer_ptr[0][0][first_search_region_index_pos_integ]),
                            &(context_ptr->pos_b_buffer[0][0][first_search_region_index_pos_b]),
                            &(context_ptr->pos_h_buffer[0][0][first_search_region_index_pos_h]),
@@ -695,11 +775,12 @@ void uni_motion_compensation(MeContext_t* context_ptr,
                            &comp_block_stride,
                            asm_type);
 
-//        save_Y_to_file("sub_block_Y_MC.yuv", comp_block,
-//                   SUB_BW, SUB_BH,
-//                       comp_block_stride, 0, 0);
-
-        copy_block(pred_ptr[0], BW, comp_block, comp_block_stride, SUB_BW, SUB_BH);
+#if 0
+        save_Y_to_file("sub_block_Y_MC.yuv", comp_block,
+                   subblock_w, subblock_h,
+                       comp_block_stride, 0, 0);
+#endif
+        copy_block(pred_ptr[0], BW, comp_block, comp_block_stride, subblock_w, subblock_h);
 
         // ----- compensate chroma ------
 
@@ -751,25 +832,31 @@ void uni_motion_compensation(MeContext_t* context_ptr,
 
 #if DEBUG
 #if 0
-//        save_Y_to_file("input_padded_ch.yuv", input_padded_ch[0],
-//                       interpolated_full_stride_ch, 144,
-//                       interpolated_full_stride_ch, 0, 0);
-//
-//        save_Y_to_file("pos_b_buffer_chroma.yuv", pos_b_buffer_ch[0],
-//                       MAX_SEARCH_AREA_WIDTH_CH, MAX_SEARCH_AREA_HEIGHT_CH,
-//                       MAX_SEARCH_AREA_WIDTH_CH, 0, 0);
-//
-//        save_Y_to_file("pos_b_buffer_luma.yuv", context_ptr->pos_b_buffer[0][0],
-//                       MAX_SEARCH_AREA_WIDTH, MAX_SEARCH_AREA_HEIGHT,
-//                       MAX_SEARCH_AREA_WIDTH, 0, 0);
+        save_Y_to_file("input_padded_ch.yuv", input_padded_ch[0],
+                       interpolated_full_stride_ch, 144,
+                       interpolated_full_stride_ch, 0, 0);
+
+        save_Y_to_file("pos_b_buffer_chroma.yuv", pos_b_buffer_ch[0],
+                       MAX_SEARCH_AREA_WIDTH_CH, MAX_SEARCH_AREA_HEIGHT_CH,
+                       MAX_SEARCH_AREA_WIDTH_CH, 0, 0);
+
+        save_Y_to_file("pos_b_buffer_luma.yuv", context_ptr->pos_b_buffer[0][0],
+                       MAX_SEARCH_AREA_WIDTH, MAX_SEARCH_AREA_HEIGHT,
+                       MAX_SEARCH_AREA_WIDTH, 0, 0);
 #endif
 #endif
 
-        // Obtain compensated chroma block
-        first_ref_pos_x = _MVXT(context_ptr->p_best_mv16x16[nIndex-5])/2;
-        first_ref_pos_y = _MVYT(context_ptr->p_best_mv16x16[nIndex-5])/2;
-//        first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[pu_index-1])/2;
-//        first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[pu_index-1])/2;
+        // ------ Obtain compensated chroma block ------
+
+        // get motion vectors
+        if (use_16x16_subblocks) {
+            first_ref_pos_x = _MVXT(context_ptr->p_best_mv16x16[mv_index])/2;
+            first_ref_pos_y = _MVYT(context_ptr->p_best_mv16x16[mv_index])/2;
+        }
+        else {
+            first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[mv_index])/2;
+            first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[mv_index])/2;
+        }
 
         first_ref_integ_pos_x = (first_ref_pos_x >> 2);
         first_ref_integ_pos_y = (first_ref_pos_y >> 2);
@@ -789,8 +876,8 @@ void uni_motion_compensation(MeContext_t* context_ptr,
         uni_pred_averaging(pu_index, // pu_index
                            EB_TRUE,
                            first_ref_frac_pos,
-                           SUB_BW>>1, // pu_width
-                           SUB_BH>>1, // pu_height
+                           subblock_w>>1, // pu_width
+                           subblock_h>>1, // pu_height
                            &(integer_buffer_ptr_ch[0][first_search_region_index_pos_integ]),
                            &(pos_b_buffer_ch[0][first_search_region_index_pos_b]),
                            &(pos_h_buffer_ch[0][first_search_region_index_pos_h]),
@@ -802,18 +889,19 @@ void uni_motion_compensation(MeContext_t* context_ptr,
                            &comp_block_stride,
                            asm_type);
 
-        copy_block(pred_ptr[1], BW>>1, comp_block, comp_block_stride, SUB_BW>>1, SUB_BH>>1);
+        copy_block(pred_ptr[1], BW>>1, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
 
-//        save_Y_to_file("sub_block_U_MC.yuv", comp_block,
-//                       SUB_BW>>1, SUB_BH>>1,
-//                       comp_block_stride, 0, 0);
-
+#if 0
+        save_Y_to_file("sub_block_U_MC.yuv", comp_block,
+                       subblock_w>>1, subblock_h>>1,
+                       comp_block_stride, 0, 0);
+#endif
         // compensate V
         uni_pred_averaging(pu_index, // pu_index
                            EB_TRUE,
                            first_ref_frac_pos,
-                           SUB_BW>>1, // pu_width
-                           SUB_BH>>1, // pu_height
+                           subblock_w>>1, // pu_width
+                           subblock_h>>1, // pu_height
                            &(integer_buffer_ptr_ch[1][first_search_region_index_pos_integ]),
                            &(pos_b_buffer_ch[1][first_search_region_index_pos_b]),
                            &(pos_h_buffer_ch[1][first_search_region_index_pos_h]),
@@ -825,7 +913,7 @@ void uni_motion_compensation(MeContext_t* context_ptr,
                            &comp_block_stride,
                            asm_type);
 
-        copy_block(pred_ptr[2], BW>>1, comp_block, comp_block_stride, SUB_BW>>1, SUB_BH>>1);
+        copy_block(pred_ptr[2], BW>>1, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
 
     }
 
@@ -910,8 +998,10 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
             memset(accumulator, 0, BLK_PELS * COLOR_CHANNELS * sizeof(accumulator[0]));
             memset(counter, 0, BLK_PELS * COLOR_CHANNELS * sizeof(counter[0]));
 
-            int blk_fw[4] = { 2, 2, 2, 2};
-            int use_subblocks = 0;
+            int blk_fw[16] = { 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2 };
+            int use_16x16_subblocks = 0;
+            int me_16x16_subblock_sad[16];
+            int me_32x32_total_sad = 0;
 
             // for every frame to filter
             for (frame_index = 0; frame_index < altref_nframes; frame_index++) {
@@ -967,8 +1057,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
 
                     // skip MC (central frame)
 
-                    blk_fw[0] = blk_fw[1] = blk_fw[2] = blk_fw[3] = 2;
-                    use_subblocks = 0;
+                    populate_list_with_value(blk_fw, 16, 2);
+                    use_16x16_subblocks = 0;
 
                     copy_block_and_remove_stride(pred[C_Y], src_central[C_Y] + blk_y_src_offset, BW, BH, stride[C_Y]);
                     copy_block_and_remove_stride(pred[C_U], src_central[C_U] + blk_ch_src_offset, BW>>1, BH>>1, stride[C_U]);
@@ -1064,35 +1154,28 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                     save_YUV_to_file("sub_block_input.yuv", src_central[C_Y] + blk_y_src_offset + 16*2*stride[C_Y] + 16,
                                      src_central[C_U] + blk_ch_src_offset + 8*2*stride[C_U] + 8,
                                      src_central[C_V] + blk_ch_src_offset + 8*2*stride[C_V] + 8,
-                                     SUB_BW, SUB_BH,
+                                     subblock_w, subblock_h,
                                      stride[C_Y], stride[C_U], stride[C_V],
                                      0, 0);
 
                     save_YUV_to_file("sub_block_central.yuv", src_altref_index[C_Y] + 16*2*stride[C_Y] + 16,
                                      src_altref_index[C_U] + 8*2*stride[C_U] + 8,
                                      src_altref_index[C_V] + 8*2*stride[C_V] + 8,
-                                     SUB_BW, SUB_BH,
+                                     subblock_w, subblock_h,
                                      stride[C_Y], stride[C_U], stride[C_V],
                                    0, 0);
 
                     save_Y_to_file("sub_block_input_U.yuv", src_central[C_U] + blk_ch_src_offset + 8,
-                                     SUB_BW>>1, SUB_BH>>1,
+                                     subblock_w>>1, subblock_h>>1,
                                      stride[C_U],
                                      0, 0);
 #endif
 
                     // Find best match in this frame by MC
-                    int blk_bestsme[4] = { INT_MAX, INT_MAX, INT_MAX, INT_MAX };
-                    int err = 0;
-                    blk_bestsme[0] = 0; // TODO get sub_blk level sse
-                    blk_bestsme[1] = 0;
-                    blk_bestsme[2] = 0;
-                    blk_bestsme[3] = 0;
 
-                    // TODO get sse
-                    get_me_sse(&err, blk_bestsme);
+                    get_ME_distortion(context_ptr, &me_32x32_total_sad, me_16x16_subblock_sad);
 
-                    get_blk_fw_from_me_err(&err, blk_bestsme, &use_subblocks, blk_fw);
+                    get_blk_fw_using_dist(&me_32x32_total_sad, me_16x16_subblock_sad, &use_16x16_subblocks, blk_fw);
 
                     // Perform MC using the information acquired using the ME step
                     uni_motion_compensation(context_ptr,
@@ -1100,6 +1183,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                                         pred,
                                         (uint32_t)blk_col*BW,
                                         (uint32_t)blk_row*BH,
+                                        use_16x16_subblocks,
                                         asm_type);
 
 #endif
@@ -1181,7 +1265,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                                     1,
                                     altref_strength,
                                     blk_fw, // depends on the error of the MC step
-                                    use_subblocks); // depends on the error of the MC step
+                                    use_16x16_subblocks); // depends on the error of the MC step
 
                 }
             }
