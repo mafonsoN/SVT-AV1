@@ -27,7 +27,6 @@
 #include "EbMcp.h"
 
 #define COLOR_CHANNELS 3
-
 #define C_Y 0
 #define C_U 1
 #define C_V 2
@@ -43,8 +42,8 @@
 #define INT_MAX 2147483647 //max value for an int
 #define INT_MIN (-2147483647-1) //min value for an int
 #define THR_SHIFT 4
-#define THRES_LOW 400 // TODO: adjust to account for using SAD instead of SSE
-#define THRES_HIGH 560 // TODO: adjust to account for using SAD instead of SSE
+#define THRES_LOW 768 // mean SAD of 3
+#define THRES_HIGH 1280 // mean SAD of 5
 #define THRES_DIFF_LOW 300
 #define THRES_DIFF_HIGH 450
 
@@ -63,7 +62,6 @@
 #define OD_DIVU(_x, _d) \
   (((_d) < OD_DIVU_DMAX) ? (OD_DIVU_SMALL((_x), (_d))) : ((_x) / (_d)))
 
-// TODO: check if this still holds for 64x64 sized-blocks
 static unsigned int index_mult[14] = {
         0, 0, 0, 0, 49152, 39322, 32768, 28087, 24576, 21846, 19661, 17874, 0, 15124
 };
@@ -220,10 +218,15 @@ void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_su
 
         *use_16x16_subblocks = 1;
 
-        for (blk_idx = 0; blk_idx < 16; blk_idx++)
+        for (blk_idx = 0; blk_idx < 16; blk_idx++){
             blk_fw[blk_idx] = me_16x16_subblock_sad[blk_idx] < THRES_LOW
-            ? 2
-            : me_16x16_subblock_sad[blk_idx] < THRES_HIGH ? 1 : 0;
+                              ? 2
+                              : me_16x16_subblock_sad[blk_idx] < THRES_HIGH ? 1 : 0;
+            
+        }
+
+
+
 
     }
 }
@@ -242,7 +245,9 @@ void get_ME_distortion(MeContext_t *context_ptr, int* me_32x32_total_sad, int *m
         // sad
         *me_32x32_total_sad += context_ptr->p_best_sad32x32[mv_index-1];
 
+#if DEBUG
         printf("[SAD on 32x32 block = %d]\n", context_ptr->p_best_sad32x32[mv_index-1]);
+#endif
     }
 
     // 16x16 distortion
@@ -253,11 +258,12 @@ void get_ME_distortion(MeContext_t *context_ptr, int* me_32x32_total_sad, int *m
         // sad
         me_16x16_subblock_sad[pu_index-5] = context_ptr->p_best_sad16x16[mv_index-5];
 
+#if DEBUG
         printf("[SAD on 16x16 block = %d]\n", me_16x16_subblock_sad[pu_index-5]);
+#endif
     }
 
 }
-
 
 void create_ME_context_and_picture_control(MotionEstimationContext_t *context_ptr,
                                             PictureParentControlSet_t *picture_control_set_ptr_frame,
@@ -400,7 +406,7 @@ static INLINE int get_subblock_filter_weight(unsigned int y,
             filter_weight = blk_fw[6];
         else
             filter_weight = blk_fw[7];
-    } else if(y < block_height / 2){
+    } else if(y < (double)block_height / four_thirds){
         if (x < block_width / 4)
             filter_weight = blk_fw[8];
         else if(x < block_width / 2)
@@ -544,6 +550,10 @@ void apply_filtering(EbByte *src,
             y_index += 2;
 
             modifier = mod_index(modifier, y_index, rounding, strength, filter_weight);
+
+            if(modifier==0){
+                modifier=0;
+            }
 
             count_y[k] += modifier;
             accum_y[k] += modifier * pixel_value;
@@ -795,21 +805,19 @@ void uni_motion_compensation(MeContext_t* context_ptr,
         EB_MEMCPY(input_padded_ch[0], pic_ptr_ref->bufferCb, pic_ptr_ref->chromaSize);
         EB_MEMCPY(input_padded_ch[1], pic_ptr_ref->bufferCr, pic_ptr_ref->chromaSize);
 
-        generate_padding(
-                input_padded_ch[0],
-                pic_ptr_ref->strideCb,
-                pic_ptr_ref->width >> 1,
-                pic_ptr_ref->height >> 1,
-                pic_ptr_ref->origin_x >> 1,
-                pic_ptr_ref->origin_y >> 1);
+        generate_padding(input_padded_ch[0],
+                        pic_ptr_ref->strideCb,
+                        pic_ptr_ref->width >> 1,
+                        pic_ptr_ref->height >> 1,
+                        pic_ptr_ref->origin_x >> 1,
+                        pic_ptr_ref->origin_y >> 1);
 
-        generate_padding(
-                input_padded_ch[1],
-                pic_ptr_ref->strideCr,
-                pic_ptr_ref->width >> 1,
-                pic_ptr_ref->height >> 1,
-                pic_ptr_ref->origin_x >> 1,
-                pic_ptr_ref->origin_y >> 1);
+        generate_padding(input_padded_ch[1],
+                        pic_ptr_ref->strideCr,
+                        pic_ptr_ref->width >> 1,
+                        pic_ptr_ref->height >> 1,
+                        pic_ptr_ref->origin_x >> 1,
+                        pic_ptr_ref->origin_y >> 1);
 
         integer_buffer_ptr_ch[0] = &(input_padded_ch[0][searchRegionIndex_cb]);
         integer_buffer_ptr_ch[1] = &(input_padded_ch[1][searchRegionIndex_cr]);
@@ -1179,7 +1187,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
 
                     // Perform MC using the information acquired using the ME step
                     uni_motion_compensation(context_ptr,
-                                        list_input_picture_ptr[index_center],
+                                        list_input_picture_ptr[frame_index],
                                         pred,
                                         (uint32_t)blk_col*BW,
                                         (uint32_t)blk_row*BH,
@@ -1346,7 +1354,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
     }
 
 #if DEBUG
-    save_YUV_to_file("filtered_frame.yuv", alt_ref_buffer_y, alt_ref_buffer_u, alt_ref_buffer_v,
+    save_YUV_to_file("filtered_frame_svtav1.yuv", alt_ref_buffer_y, alt_ref_buffer_u, alt_ref_buffer_v,
                      input_picture_ptr_central->width, input_picture_ptr_central->height,
                      input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr,
                      0, 0);
