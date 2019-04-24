@@ -24,6 +24,7 @@
 #include "EbMotionEstimationContext.h"
 #include "EbDefinitions.h"
 #include "EbLambdaRateTables.h"
+#include "EbPictureAnalysisProcess.h"
 #include "EbMcp.h"
 
 #define COLOR_CHANNELS 3
@@ -53,6 +54,7 @@
 
 #define _MM_HINT_T2  1
 #define OD_DIVU_DMAX (1024)
+
 #define OD_DIVU_SMALL(_x, _d)                                     \
   ((uint32_t)((OD_DIVU_SMALL_CONSTS[(_d)-1][0] * (uint64_t)(_x) + \
                OD_DIVU_SMALL_CONSTS[(_d)-1][1]) >>                \
@@ -176,6 +178,24 @@ void copy_block(EbByte dst, int stride_dst, EbByte src, int stride_src, int widt
 
 }
 
+void copy_picture_channel(EbByte dst, int stride_dst,
+                          int origin_dst_y, int origin_dst_x,
+                          EbByte src, int stride_src,
+                          int origin_src_y, int origin_src_x,
+                          int width, int height){
+
+    int h;
+    EbByte src_cpy = src + origin_src_y*stride_src + origin_src_x;
+    EbByte dst_cpy = dst + origin_dst_y*stride_dst + origin_dst_x;
+
+    for (h=0; h<height; h++){
+        EB_MEMCPY(dst_cpy, src_cpy, width * sizeof(uint8_t));
+        dst_cpy += stride_dst;
+        src_cpy += stride_src;
+    }
+
+}
+
 static void populate_list_with_value(int *list, int nelements, const int value){
 
     for(int i=0; i<nelements; i++){
@@ -214,7 +234,7 @@ void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_su
 
     } else {
 
-        // split into sub-blocks
+        // split into 16x16 sub-blocks
 
         *use_16x16_subblocks = 1;
 
@@ -222,11 +242,8 @@ void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_su
             blk_fw[blk_idx] = me_16x16_subblock_sad[blk_idx] < THRES_LOW
                               ? 2
                               : me_16x16_subblock_sad[blk_idx] < THRES_HIGH ? 1 : 0;
-            
+
         }
-
-
-
 
     }
 }
@@ -245,7 +262,7 @@ void get_ME_distortion(MeContext_t *context_ptr, int* me_32x32_total_sad, int *m
         // sad
         *me_32x32_total_sad += context_ptr->p_best_sad32x32[mv_index-1];
 
-#if DEBUG
+#if 0
         printf("[SAD on 32x32 block = %d]\n", context_ptr->p_best_sad32x32[mv_index-1]);
 #endif
     }
@@ -258,7 +275,7 @@ void get_ME_distortion(MeContext_t *context_ptr, int* me_32x32_total_sad, int *m
         // sad
         me_16x16_subblock_sad[pu_index-5] = context_ptr->p_best_sad16x16[mv_index-5];
 
-#if DEBUG
+#if 0
         printf("[SAD on 16x16 block = %d]\n", me_16x16_subblock_sad[pu_index-5]);
 #endif
     }
@@ -473,7 +490,7 @@ static INLINE void calculate_squared_errors(const uint8_t *s,
 
 }
 
-
+// TODO: libaom uses an intrinsics version of this function
 void apply_filtering(EbByte *src,
                     EbByte *pred,
                     uint32_t **accum,
@@ -822,9 +839,9 @@ void uni_motion_compensation(MeContext_t* context_ptr,
         integer_buffer_ptr_ch[0] = &(input_padded_ch[0][searchRegionIndex_cb]);
         integer_buffer_ptr_ch[1] = &(input_padded_ch[1][searchRegionIndex_cr]);
         uint32_t interpolated_full_stride_ch = pic_ptr_ref->strideCb;
-
         uint32_t search_area_width_ch = (context_ptr->search_area_width + (BLOCK_SIZE_64 - 1))>>1;
         uint32_t search_area_height_ch = (context_ptr->search_area_height + (BLOCK_SIZE_64 - 1))>>1;
+
         interpolate_search_region_AVC_chroma(context_ptr,
                                              integer_buffer_ptr_ch[0] + (ME_FILTER_TAP >> 1) + ((ME_FILTER_TAP >> 1) * interpolated_full_stride_ch),
                                              integer_buffer_ptr_ch[1] + (ME_FILTER_TAP >> 1) + ((ME_FILTER_TAP >> 1) * interpolated_full_stride_ch),
@@ -942,7 +959,8 @@ void uni_motion_compensation(MeContext_t* context_ptr,
 static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **list_picture_control_set_ptr,
                                             EbPictureBufferDesc_t **list_input_picture_ptr,
                                             uint8_t altref_strength,
-                                            uint8_t altref_nframes) {
+                                            uint8_t altref_nframes,
+                                            uint8_t **alt_ref_buffer) {
 
     int frame_index;
     DECLARE_ALIGNED(16, uint32_t, accumulator[BLK_PELS * COLOR_CHANNELS]);
@@ -975,11 +993,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
     int blk_rows = (input_picture_ptr_central->height + BH - 1) / BH; // that fits to the 32x32 blocks are actually filtered
 
     int stride[COLOR_CHANNELS] = { input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr };
-
-    // allocate memory for the alt-ref buffer - to be replaced by some other final structure
-    EbByte alt_ref_buffer_y = (EbByte) malloc(input_picture_ptr_central->lumaSize * sizeof(uint8_t));
-    EbByte alt_ref_buffer_u = (EbByte) malloc(input_picture_ptr_central->chromaSize * sizeof(uint8_t));
-    EbByte alt_ref_buffer_v = (EbByte) malloc(input_picture_ptr_central->chromaSize * sizeof(uint8_t));
 
 #if VANILA_ME==0
     MotionEstimationContext_t *me_context_ptr;
@@ -1305,7 +1318,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                 for (j = 0; j < BW; j++, k++) {
 
 //                    alt_ref_buffer_y[byte] = (uint8_t)OD_DIVU(accum[C_Y][k] + (count[C_Y][k] >> 1), count[C_Y][k]);
-                    alt_ref_buffer_y[byte] = (accum[C_Y][k] + (count[C_Y][k] >> 1))/count[C_Y][k];
+                    alt_ref_buffer[C_Y][byte] = (accum[C_Y][k] + (count[C_Y][k] >> 1))/count[C_Y][k];
 //                    printf("accum = %d, count = %d and dst = %d\n", accum[C_Y][k], count[C_Y][k], alt_ref_buffer_y[byte]);
                     // move to next pixel
                     byte++;
@@ -1318,10 +1331,10 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                 for (j = 0; j < blk_width_ch; j++, k++) {
                     // U
 //                    alt_ref_buffer_u[byte] = (uint8_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]);
-                    alt_ref_buffer_u[byte] = (accum[C_U][k] + (count[C_U][k] >> 1))/count[C_U][k];
+                    alt_ref_buffer[C_U][byte] = (accum[C_U][k] + (count[C_U][k] >> 1))/count[C_U][k];
                     // V
 //                    alt_ref_buffer_v[byte] = (uint8_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]);
-                    alt_ref_buffer_v[byte] = (accum[C_V][k] + (count[C_V][k] >> 1))/count[C_V][k];
+                    alt_ref_buffer[C_V][byte] = (accum[C_V][k] + (count[C_V][k] >> 1))/count[C_V][k];
                     // move to next pixel
                     byte++;
                 }
@@ -1334,7 +1347,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
             snprintf(block_number, 4, "%d", blk_row*blk_cols + blk_col);
             strcat(filename, block_number);
             strcat(filename, ".yuv");
-            save_YUV_to_file(filename, alt_ref_buffer_y+blk_y_offset, alt_ref_buffer_u+blk_ch_offset, alt_ref_buffer_v+blk_ch_offset,
+            save_YUV_to_file(filename, alt_ref_buffer[C_Y]+blk_y_offset, alt_ref_buffer[C_U]+blk_ch_offset, alt_ref_buffer[C_V]+blk_ch_offset,
                              BW, BH,
                              input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr,
                              0, 0);
@@ -1354,15 +1367,11 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
     }
 
 #if DEBUG
-    save_YUV_to_file("filtered_frame_svtav1.yuv", alt_ref_buffer_y, alt_ref_buffer_u, alt_ref_buffer_v,
+    save_YUV_to_file("filtered_frame_svtav1.yuv", alt_ref_buffer[C_Y], alt_ref_buffer[C_U], alt_ref_buffer[C_V],
                      input_picture_ptr_central->width, input_picture_ptr_central->height,
                      input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr,
                      0, 0);
 #endif
-
-    free(alt_ref_buffer_y);
-    free(alt_ref_buffer_u);
-    free(alt_ref_buffer_v);
 
 #if !VANILA_ME
     free(me_context_ptr);
@@ -1490,12 +1499,12 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
                                 input_picture_ptr->height,
                                 input_picture_ptr->stride_y);
 
+    // Adjust the strength of the temporal filtering
+    // based on the amount of noise present in the frame
+    // adjustment in the integer range [-2, 1]
+    // if noiselevel < 0, it means that the estimation was
+    // unsuccessful and therefore keep the strength as it was set
     if (noiselevel > 0) {
-        // Adjust the strength of the temporal filtering
-        // based on the amount of noise present in the frame
-        // adjustment in the integer range [-2, 1]
-        // if noiselevel < 0, it means that the estimation was
-        // unsuccessful and therefore keep the strength as it was set
         int noiselevel_adj;
         if (noiselevel < 0.75)
             noiselevel_adj = -2;
@@ -1507,6 +1516,7 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
             noiselevel_adj = 1;
         adj_strength += noiselevel_adj;
     }
+
 #if DEBUG
     printf("[DEBUG] noise level: %g, strength = %d, adj_strength = %d\n", noiselevel, strength, adj_strength);
 #endif
@@ -1514,7 +1524,7 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
     // TODO: does it make sense to use negative strength after it has been adjusted?
     strength = adj_strength;
 
-    // TODO: libaom applies some more refinements to the number of filtered frames
+    // TODO: libaom applies some more refinements to the number of frames to filter and strength
     // and the strength based on the quantization level and a stat called group_boost
     // for now, this is ignored.
     /* // Adjust the strength based on active max q.
@@ -1539,24 +1549,134 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
     *altref_strength = (uint8_t)strength;
 }
 
+int replace_src_pic_buffers(PictureParentControlSet_t *picture_control_set_ptr_central, uint8_t **alt_ref_buffer){
+
+    // Y
+    copy_picture_channel(picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->origin_y,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->origin_x,
+                         alt_ref_buffer[C_Y],
+                         picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
+                         0,
+                         0,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->width,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->height);
+
+    // U
+    copy_picture_channel(picture_control_set_ptr_central->enhanced_picture_ptr->bufferCb,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->strideCb,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->origin_y >> 1,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->origin_x >> 1,
+                         alt_ref_buffer[C_U],
+                         picture_control_set_ptr_central->enhanced_picture_ptr->strideCb,
+                         0,
+                         0,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->width >> 1,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->height >> 1);
+
+    // V
+    copy_picture_channel(picture_control_set_ptr_central->enhanced_picture_ptr->bufferCr,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->strideCr,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->origin_y >> 1,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->origin_x >> 1,
+                         alt_ref_buffer[C_V],
+                         picture_control_set_ptr_central->enhanced_picture_ptr->strideCr,
+                         0,
+                         0,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->width >> 1,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->height >> 1);
+
+
+    // Replace enhanced picture buffer
+
+#if DEBUG
+    save_YUV_to_file("modified_enhanced_picture.yuv",
+                     picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->bufferCb,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->bufferCr,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->width,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->height,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->strideCb,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->strideCr,
+                     0,
+                     0);
+#endif
+
+    // get padded alt-ref picture
+
+    // reference structures (padded pictures + downsampled versions)
+    EbPaReferenceObject_t *src_object = (EbPaReferenceObject_t*)picture_control_set_ptr_central->pa_reference_picture_wrapper_ptr->object_ptr;
+    EbPictureBufferDesc_t *padded_pic_ptr = src_object->inputPaddedPicturePtr;
+    EbPictureBufferDesc_t *quarter_pic_ptr = src_object->quarterDecimatedPicturePtr;
+    EbPictureBufferDesc_t *sixteenth_pic_ptr = src_object->sixteenthDecimatedPicturePtr;
+
+    copy_picture_channel(padded_pic_ptr->buffer_y,
+                         padded_pic_ptr->stride_y,
+                         padded_pic_ptr->origin_y,
+                         padded_pic_ptr->origin_x,
+                         alt_ref_buffer[C_Y],
+                         picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
+                         0,
+                         0,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->width,
+                         picture_control_set_ptr_central->enhanced_picture_ptr->height);
+
+    DecimateInputPicture(picture_control_set_ptr_central,
+                         padded_pic_ptr,
+                         quarter_pic_ptr,
+                         sixteenth_pic_ptr);
+
+#if DEBUG
+    save_Y_to_file("padded_picture.yuv",
+            padded_pic_ptr->buffer_y,
+            picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
+            picture_control_set_ptr_central->enhanced_picture_ptr->height,
+            picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
+            0, 0);
+
+    save_Y_to_file("quarter_picture.yuv",
+                   quarter_pic_ptr->buffer_y,
+                   picture_control_set_ptr_central->enhanced_picture_ptr->stride_y >> 1,
+                   picture_control_set_ptr_central->enhanced_picture_ptr->height >> 1,
+                   picture_control_set_ptr_central->enhanced_picture_ptr->stride_y >> 1,
+                   0, 0);
+
+    save_Y_to_file("sixteenth_picture.yuv",
+                   sixteenth_pic_ptr->buffer_y,
+                   picture_control_set_ptr_central->enhanced_picture_ptr->stride_y >> 2,
+                   picture_control_set_ptr_central->enhanced_picture_ptr->height >> 2,
+                   picture_control_set_ptr_central->enhanced_picture_ptr->stride_y >> 2,
+                   0, 0);
+#endif
+
+    return 0;
+
+}
+
 EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_control_set_ptr) {
 
     int frame;
     uint64_t frames_to_blur_backward, frames_to_blur_forward, start_frame;
     EbBool enable_alt_refs;
-    uint8_t altref_strength, altref_nframes;
+    uint8_t altref_strength, altref_nframes, index_center;
     EbPictureBufferDesc_t *input_picture_ptr;
     PictureParentControlSet_t *picture_control_set_ptr_central = list_picture_control_set_ptr[0]; // picture control set of the first frame
-
-    // distance to key frame
-    uint64_t distance_to_key = picture_control_set_ptr_central->picture_number - picture_control_set_ptr_central->decode_order;
-
-    // source central frame picture buffer
-    input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
 
     // user-defined encoder parameters related to alt-refs
     altref_strength = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_strength;
     altref_nframes = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_nframes;
+
+    // index of the central source frame
+    index_center = (uint8_t)(altref_nframes/2);
+    picture_control_set_ptr_central = list_picture_control_set_ptr[index_center];
+
+    // source central frame picture buffer
+    input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
+
+    // distance to key frame
+    uint64_t distance_to_key = picture_control_set_ptr_central->picture_number - picture_control_set_ptr_central->decode_order;
 
     // adjust filter parameter based on the estimated noise of the picture
     adjust_filter_params(input_picture_ptr, distance_to_key, &altref_strength, &altref_nframes);
@@ -1599,17 +1719,22 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_con
         //frames[frames_to_blur - 1 - frame] = &buf->img;
     }
 
+    uint8_t *alt_ref_buffer[COLOR_CHANNELS];
+
+    // allocate memory for the alt-ref buffer - to be replaced by some other final structure
+    for(int c=0; c<COLOR_CHANNELS; c++){
+        alt_ref_buffer[c] = (EbByte) malloc(input_picture_ptr->lumaSize * sizeof(uint8_t));
+    }
+
     EbErrorType ret;
-    ret = produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, altref_strength, altref_nframes);
+    ret = produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, altref_strength, altref_nframes, alt_ref_buffer);
 
-    // Initialize errorperbit, sadperbit16 and sadperbit4.
-    // rdmult = av1_compute_rd_mult_based_on_qindex(cpi, ARNR_FILT_QINDEX);
-    // set_error_per_bit(&cpi->td.mb, rdmult);
-    // av1_initialize_me_consts(cpi, &cpi->td.mb, ARNR_FILT_QINDEX);
-    // av1_initialize_cost_tables(&cpi->common, &cpi->td.mb);
+    // TODO: for test purposes only - replacing the buffers entirely
+    replace_src_pic_buffers(picture_control_set_ptr_central, alt_ref_buffer);
 
-    // function that implements the temporal filtering in libaom
-    //temporal_filter_iterate_c(cpi, frames, frames_to_blur, frames_to_blur_backward, strength, &sf);
+    for(int c=0; c<COLOR_CHANNELS; c++){
+        free(alt_ref_buffer[c]);
+    }
 
     return ret;
 }

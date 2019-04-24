@@ -5,6 +5,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "EbDefinitions.h"
 #include "EbUtility.h"
@@ -37,6 +38,10 @@
 #define OTH 64
 #define FC_SKIP_TX_SR_TH025                     125 // Fast cost skip tx search threshold.
 #define FC_SKIP_TX_SR_TH010                     110 // Fast cost skip tx search threshold.
+
+// alt-ref debug define
+#define ALT_REF_WAIT 0
+
  /************************************************
   * Picture Analysis Context Constructor
   ************************************************/
@@ -1636,20 +1641,6 @@ void  Av1GenerateRpsInfo(
     }
  }
 
-char* itoa(int val, int base){
-
-    static char buf[32] = {0};
-
-    int i = 30;
-
-    for(; val && i ; --i, val /= base)
-
-        buf[i] = "0123456789abcdef"[val % base];
-
-    return &buf[i+1];
-
-}
-
 /***************************************************************************************************
  * Picture Decision Kernel
  *
@@ -1799,6 +1790,12 @@ void* picture_decision_kernel(void *input_ptr)
     // ----- Alt-Refs variables
     PictureParentControlSet_t *list_picture_control_set_ptr[ALTREF_MAX_NFRAMES];
     int count_alt_refs = 0;
+    int alt_ref_central_loc = 16; // TODO: testing purposes only - stategy to define which frames are alt-refs is required
+#if ALT_REF_WAIT
+    EbObjectWrapper_t *outputResultsWrapperPtr_list[10];
+    int count_ME_wait_pics = 0;
+    EbBool alt_ref_created_flag = EB_FALSE;
+#endif
     // -----
 
     for (;;) {
@@ -2238,27 +2235,6 @@ void* picture_decision_kernel(void *input_ptr)
                                 EB_TRUE :
                                 encode_context_ptr->terminating_sequence_flag_received;
 
-
-                            // ----------------- Alt-Refs --------------------
-
-                            // TODO: testing purposes only - stategy to define which frames are alt-refs will be placed here
-                            int alt_ref_central_loc = 16;
-                            int altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
-                            int pic_number_to_save = alt_ref_central_loc - altref_nframes/2 + count_alt_refs;
-
-                            if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE
-                                && picture_control_set_ptr->picture_number == pic_number_to_save ){ // Altrefs are enabled and this is the first P frame (ALTREF location)
-
-                                list_picture_control_set_ptr[count_alt_refs] = picture_control_set_ptr;
-                                count_alt_refs++;
-
-                                if(picture_control_set_ptr->picture_number == alt_ref_central_loc + altref_nframes/2){
-                                    EbErrorType ret = init_temporal_filtering(list_picture_control_set_ptr);
-                                }
-
-                            }
-                            // ------------------------------------------------
-
                             encode_context_ptr->terminating_picture_number = (picture_control_set_ptr->end_of_sequence_flag == EB_TRUE) ?
                                 picture_control_set_ptr->picture_number :
                                 encode_context_ptr->terminating_picture_number;
@@ -2691,25 +2667,43 @@ void* picture_decision_kernel(void *input_ptr)
                             picture_control_set_ptr->me_segments_total_count = (uint16_t)(picture_control_set_ptr->me_segments_column_count  * picture_control_set_ptr->me_segments_row_count);
                             picture_control_set_ptr->me_segments_completion_mask = 0;
 
+
                             // Post the results to the ME processes
                             {
                                 uint32_t segment_index;
 
-                                for (segment_index = 0; segment_index < picture_control_set_ptr->me_segments_total_count; ++segment_index)
-                                {
+                                for (segment_index = 0; segment_index <
+                                                        picture_control_set_ptr->me_segments_total_count; ++segment_index) {
                                     // Get Empty Results Object
                                     eb_get_empty_object(
-                                        context_ptr->picture_decision_results_output_fifo_ptr,
-                                        &outputResultsWrapperPtr);
+                                            context_ptr->picture_decision_results_output_fifo_ptr,
+                                            &outputResultsWrapperPtr);
 
-                                    outputResultsPtr = (PictureDecisionResults_t*)outputResultsWrapperPtr->object_ptr;
+                                    outputResultsPtr = (PictureDecisionResults_t *) outputResultsWrapperPtr->object_ptr;
 
                                     outputResultsPtr->pictureControlSetWrapperPtr = encode_context_ptr->pre_assignment_buffer[pictureIndex];
 
                                     outputResultsPtr->segment_index = segment_index;
 
+#if ALT_REF_WAIT
+                                    // Post the Full Results Object
+                                    if((picture_control_set_ptr->ref_pic_poc_array[0]!=alt_ref_central_loc &&
+                                       picture_control_set_ptr->ref_pic_poc_array[1]!=alt_ref_central_loc) ||
+                                       alt_ref_created_flag == EB_TRUE){
+
+                                        eb_post_full_object(outputResultsWrapperPtr);
+
+                                    }else{
+
+                                        outputResultsWrapperPtr_list[count_ME_wait_pics] = outputResultsWrapperPtr;
+                                        count_ME_wait_pics++;
+
+                                    }
+
+#else
                                     // Post the Full Results Object
                                     eb_post_full_object(outputResultsWrapperPtr);
+#endif
                                 }
                             }
 
@@ -2728,6 +2722,47 @@ void* picture_decision_kernel(void *input_ptr)
                                 encode_context_ptr->pre_assignment_buffer_scene_change_count = 0;
                                 encode_context_ptr->pre_assignment_buffer_eos_flag = EB_FALSE;
                             }
+
+                            // ----------------- Alt-Refs --------------------
+
+                            int altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
+                            int pic_number_to_save = alt_ref_central_loc - altref_nframes/2 + count_alt_refs;
+
+                            if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE
+                               && picture_control_set_ptr->picture_number == pic_number_to_save ){ // Altrefs are enabled and this is the first P frame (ALTREF location)
+
+                                list_picture_control_set_ptr[count_alt_refs] = picture_control_set_ptr;
+                                count_alt_refs++;
+
+                                if(picture_control_set_ptr->picture_number == alt_ref_central_loc + altref_nframes/2){
+                                    clock_t start_time;
+                                    start_time = clock();
+
+                                    // temporal filtering start
+                                    EbErrorType ret = init_temporal_filtering(list_picture_control_set_ptr);
+
+                                    count_alt_refs = 0;
+
+                                    clock_t elapsed_time = clock() - start_time;
+                                    double time_taken = ((double)elapsed_time)/CLOCKS_PER_SEC; // in seconds
+
+                                    printf("Producing the alt-ref frame took %f seconds.\n", time_taken);
+
+#if ALT_REF_WAIT
+                                    // Post the Full Results Objects that depend on the alt-ref frame directly after it is ready
+                                    for(int i_pics = 0; i_pics < count_ME_wait_pics; i_pics++){
+                                        eb_post_full_object(outputResultsWrapperPtr_list[i_pics]);
+                                    }
+
+                                    alt_ref_created_flag = EB_TRUE;
+#endif
+
+                                }
+
+                            }
+
+                            // ------------------------------------------------
+
                         }
 
                     } // End MINI GOPs loop

@@ -8,6 +8,7 @@
 
 #include "EbDefinitions.h"
 #include "EbSystemResourceManager.h"
+#include "EbPictureControlSet.h"
 
 /**************************************
  * Context
@@ -63,5 +64,10 @@ extern EbErrorType picture_decision_context_ctor(
 
 
 extern void* picture_decision_kernel(void *input_ptr);
+
+void DecimateInputPicture(PictureParentControlSet_t       *picture_control_set_ptr,
+                          EbPictureBufferDesc_t           *inputPaddedPicturePtr,
+                          EbPictureBufferDesc_t           *quarterDecimatedPicturePtr,
+                          EbPictureBufferDesc_t           *sixteenthDecimatedPicturePtr);
 
 #endif // EbPictureDecision_h
