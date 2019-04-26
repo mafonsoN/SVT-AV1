@@ -1366,7 +1366,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
         blk_ch_src_offset += blk_height_ch * stride[C_U] - blk_width_ch * blk_cols;
     }
 
-#if DEBUG
+#if 1
     save_YUV_to_file("filtered_frame_svtav1.yuv", alt_ref_buffer[C_Y], alt_ref_buffer[C_U], alt_ref_buffer[C_V],
                      input_picture_ptr_central->width, input_picture_ptr_central->height,
                      input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr,
@@ -1551,7 +1551,8 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
 
 int replace_src_pic_buffers(PictureParentControlSet_t *picture_control_set_ptr_central, uint8_t **alt_ref_buffer){
 
-    save_YUV_to_file("enhanced_picture.yuv",
+#if DEBUG
+    save_YUV_to_file("src_enhanced_picture.yuv",
                      picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y,
                      picture_control_set_ptr_central->enhanced_picture_ptr->bufferCb,
                      picture_control_set_ptr_central->enhanced_picture_ptr->bufferCr,
@@ -1562,6 +1563,7 @@ int replace_src_pic_buffers(PictureParentControlSet_t *picture_control_set_ptr_c
                      picture_control_set_ptr_central->enhanced_picture_ptr->strideCr,
                      0,
                      0);
+#endif
 
     // Y
     copy_picture_channel(picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y,
@@ -1624,12 +1626,14 @@ int replace_src_pic_buffers(PictureParentControlSet_t *picture_control_set_ptr_c
     EbPictureBufferDesc_t *quarter_pic_ptr = src_object->quarterDecimatedPicturePtr;
     EbPictureBufferDesc_t *sixteenth_pic_ptr = src_object->sixteenthDecimatedPicturePtr;
 
+#if DEBUG
     save_Y_to_file("input_padded_picture.yuv",
                    padded_pic_ptr->buffer_y,
                    picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
                    picture_control_set_ptr_central->enhanced_picture_ptr->height,
                    picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
                    0, 0);
+#endif
 
     copy_picture_channel(padded_pic_ptr->buffer_y,
                          padded_pic_ptr->stride_y,
@@ -1676,9 +1680,6 @@ int replace_src_pic_buffers(PictureParentControlSet_t *picture_control_set_ptr_c
 
 EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_control_set_ptr) {
 
-    int frame;
-    uint64_t frames_to_blur_backward, frames_to_blur_forward, start_frame;
-    EbBool enable_alt_refs;
     uint8_t altref_strength, altref_nframes, index_center;
     EbPictureBufferDesc_t *input_picture_ptr;
     PictureParentControlSet_t *picture_control_set_ptr_central = list_picture_control_set_ptr[0]; // picture control set of the first frame
@@ -1724,20 +1725,6 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_con
 #endif
     }
 
-    // For even length filter there is one more frame backward
-    // than forward: e.g. len=6 ==> bbbAff, len=7 ==> bbbAfff.
-    frames_to_blur_backward = (uint64_t)(altref_nframes / 2);
-    frames_to_blur_forward = (uint64_t)((altref_nframes - 1) / 2);
-
-    start_frame = distance_to_key + frames_to_blur_forward;
-
-    // Setup frame pointers, NULL indicates frame not included in filter.
-    for (frame = 0; frame < altref_nframes; ++frame) {
-        const int which_buffer = start_frame - frame;
-        // get input forward or backward frames from input picture buffer
-        //frames[frames_to_blur - 1 - frame] = &buf->img;
-    }
-
     uint8_t *alt_ref_buffer[COLOR_CHANNELS];
 
     // allocate memory for the alt-ref buffer - to be replaced by some other final structure
@@ -1748,7 +1735,7 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_con
     EbErrorType ret;
     ret = produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, altref_strength, altref_nframes, alt_ref_buffer);
 
-    // TODO: for test purposes only - replacing the buffers entirely
+    // TODO: for test purposes only - replacing the src buffers with the filtered frame (milestone 0)
     replace_src_pic_buffers(picture_control_set_ptr_central, alt_ref_buffer);
 
     for(int c=0; c<COLOR_CHANNELS; c++){

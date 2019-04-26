@@ -2216,8 +2216,7 @@ void CopyApiFromApp(
 #endif
 #endif
     sequence_control_set_ptr->static_config.pred_structure = 2; // Hardcoded(Cleanup)
-    //sequence_control_set_ptr->static_config.enable_qp_scaling_flag = 1;
-    sequence_control_set_ptr->static_config.enable_qp_scaling_flag = 0;
+    sequence_control_set_ptr->static_config.enable_qp_scaling_flag = 1;
 
     sequence_control_set_ptr->max_cu_size = (uint8_t)64;
     sequence_control_set_ptr->min_cu_size = (uint8_t)8;

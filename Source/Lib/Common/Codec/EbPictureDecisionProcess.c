@@ -32,6 +32,7 @@
 #define HIGH_PICTURE_VARIANCE_TH            1500
 #define NUM64x64INPIC(w,h)          ((w*h)>> (LOG2F(BLOCK_SIZE_64)<<1))
 #define QUEUE_GET_PREVIOUS_SPOT(h)  ((h == 0) ? PICTURE_DECISION_REORDER_QUEUE_MAX_DEPTH - 1 : h - 1)
+#define QUEUE_GET_PREVIOUS_2_SPOT(h)  ((h < 2) ? PICTURE_DECISION_REORDER_QUEUE_MAX_DEPTH - 1 : h - 2)
 #define QUEUE_GET_NEXT_SPOT(h,off)  (( (h+off) >= PICTURE_DECISION_REORDER_QUEUE_MAX_DEPTH) ? h+off - PICTURE_DECISION_REORDER_QUEUE_MAX_DEPTH  : h + off)
 
 #define WTH 64
@@ -1758,6 +1759,7 @@ void* picture_decision_kernel(void *input_ptr)
     int32_t                           queueEntryIndex;
 
     int32_t                           previousEntryIndex;
+    int32_t                           previous2EntryIndex;
 
     PaReferenceQueueEntry_t         *inputEntryPtr;
     uint32_t                           inputQueueIndex;
@@ -1783,14 +1785,16 @@ void* picture_decision_kernel(void *input_ptr)
     uint32_t                           windowIndex;
     uint32_t                           entryIndex;
     PictureParentControlSet_t        *ParentPcsWindow[FUTURE_WINDOW_WIDTH + 2];
+    PictureParentControlSet_t        *ParentPcsWindow_past[1];
 
     // Debug
     uint64_t                           loopCount = 0;
 
     // ----- Alt-Refs variables
     PictureParentControlSet_t *list_picture_control_set_ptr[ALTREF_MAX_NFRAMES];
-    int count_alt_refs = 0;
-    int alt_ref_central_loc = 16; // TODO: testing purposes only - stategy to define which frames are alt-refs is required
+    int mini_gop_count = 0;
+    int pics_saved = 0;
+    int alt_ref_central_loc = 0; // TODO: testing purposes only - stategy to define which frames are alt-refs is required
     EbBool alt_ref_created_flag = EB_FALSE;
 #if ALT_REF_WAIT
     EbObjectWrapper_t *outputResultsWrapperPtr_list[10];
@@ -1836,11 +1840,6 @@ void* picture_decision_kernel(void *input_ptr)
         // P.S. The Picture Decision Reordering Queue should be parsed in the display order to be able to construct a pred structure
         queueEntryPtr = encode_context_ptr->picture_decision_reorder_queue[encode_context_ptr->picture_decision_reorder_queue_head_index];
 
-        // ------- alt-refs ------
-        // pictures beyond this point are ordered
-        // use this window strategy to get one past frame, one future frame (3 window) 15, 16, 17
-        // if this works, then expand this to up to 7 frames
-
         while (queueEntryPtr->parentPcsWrapperPtr != EB_NULL) {
 
             if (queueEntryPtr->picture_number == 0 ||
@@ -1877,44 +1876,71 @@ void* picture_decision_kernel(void *input_ptr)
 
             // ----------------- Alt-Refs --------------------
 
-            //int pic_number_to_save = alt_ref_central_loc - altref_nframes/2 + count_alt_refs;
+            alt_ref_central_loc = (mini_gop_count + 1) * (1 << sequence_control_set_ptr->static_config.hierarchical_levels);
+            int altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
+            int num_past_pics = altref_nframes/2;
 
-            if(ParentPcsWindow[1]!=NULL && ParentPcsWindow[2]!=NULL){
+            if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE &&
+               alt_ref_created_flag == EB_FALSE) {
 
-                if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE &&
-                    alt_ref_created_flag == EB_FALSE &&
-                    ParentPcsWindow[1]->picture_number == alt_ref_central_loc &&
-                    ParentPcsWindow[2]->picture_number == alt_ref_central_loc+1){
+                if(ParentPcsWindow[0]!=NULL && ParentPcsWindow[1]!=NULL){
 
-                    int altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
+                    // get previous frames
+                    if (pics_saved < num_past_pics) {
 
-                    for(int pic_save=0; pic_save < altref_nframes; pic_save++ ) { // Altrefs are enabled and this is the first P frame (ALTREF location)
+                        for (int pic_save = pics_saved; pic_save < num_past_pics; pic_save++) {
 
-                        list_picture_control_set_ptr[pic_save] = ParentPcsWindow[pic_save];
-                        // Set the default settings of  subpel
+                            int pic_to_save = alt_ref_central_loc - (num_past_pics - pic_save);
 
-                        list_picture_control_set_ptr[pic_save]->use_subpel_flag = 1;
+                            if (ParentPcsWindow[0]->picture_number == pic_to_save) {
+                                list_picture_control_set_ptr[pic_save] = ParentPcsWindow[0];
+                                pics_saved++;
 
+                                // Set the default subpel settings
+                                list_picture_control_set_ptr[pic_save]->use_subpel_flag = 1;
+                            }
+
+                        }
                     }
 
-                    clock_t start_time;
-                    start_time = clock();
+                    if (pics_saved == num_past_pics) {
 
-                    // temporal filtering start
-                    EbErrorType ret = init_temporal_filtering(list_picture_control_set_ptr);
+                        int window_index = 1;
+                        for (int pic_save = pics_saved; pic_save < altref_nframes; pic_save++) {
 
-                    clock_t elapsed_time = clock() - start_time;
-                    double time_taken = ((double)elapsed_time)/CLOCKS_PER_SEC; // in seconds
+                            int pic_to_save = alt_ref_central_loc + (pic_save - num_past_pics);
 
-                    printf("Producing the svt-av1 alt-ref frame took %f seconds.\n", time_taken);
+                            if (ParentPcsWindow[window_index]->picture_number == pic_to_save) {
+                                list_picture_control_set_ptr[pic_save] = ParentPcsWindow[window_index];
+                                window_index++;
+                                pics_saved++;
 
-                    alt_ref_created_flag = EB_TRUE;
+                                // Set the default subpel settings
+                                list_picture_control_set_ptr[pic_save]->use_subpel_flag = 1;
+                            }
+
+                        }
+
+                        clock_t start_time;
+                        start_time = clock();
+
+                        // temporal filtering start
+                        EbErrorType ret = init_temporal_filtering(list_picture_control_set_ptr);
+
+                        clock_t elapsed_time = clock() - start_time;
+                        double time_taken = ((double) elapsed_time) / CLOCKS_PER_SEC; // in seconds
+
+                        printf("Producing the alt-ref frame at POC %d took %f seconds.\n", alt_ref_central_loc, time_taken);
+
+                        alt_ref_created_flag = EB_TRUE;
+
+                    }
 
                 }
 
             }
 
-            // ------------------------------------------------
+            // ------------------- End of Alt-refs -------------------------
 
             picture_control_set_ptr = (PictureParentControlSet_t*)queueEntryPtr->parentPcsWrapperPtr->object_ptr;
 
@@ -2062,6 +2088,14 @@ void* picture_decision_kernel(void *input_ptr)
                     GenerateMiniGopRps(
                         context_ptr,
                         encode_context_ptr);
+
+                    // ---- alt-refs ---- set state for next mini-gop
+                    // TODO: testing purposes only - stategy to define which frames are alt-refs is required
+                    if(picture_control_set_ptr->picture_number > 0){
+                        pics_saved = 0;
+                        mini_gop_count++;
+                        alt_ref_created_flag = EB_FALSE;
+                    }
 
                     // Loop over Mini GOPs
 
