@@ -7079,9 +7079,6 @@ EbErrorType MotionEstimateLcu(
 #else
     numOfListToSearch = (picture_control_set_ptr->slice_type == P_SLICE) || (picture_control_set_ptr->temporal_layer_index == 0) ? (uint32_t)REF_LIST_0 : (uint32_t)REF_LIST_1;
 #endif
-    if(context_ptr->me_alt_ref == EB_TRUE){
-        numOfListToSearch = 0;
-    }
 
 #if NSQ_OPTIMASATION 
     EbBool is_nsq_table_used = (picture_control_set_ptr->pic_depth_mode <= PIC_ALL_C_DEPTH_MODE &&
@@ -7092,13 +7089,22 @@ EbErrorType MotionEstimateLcu(
 #if TEST5_DISABLE_NSQ_ME
     is_nsq_table_used = EB_FALSE;
 #endif
-    referenceObject = (EbPaReferenceObject_t*)picture_control_set_ptr->ref_pa_pic_ptr_array[0]->object_ptr;
-    ref0Poc = picture_control_set_ptr->ref_pic_poc_array[0];
 
-    if (numOfListToSearch) {
+    if(context_ptr->me_alt_ref == EB_TRUE){
 
-        referenceObject = (EbPaReferenceObject_t*)picture_control_set_ptr->ref_pa_pic_ptr_array[1]->object_ptr;
-        ref1Poc = picture_control_set_ptr->ref_pic_poc_array[1];
+        numOfListToSearch = 0;
+
+    }else{
+
+        referenceObject = (EbPaReferenceObject_t*)picture_control_set_ptr->ref_pa_pic_ptr_array[0]->object_ptr;
+        ref0Poc = picture_control_set_ptr->ref_pic_poc_array[0];
+
+        if (numOfListToSearch) {
+
+            referenceObject = (EbPaReferenceObject_t*)picture_control_set_ptr->ref_pa_pic_ptr_array[1]->object_ptr;
+            ref1Poc = picture_control_set_ptr->ref_pic_poc_array[1];
+        }
+
     }
 
     // Uni-Prediction motion estimation loop

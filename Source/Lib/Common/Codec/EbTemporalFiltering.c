@@ -49,7 +49,7 @@
 #define THRES_DIFF_HIGH 450
 
 // Debug-specific defines
-#define DEBUG 1
+#define DEBUG 0
 #define VANILA_ME 0
 
 #define _MM_HINT_T2  1
@@ -1551,6 +1551,18 @@ static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
 
 int replace_src_pic_buffers(PictureParentControlSet_t *picture_control_set_ptr_central, uint8_t **alt_ref_buffer){
 
+    save_YUV_to_file("enhanced_picture.yuv",
+                     picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->bufferCb,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->bufferCr,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->width,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->height,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->strideCb,
+                     picture_control_set_ptr_central->enhanced_picture_ptr->strideCr,
+                     0,
+                     0);
+
     // Y
     copy_picture_channel(picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y,
                          picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
@@ -1611,6 +1623,13 @@ int replace_src_pic_buffers(PictureParentControlSet_t *picture_control_set_ptr_c
     EbPictureBufferDesc_t *padded_pic_ptr = src_object->inputPaddedPicturePtr;
     EbPictureBufferDesc_t *quarter_pic_ptr = src_object->quarterDecimatedPicturePtr;
     EbPictureBufferDesc_t *sixteenth_pic_ptr = src_object->sixteenthDecimatedPicturePtr;
+
+    save_Y_to_file("input_padded_picture.yuv",
+                   padded_pic_ptr->buffer_y,
+                   picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
+                   picture_control_set_ptr_central->enhanced_picture_ptr->height,
+                   picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
+                   0, 0);
 
     copy_picture_channel(padded_pic_ptr->buffer_y,
                          padded_pic_ptr->stride_y,

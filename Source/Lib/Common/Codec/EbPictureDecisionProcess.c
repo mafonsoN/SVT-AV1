@@ -1791,10 +1791,10 @@ void* picture_decision_kernel(void *input_ptr)
     PictureParentControlSet_t *list_picture_control_set_ptr[ALTREF_MAX_NFRAMES];
     int count_alt_refs = 0;
     int alt_ref_central_loc = 16; // TODO: testing purposes only - stategy to define which frames are alt-refs is required
+    EbBool alt_ref_created_flag = EB_FALSE;
 #if ALT_REF_WAIT
     EbObjectWrapper_t *outputResultsWrapperPtr_list[10];
     int count_ME_wait_pics = 0;
-    EbBool alt_ref_created_flag = EB_FALSE;
 #endif
     // -----
 
@@ -1836,6 +1836,11 @@ void* picture_decision_kernel(void *input_ptr)
         // P.S. The Picture Decision Reordering Queue should be parsed in the display order to be able to construct a pred structure
         queueEntryPtr = encode_context_ptr->picture_decision_reorder_queue[encode_context_ptr->picture_decision_reorder_queue_head_index];
 
+        // ------- alt-refs ------
+        // pictures beyond this point are ordered
+        // use this window strategy to get one past frame, one future frame (3 window) 15, 16, 17
+        // if this works, then expand this to up to 7 frames
+
         while (queueEntryPtr->parentPcsWrapperPtr != EB_NULL) {
 
             if (queueEntryPtr->picture_number == 0 ||
@@ -1869,6 +1874,48 @@ void* picture_decision_kernel(void *input_ptr)
                     }
                 }
             }
+
+            // ----------------- Alt-Refs --------------------
+
+            //int pic_number_to_save = alt_ref_central_loc - altref_nframes/2 + count_alt_refs;
+
+            if(ParentPcsWindow[1]!=NULL && ParentPcsWindow[2]!=NULL){
+
+                if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE &&
+                    alt_ref_created_flag == EB_FALSE &&
+                    ParentPcsWindow[1]->picture_number == alt_ref_central_loc &&
+                    ParentPcsWindow[2]->picture_number == alt_ref_central_loc+1){
+
+                    int altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
+
+                    for(int pic_save=0; pic_save < altref_nframes; pic_save++ ) { // Altrefs are enabled and this is the first P frame (ALTREF location)
+
+                        list_picture_control_set_ptr[pic_save] = ParentPcsWindow[pic_save];
+                        // Set the default settings of  subpel
+
+                        list_picture_control_set_ptr[pic_save]->use_subpel_flag = 1;
+
+                    }
+
+                    clock_t start_time;
+                    start_time = clock();
+
+                    // temporal filtering start
+                    EbErrorType ret = init_temporal_filtering(list_picture_control_set_ptr);
+
+                    clock_t elapsed_time = clock() - start_time;
+                    double time_taken = ((double)elapsed_time)/CLOCKS_PER_SEC; // in seconds
+
+                    printf("Producing the svt-av1 alt-ref frame took %f seconds.\n", time_taken);
+
+                    alt_ref_created_flag = EB_TRUE;
+
+                }
+
+            }
+
+            // ------------------------------------------------
+
             picture_control_set_ptr = (PictureParentControlSet_t*)queueEntryPtr->parentPcsWrapperPtr->object_ptr;
 
             picture_control_set_ptr->fade_out_from_black = 0;
@@ -1968,7 +2015,7 @@ void* picture_decision_kernel(void *input_ptr)
 
                 // Determine if Pictures can be released from the Pre-Assignment Buffer
                 if ((encode_context_ptr->pre_assignment_buffer_intra_count > 0) ||
-                    (encode_context_ptr->pre_assignment_buffer_count == (uint32_t)(1 << sequence_control_set_ptr->static_config.hierarchical_levels)) || 
+                    (encode_context_ptr->pre_assignment_buffer_count == (uint32_t)(1 << sequence_control_set_ptr->static_config.hierarchical_levels)) ||
                     (encode_context_ptr->pre_assignment_buffer_eos_flag == EB_TRUE) ||
                     (picture_control_set_ptr->pred_structure == EB_PRED_LOW_DELAY_P) ||
                     (picture_control_set_ptr->pred_structure == EB_PRED_LOW_DELAY_B))
@@ -2322,10 +2369,12 @@ void* picture_decision_kernel(void *input_ptr)
                                 picture_control_set_ptr->sc_content_detected = context_ptr->last_i_picture_sc_detection;
 #endif
 
+                            // TODO: put this in EbMotionEstimationProcess?
                             // ME Kernel Multi-Processes Signal(s) derivation
                             signal_derivation_multi_processes_oq(
                                 picture_control_set_ptr);
 
+                            // TODO: put this in EbMotionEstimationProcess?
                             // Set the default settings of  subpel
                             picture_control_set_ptr->use_subpel_flag = 1;
 #if !CHROMA_BLIND
@@ -2687,9 +2736,10 @@ void* picture_decision_kernel(void *input_ptr)
 
 #if ALT_REF_WAIT
                                     // Post the Full Results Object
-                                    if((picture_control_set_ptr->ref_pic_poc_array[0]!=alt_ref_central_loc &&
-                                       picture_control_set_ptr->ref_pic_poc_array[1]!=alt_ref_central_loc) ||
-                                       alt_ref_created_flag == EB_TRUE){
+                                    if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE &&
+                                            ((picture_control_set_ptr->ref_pic_poc_array[0]!=alt_ref_central_loc &&
+                                            picture_control_set_ptr->ref_pic_poc_array[1]!=alt_ref_central_loc) ||
+                                            alt_ref_created_flag == EB_TRUE)){
 
                                         eb_post_full_object(outputResultsWrapperPtr);
 
@@ -2722,46 +2772,6 @@ void* picture_decision_kernel(void *input_ptr)
                                 encode_context_ptr->pre_assignment_buffer_scene_change_count = 0;
                                 encode_context_ptr->pre_assignment_buffer_eos_flag = EB_FALSE;
                             }
-
-                            // ----------------- Alt-Refs --------------------
-
-                            int altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
-                            int pic_number_to_save = alt_ref_central_loc - altref_nframes/2 + count_alt_refs;
-
-                            if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE
-                               && picture_control_set_ptr->picture_number == pic_number_to_save ){ // Altrefs are enabled and this is the first P frame (ALTREF location)
-
-                                list_picture_control_set_ptr[count_alt_refs] = picture_control_set_ptr;
-                                count_alt_refs++;
-
-                                if(picture_control_set_ptr->picture_number == alt_ref_central_loc + altref_nframes/2){
-                                    clock_t start_time;
-                                    start_time = clock();
-
-                                    // temporal filtering start
-                                    EbErrorType ret = init_temporal_filtering(list_picture_control_set_ptr);
-
-                                    count_alt_refs = 0;
-
-                                    clock_t elapsed_time = clock() - start_time;
-                                    double time_taken = ((double)elapsed_time)/CLOCKS_PER_SEC; // in seconds
-
-                                    printf("Producing the alt-ref frame took %f seconds.\n", time_taken);
-
-#if ALT_REF_WAIT
-                                    // Post the Full Results Objects that depend on the alt-ref frame directly after it is ready
-                                    for(int i_pics = 0; i_pics < count_ME_wait_pics; i_pics++){
-                                        eb_post_full_object(outputResultsWrapperPtr_list[i_pics]);
-                                    }
-
-                                    alt_ref_created_flag = EB_TRUE;
-#endif
-
-                                }
-
-                            }
-
-                            // ------------------------------------------------
 
                         }
 
