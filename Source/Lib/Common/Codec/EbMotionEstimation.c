@@ -80,31 +80,6 @@ uint32_t stage1ModesArray[9] = { EB_INTRA_HORIZONTAL, EB_INTRA_VERTICAL, EB_INTR
 #define REFERENCE_PIC_LIST_0  0
 #define REFERENCE_PIC_LIST_1  1
 
-// delete when done debugging
-void save_Y_to_file2(char *filename, EbByte buffer_y,
-                     uint16_t width, uint16_t height,
-                     uint16_t stride_y,
-                     uint16_t origin_y, uint16_t origin_x){
-
-    FILE *fid = NULL;
-    EbByte pic_point;
-    int h;
-
-    // save current source picture to a YUV file
-    if ((fid = fopen(filename, "wb")) == NULL) {
-        printf("Unable to open file %s to write.\n", "temp_picture.yuv");
-    }else{
-
-        // the source picture saved in the enchanced_picture_ptr contains a border in x and y dimensions
-        pic_point = buffer_y + (origin_y*stride_y) + origin_x;
-        for (h = 0; h < height; h++) {
-            fwrite(pic_point, 1, (size_t)width, fid);
-            pic_point = pic_point + stride_y;
-        }
-        fclose(fid);
-    }
-}
-
 /*******************************************
 * Compute8x4SAD_Default
 *   Unoptimized 8x4 SAD
@@ -6944,31 +6919,6 @@ static void hme_mv_center_check(
     *xsc = search_center_x;
     *ysc = search_center_y;
 }
-
-static void save_Y_to_file(char *filename, EbByte buffer_y,
-                    uint16_t width, uint16_t height,
-                    uint16_t stride_y,
-                    uint16_t origin_y, uint16_t origin_x){
-
-    FILE *fid = NULL;
-    EbByte pic_point;
-    int h;
-
-    // save current source picture to a YUV file
-    if ((fid = fopen(filename, "wb")) == NULL) {
-        printf("Unable to open file %s to write.\n", "temp_picture.yuv");
-    }else{
-
-        // the source picture saved in the enchanced_picture_ptr contains a border in x and y dimensions
-        pic_point = buffer_y + (origin_y*stride_y) + origin_x;
-        for (h = 0; h < height; h++) {
-            fwrite(pic_point, 1, (size_t)width, fid);
-            pic_point = pic_point + stride_y;
-        }
-        fclose(fid);
-    }
-}
-
 
 /*******************************************
 * MotionEstimateLcu

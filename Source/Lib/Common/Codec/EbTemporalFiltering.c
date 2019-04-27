@@ -309,11 +309,11 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
 
     // Parts from MotionEstimationKernel()
     uint16_t blk_index = (uint16_t)(blk_col + blk_row * blk_cols);
-    int sb_origin_x = blk_col * BW;
-    int sb_origin_y = blk_row * BH;
+    uint32_t sb_origin_x = blk_col * BW;
+    uint32_t sb_origin_y = blk_row * BH;
 
-    int sb_width = (input_picture_ptr_central->width - sb_origin_x) < BLOCK_SIZE_64 ? input_picture_ptr_central->width - sb_origin_x : BLOCK_SIZE_64;
-    int sb_height = (input_picture_ptr_central->height - sb_origin_y) < BLOCK_SIZE_64 ? input_picture_ptr_central->height - sb_origin_y : BLOCK_SIZE_64;
+    uint32_t sb_width = (input_picture_ptr_central->width - sb_origin_x) < BLOCK_SIZE_64 ? input_picture_ptr_central->width - sb_origin_x : BLOCK_SIZE_64;
+    uint32_t sb_height = (input_picture_ptr_central->height - sb_origin_y) < BLOCK_SIZE_64 ? input_picture_ptr_central->height - sb_origin_y : BLOCK_SIZE_64;
 
     // Load the SB from the input to the intermediate SB buffer
     int bufferIndex = (input_picture_ptr_central->origin_y + sb_origin_y) * input_picture_ptr_central->stride_y + input_picture_ptr_central->origin_x + sb_origin_x;
@@ -970,7 +970,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
     uint16_t *count[COLOR_CHANNELS] = { counter, counter + BLK_PELS, counter + (BLK_PELS<<1) };
     EbByte pred[COLOR_CHANNELS] = { predictor, predictor + BLK_PELS, predictor + (BLK_PELS<<1) };
     int index_center;
-    int blk_row, blk_col;
+    uint32_t blk_row, blk_col;
     int stride_pred[COLOR_CHANNELS] = {BW, BW>>1, BW>>1};
     uint16_t blk_width_ch = BW >> 1; // 420 // TODO: implement for 420 now and extend it later
     uint16_t blk_height_ch = BW >> 1; // 420

@@ -462,9 +462,9 @@ void EbConfigCtor(EbConfig_t *config_ptr)
     config_ptr->hmeLevel2SearchAreaInHeightArray[1]  = 1;
     config_ptr->constrained_intra                    = 0;
     config_ptr->film_grain_denoise_strength          = 0;
-    config_ptr->enable_altrefs                       = 1;
-    config_ptr->altref_strength                      = 5;
-    config_ptr->altref_nframes                       = 7;
+    config_ptr->enable_altrefs                       = 0;
+    config_ptr->altref_strength                      = 3;
+    config_ptr->altref_nframes                       = 5;
 
     // Thresholds
     config_ptr->high_dynamic_range_input             = 0;
@@ -840,12 +840,12 @@ static EbErrorType VerifySettings(EbConfig_t *config, uint32_t channelNumber)
     }
 
     // alt-ref frames related
-    if (config->altref_strength < 0 || config->altref_strength > 6 ) {
+    if (config->altref_strength < 0 || config->altref_strength > 5 ) {
         fprintf(config->errorLogFile, "Error instance %u: invalid altref-strength, should be in the range [0 - 5] \n",channelNumber+1);
         return_error = EB_ErrorBadParameter;
     }
 
-    if (config->altref_nframes < 0 || config->altref_nframes > 15 ) {
+    if (config->altref_nframes < 0 || config->altref_nframes > 7 ) {
         fprintf(config->errorLogFile, "Error instance %u: invalid altref-nframes, should be in the range [0 - 7] \n",channelNumber+1);
         return_error = EB_ErrorBadParameter;
     }

@@ -2820,6 +2820,11 @@ EbErrorType eb_svt_enc_init_parameter(
     // Debug info
     config_ptr->recon_enabled = 0;
 
+    // Alt-Ref default values
+    config_ptr->enable_altrefs = 0;
+    config_ptr->altref_nframes = 5;
+    config_ptr->altref_strength = 3;
+
     return return_error;
 }
 //#define DEBUG_BUFFERS

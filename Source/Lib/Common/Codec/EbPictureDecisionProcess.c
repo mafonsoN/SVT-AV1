@@ -1880,6 +1880,8 @@ void* picture_decision_kernel(void *input_ptr)
             int altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
             int num_past_pics = altref_nframes/2;
 
+            printf("\nAlt-ref frames!!!! loc = %d\n", alt_ref_central_loc); // delete
+
             if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE &&
                alt_ref_created_flag == EB_FALSE) {
 
