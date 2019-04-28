@@ -49,7 +49,7 @@
 #define THRES_DIFF_HIGH 450
 
 // Debug-specific defines
-#define DEBUG 1
+#define DEBUG 0
 #define VANILA_ME 0
 
 #define _MM_HINT_T2  1
