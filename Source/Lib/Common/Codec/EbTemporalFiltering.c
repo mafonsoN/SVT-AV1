@@ -49,7 +49,7 @@
 #define THRES_DIFF_HIGH 450
 
 // Debug-specific defines
-#define DEBUG 0
+#define DEBUG 1
 #define VANILA_ME 0
 
 #define _MM_HINT_T2  1
@@ -891,11 +891,15 @@ void uni_motion_compensation(MeContext_t* context_ptr,
         first_ref_frac_pos = (uint8_t)(first_ref_frac_pos_x + (first_ref_frac_pos_y << 2));
 
         x_first_search_index = (int32_t)first_ref_integ_pos_x - ((context_ptr->x_search_area_origin[0][0])/2);
-        y_first_search_index = (int32_t)first_ref_integ_pos_y - ((context_ptr->x_search_area_origin[0][0])/2);
+        y_first_search_index = (int32_t)first_ref_integ_pos_y - ((context_ptr->y_search_area_origin[0][0])/2);
         first_search_region_index_pos_integ = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1)) + interpolated_full_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
         first_search_region_index_pos_b = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + interpolated_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
         first_search_region_index_pos_h = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + interpolated_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
         first_search_region_index_pos_j = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + interpolated_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
+
+        assert(first_search_region_index_pos_b>=0);
+        assert(first_search_region_index_pos_h>=0);
+        assert(first_search_region_index_pos_j>=0);
 
         // compensate U
         uni_pred_averaging(pu_index, // pu_index
