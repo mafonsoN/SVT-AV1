@@ -1650,6 +1650,14 @@ int replace_src_pic_buffers(PictureParentControlSet_t *picture_control_set_ptr_c
                          picture_control_set_ptr_central->enhanced_picture_ptr->width,
                          picture_control_set_ptr_central->enhanced_picture_ptr->height);
 
+    generate_padding(
+            &(padded_pic_ptr->buffer_y[0]),
+            padded_pic_ptr->stride_y,
+            padded_pic_ptr->width,
+            padded_pic_ptr->height,
+            padded_pic_ptr->origin_x,
+            padded_pic_ptr->origin_y);
+
     DecimateInputPicture(picture_control_set_ptr_central,
                          padded_pic_ptr,
                          quarter_pic_ptr,

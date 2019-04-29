@@ -1794,7 +1794,7 @@ void* picture_decision_kernel(void *input_ptr)
     PictureParentControlSet_t *list_picture_control_set_ptr[ALTREF_MAX_NFRAMES];
     int mini_gop_count = 0;
     int pics_saved = 0;
-    int alt_ref_central_loc = 0; // TODO: testing purposes only - stategy to define which frames are alt-refs is required
+    int alt_ref_central_loc = 0;
     EbBool alt_ref_created_flag = EB_FALSE;
 #if ALT_REF_WAIT
     EbObjectWrapper_t *outputResultsWrapperPtr_list[10];
