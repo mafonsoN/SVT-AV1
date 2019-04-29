@@ -2127,6 +2127,9 @@ void  inject_inter_candidates(
 #if BASE_LAYER_REF || MRP_REF_MODE
 #if MRP_ENABLE_BI_FOR_BASE
     EbBool allow_bipred = (context_ptr->blk_geom->bwidth == 4 || context_ptr->blk_geom->bheight == 4) ? EB_FALSE : EB_TRUE;
+#if MRP_DISABLE_ADDED_CAND_M1
+    allow_bipred = (picture_control_set_ptr->enc_mode >= ENC_M1 && picture_control_set_ptr->parent_pcs_ptr->temporal_layer_index == 0) ? EB_FALSE : allow_bipred;
+#endif
 #if !INJ_MVP 
    EbBool amp_allow_bipred = (picture_control_set_ptr->parent_pcs_ptr->temporal_layer_index == 0 || context_ptr->blk_geom->bwidth == 4 || context_ptr->blk_geom->bheight == 4) ? EB_FALSE : EB_TRUE;
 #endif

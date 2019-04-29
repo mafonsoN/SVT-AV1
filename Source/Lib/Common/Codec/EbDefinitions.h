@@ -243,6 +243,7 @@ extern "C" {
 #define NSQ_TAB_SIZE                                    6
 
 #define AOM_INTERP_EXTEND 4
+#define MRP_DISABLE_ADDED_CAND_M1                        0
 
 struct Buf2D 
 {
