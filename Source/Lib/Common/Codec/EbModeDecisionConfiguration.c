@@ -470,7 +470,7 @@ void ForwardCuToModeDecision(
     const CodedUnitStats *cuStatsPtr = get_coded_unit_stats(0);
 
     SbStat *sb_stat_ptr = &(picture_control_set_ptr->parent_pcs_ptr->sb_stat_array[sb_index]);
-
+#if !MEMORY_FOOTPRINT_OPT 
     EbBool    testAllDepthIntraSliceFlag = EB_FALSE;
 
 
@@ -478,7 +478,7 @@ void ForwardCuToModeDecision(
         (sb_stat_ptr->stationary_edge_over_time_flag || picture_control_set_ptr->parent_pcs_ptr->logo_pic_flag ||
         (picture_control_set_ptr->parent_pcs_ptr->very_low_var_pic_flag && picture_control_set_ptr->parent_pcs_ptr->low_motion_content_flag)) ?
         EB_TRUE : testAllDepthIntraSliceFlag;
-
+#endif
 
     resultsPtr->leaf_count = 0;
     uint8_t   enable_blk_4x4 = 0;
@@ -501,6 +501,10 @@ void ForwardCuToModeDecision(
 
 
                 if (slice_type == I_SLICE) {
+#if MEMORY_FOOTPRINT_OPT 
+                    cuClass = local_cu_array[cu_index].selected_cu == EB_TRUE ? ADD_CU_CONTINUE_SPLIT : cuClass;
+                    cuClass = local_cu_array[cu_index].stop_split == EB_TRUE ? ADD_CU_STOP_SPLIT : cuClass;
+#else
                     if (testAllDepthIntraSliceFlag) {
                         cuClass = ADD_CU_CONTINUE_SPLIT;
                     }
@@ -508,6 +512,7 @@ void ForwardCuToModeDecision(
                         cuClass = local_cu_array[cu_index].selected_cu == EB_TRUE ? ADD_CU_CONTINUE_SPLIT : cuClass;
                         cuClass = local_cu_array[cu_index].stop_split == EB_TRUE ? ADD_CU_STOP_SPLIT : cuClass;
                     }
+#endif
                 }
                 else {
                     cuClass = local_cu_array[cu_index].selected_cu == EB_TRUE ? ADD_CU_CONTINUE_SPLIT : cuClass;

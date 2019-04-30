@@ -80,7 +80,7 @@ EbErrorType source_based_operations_context_ctor(
     return EB_ErrorNone;
 }
 
-
+#if !MEMORY_FOOTPRINT_OPT 
 /****************************************
 * Init BEA QPM array to 0
 ** Used when no Lookahead is available
@@ -113,6 +113,7 @@ void InitBeaQpmInfo(
 
     return;
 }
+#endif
 /***************************************************
 * Derives BEA statistics and set activity flags
 ***************************************************/
@@ -161,10 +162,11 @@ void DerivePictureActivityStatistics(
         picture_control_set_ptr->kf_zeromotion_pct = (non_moving_sb_count * 100) / complete_sb_count;
     }
 
+#if !MEMORY_FOOTPRINT_OPT 
     InitBeaQpmInfo(
         picture_control_set_ptr,
         sequence_control_set_ptr);
-
+#endif
     return;
 }
 

@@ -1013,8 +1013,9 @@ void UpdateBeaInfoOverTime(
 
     // SB Loop
     for (lcuIdx = 0; lcuIdx < picture_control_set_ptr->sb_total_count; ++lcuIdx) {
-
+#if !MEMORY_FOOTPRINT_OPT 
         uint32_t zzCostOverSlidingWindow = picture_control_set_ptr->zz_cost_array[lcuIdx];
+#endif
         uint16_t nonMovingIndexOverSlidingWindow = picture_control_set_ptr->non_moving_index_array[lcuIdx];
 
         // Walk the first N entries in the sliding window starting picture + 1
@@ -1029,15 +1030,17 @@ void UpdateBeaInfoOverTime(
             if (temporaryPictureControlSetPtr->slice_type == I_SLICE || temporaryPictureControlSetPtr->end_of_sequence_flag) {
                 break;
             }
-
+#if !MEMORY_FOOTPRINT_OPT 
             zzCostOverSlidingWindow += temporaryPictureControlSetPtr->zz_cost_array[lcuIdx];
+#endif
             nonMovingIndexOverSlidingWindow += temporaryPictureControlSetPtr->non_moving_index_array[lcuIdx];
 
             // Increment the inputQueueIndex Iterator
             inputQueueIndex = (inputQueueIndex == INITIAL_RATE_CONTROL_REORDER_QUEUE_MAX_DEPTH - 1) ? 0 : inputQueueIndex + 1;
         }
-
+#if !MEMORY_FOOTPRINT_OPT 
         picture_control_set_ptr->zz_cost_array[lcuIdx] = (uint8_t)(zzCostOverSlidingWindow / (framesToCheckIndex + 1));
+#endif
         picture_control_set_ptr->non_moving_index_array[lcuIdx] = (uint8_t)(nonMovingIndexOverSlidingWindow / (framesToCheckIndex + 1));
 
         nonMovingIndexSum += picture_control_set_ptr->non_moving_index_array[lcuIdx];
@@ -1056,11 +1059,13 @@ void InitZzCostInfo(
     PictureParentControlSet         *picture_control_set_ptr)
 {
     uint16_t lcuIdx;
+#if !MEMORY_FOOTPRINT_OPT 
     // SB loop
     for (lcuIdx = 0; lcuIdx < picture_control_set_ptr->sb_total_count; ++lcuIdx) {
         picture_control_set_ptr->zz_cost_array[lcuIdx] = INVALID_ZZ_COST;
 
     }
+#endif
     picture_control_set_ptr->non_moving_index_average = INVALID_ZZ_COST;
 
     // SB Loop

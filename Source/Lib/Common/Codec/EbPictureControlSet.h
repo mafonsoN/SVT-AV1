@@ -14086,8 +14086,10 @@ extern "C" {
         EbBool                                scene_transition_flag[MAX_NUM_OF_REF_PIC_LIST];
         EbBool                                intensity_transition_flag;
         uint8_t                               average_intensity[3];
+#if !MEMORY_FOOTPRINT_OPT 
         // zz cost array
         uint8_t                              *zz_cost_array;
+#endif
         // Non moving index array
         uint8_t                              *non_moving_index_array;
         int                                   kf_zeromotion_pct; // percent of zero motion blocks
@@ -14124,8 +14126,10 @@ extern "C" {
 #if !DISABLE_OIS_USE
         uint8_t                               intra_coded_block_probability;    // used by EncDecProcess()
 #endif
+#if !MEMORY_FOOTPRINT_OPT 
         EbBool                                low_motion_content_flag;            // used by EncDecProcess()
         uint32_t                              zz_cost_average;                    // used by ModeDecisionConfigurationProcess()
+#endif
         uint16_t                              non_moving_index_average;            // used by ModeDecisionConfigurationProcess()
 #if !MEMORY_FOOTPRINT_OPT
         EbBool                               *sb_isolated_non_homogeneous_area_array;            // used by ModeDecisionConfigurationProcess()
