@@ -1352,7 +1352,7 @@ void DetectComplexNonFlatMovingLcu(
     }
 }
 #endif
-
+#if !MEMORY_FOOTPRINT_OPT 
 EbAuraStatus AuraDetection64x64Gold(
     PictureControlSet           *picture_control_set_ptr,
     uint8_t                          picture_qp,
@@ -1513,8 +1513,8 @@ EbAuraStatus AuraDetection64x64Gold(
     return   auraClass;
 
 }
-
-
+#endif
+#if !MEMORY_FOOTPRINT_OPT 
 /******************************************************
 * Aura detection
 ******************************************************/
@@ -1552,7 +1552,7 @@ void AuraDetection(
     }
     return;
 }
-
+#endif
 /******************************************************
 * Load the cost of the different partitioning method into a local array and derive sensitive picture flag
     Input   : the offline derived cost per search method, detection signals

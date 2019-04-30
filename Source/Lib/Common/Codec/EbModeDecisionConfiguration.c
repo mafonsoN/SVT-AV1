@@ -858,15 +858,25 @@ void PredictionPartitionLoop(
                     context_ptr->mdc_candidate_ptr->is_zero_mv = 0;
                     context_ptr->mdc_candidate_ptr->drl_index = 0;
 #if MD_INJECTION
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+                    context_ptr->mdc_candidate_ptr->motion_vector_xl0 = me_results->me_mv_array[cuIndexInRaterScan][4 + me_block_results->ref_idx_l1].x_mv << 1;
+                    context_ptr->mdc_candidate_ptr->motion_vector_yl0 = me_results->me_mv_array[cuIndexInRaterScan][4 + me_block_results->ref_idx_l1].y_mv << 1;
+#else
                     context_ptr->mdc_candidate_ptr->motion_vector_xl0 = me_block_results[me_index].x_mv_l0 << 1;
                     context_ptr->mdc_candidate_ptr->motion_vector_yl0 = me_block_results[me_index].y_mv_l0 << 1;
+#endif
 #else
                     context_ptr->mdc_candidate_ptr->motion_vector_xl0 = mePuResult->x_mv_l0 << 1;
                     context_ptr->mdc_candidate_ptr->motion_vector_yl0 = mePuResult->y_mv_l0 << 1;
 #endif
 #if MD_INJECTION
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+                    context_ptr->mdc_candidate_ptr->motion_vector_xl0 = me_results->me_mv_array[cuIndexInRaterScan][me_block_results->ref_idx_l0].x_mv << 1;
+                    context_ptr->mdc_candidate_ptr->motion_vector_yl0 = me_results->me_mv_array[cuIndexInRaterScan][me_block_results->ref_idx_l0].y_mv << 1;
+#else
                     context_ptr->mdc_candidate_ptr->motion_vector_xl1 = me_block_results[me_index].x_mv_l1 << 1;
                     context_ptr->mdc_candidate_ptr->motion_vector_yl1 = me_block_results[me_index].y_mv_l1 << 1;
+#endif
 #else
                     context_ptr->mdc_candidate_ptr->motion_vector_xl1 = mePuResult->x_mv_l1 << 1;
                     context_ptr->mdc_candidate_ptr->motion_vector_yl1 = mePuResult->y_mv_l1 << 1;

@@ -711,7 +711,7 @@ void DeriveHighDarkAreaDensityFlag(
 #define MID_CR        115
 #define TH_CB        10
 #define TH_CR        15
-
+#if !MEMORY_FOOTPRINT_OPT
 /******************************************************
 * High  contrast classifier
 ******************************************************/
@@ -743,7 +743,7 @@ void TemporalHighContrastClassifier(
     }
     context_ptr->high_dist = meDist > 0 ? EB_TRUE : EB_FALSE;
 }
-
+#endif
 void SpatialHighContrastClassifier(
     SourceBasedOperationsContext    *context_ptr,
     PictureParentControlSet       *picture_control_set_ptr,
@@ -1035,15 +1035,19 @@ void* source_based_operations_kernel(void *input_ptr)
                 }
             }
 #endif
+#if !MEMORY_FOOTPRINT_OPT
             // Uncovered area detection II
 
             // Temporal high contrast classifier
+#endif
             if (is_complete_sb) {
+#if !MEMORY_FOOTPRINT_OPT
                 TemporalHighContrastClassifier(
                     context_ptr,
                     picture_control_set_ptr,
                     sb_index);
-#if !MEMORY_FOOTPRINT_OPT
+
+
                 if (context_ptr->high_contrast_num > 0 && context_ptr->high_dist == EB_TRUE) {
                     picture_control_set_ptr->sb_cmplx_contrast_array[sb_index] = 4;
                     context_ptr->sb_cmplx_contrast_count++;

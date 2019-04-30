@@ -61,7 +61,9 @@ EbErrorType me_sb_results_ctor(
     *objectDblPtr = objectPtr;
 
     EB_MALLOC(MeCandidate**, objectPtr->me_candidate, sizeof(MeCandidate*) * maxNumberOfPusPerLcu, EB_N_PTR);
-
+#if MEMORY_FOOTPRINT_OPT_ME_MV   
+    EB_MALLOC(MvCandidate**, objectPtr->me_mv_array, sizeof(MvCandidate*) * maxNumberOfPusPerLcu, EB_N_PTR);
+#endif
 #if ALIGN_MEM 
     objectPtr->meCandidateArray = (MeCandidate_t*)EB_aligned_malloc(sizeof(MeCandidate_t) * maxNumberOfPusPerLcu * maxNumberOfMeCandidatesPerPU, 64);
 #else
@@ -81,7 +83,9 @@ EbErrorType me_sb_results_ctor(
         objectPtr->me_candidate[puIndex][0].direction = 0;
         objectPtr->me_candidate[puIndex][1].direction = 1;
         objectPtr->me_candidate[puIndex][2].direction = 2;
-
+#if MEMORY_FOOTPRINT_OPT_ME_MV   
+        EB_MALLOC(MvCandidate*, objectPtr->me_mv_array[puIndex], sizeof(MvCandidate) * 7, EB_N_PTR);
+#endif
     }
 #if 0
     objectPtr->xMvSearchAreaCenter[0][0] = 0;
