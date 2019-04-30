@@ -315,9 +315,11 @@ extern "C" {
         // Search region stride
         uint32_t                      interpolated_stride;
         uint32_t                      interpolated_full_stride[MAX_NUM_OF_REF_PIC_LIST][MAX_REF_IDX];
-
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+        MotionEstimationTierZero      me_candidate[ME_RES_CAND];
+#else
         MotionEstimationTierZero    me_candidate[MAX_ME_CANDIDATE_PER_PU];
-
+#endif
         // Intermediate LCU-sized buffer to retain the input samples
         uint8_t                      *sb_buffer;
         uint8_t                      *sb_buffer_ptr;
@@ -456,8 +458,11 @@ extern "C" {
         // Search region stride
         uint32_t                      interpolated_stride;
         uint32_t                      interpolated_full_stride[MAX_NUM_OF_REF_PIC_LIST][MAX_REF_IDX];
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+        MotionEstimationTierZero      me_candidate[ME_RES_CAND];
+#else
         MotionEstimationTierZero    me_candidate[MAX_ME_CANDIDATE_PER_PU];
-
+#endif
         // Intermediate LCU-sized buffer to retain the input samples
         uint8_t                      *sb_buffer;
         uint8_t                      *sb_buffer_ptr;

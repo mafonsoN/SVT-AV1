@@ -18,7 +18,7 @@ extern "C" {
 
     // i.e. no 4x4, 8x4, or 4x8 partitions
 #define SQUARE_PU_COUNT           85
-#if 1//!MEMORY_FOOTPRINT_OPT_ME_MV
+#if !MEMORY_FOOTPRINT_OPT_ME_MV
 #if MRP_ME
 #define MAX_ME_CANDIDATE_PER_PU   24
 #else

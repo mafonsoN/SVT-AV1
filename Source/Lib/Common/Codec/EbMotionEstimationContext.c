@@ -109,7 +109,11 @@ EbErrorType me_context_ctor(
     EB_MALLOC(EbByte, (*object_dbl_ptr)->one_d_intermediate_results_buf1, sizeof(uint8_t)*BLOCK_SIZE_64*BLOCK_SIZE_64, EB_N_PTR);
 
     for (pu_index = 0; pu_index < MAX_ME_PU_COUNT; pu_index++) {
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+        for (meCandidateIndex = 0; meCandidateIndex < ME_RES_CAND; meCandidateIndex++) {
+#else
         for (meCandidateIndex = 0; meCandidateIndex < MAX_ME_CANDIDATE_PER_PU; meCandidateIndex++) {
+#endif
             MotionEstimetionPredUnitCtor(&((*object_dbl_ptr)->me_candidate[meCandidateIndex]).pu[pu_index]);
         }
     }
