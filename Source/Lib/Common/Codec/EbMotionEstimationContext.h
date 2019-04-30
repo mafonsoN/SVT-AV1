@@ -301,7 +301,9 @@ extern "C" {
 #endif
         uint32_t         distortion;
         EbPredDirection  prediction_direction;
+#if !MEMORY_FOOTPRINT_OPT_ME_MV
         uint32_t         mv[MAX_NUM_OF_REF_PIC_LIST];
+#endif
     } MePredUnit;
 
     typedef struct MotionEstimationTierZero {

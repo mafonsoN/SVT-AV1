@@ -6994,7 +6994,9 @@ EbErrorType  BiPredictionCompensation(
     firstRefPosX = _MVXT(firstRefMv),
     firstRefPosY = _MVYT(firstRefMv),
 #endif
+#if !MEMORY_FOOTPRINT_OPT_ME_MV
     me_candidate->mv[0] = firstRefMv;
+#endif
 #if MRP_ME
     me_candidate->ref_index[0] = (uint8_t)first_list_ref_pic_idx;
 #endif
@@ -7032,7 +7034,9 @@ EbErrorType  BiPredictionCompensation(
     secondRefPosX = _MVXT(secondRefMv),
     secondRefPosY = _MVYT(secondRefMv),
 #endif
+#if !MEMORY_FOOTPRINT_OPT_ME_MV
     me_candidate->mv[1] = secondRefMv;
+#endif
 #if MRP_ME
     me_candidate->ref_index[1] = (uint8_t)second_list_ref_pic_idx;
 #endif
@@ -9094,7 +9098,9 @@ EbErrorType motion_estimate_lcu(
                 me_candidate = &(context_ptr->me_candidate[candidateIndex].pu[pu_index]);
                 me_candidate->prediction_direction = listIndex;
                 me_candidate->ref_index[listIndex] = ref_pic_index;
+#if !MEMORY_FOOTPRINT_OPT_ME_MV
                 me_candidate->mv[listIndex] = context_ptr->p_sb_best_mv[listIndex][ref_pic_index][nIdx];
+#endif
                 me_candidate->distortion = context_ptr->p_sb_best_sad[listIndex][ref_pic_index][nIdx];
 #endif 
                 candidateIndex++;

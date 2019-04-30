@@ -16,11 +16,11 @@ void MotionEstimetionPredUnitCtor(
     pu->distortion = 0xFFFFFFFFull;
 
     pu->prediction_direction = UNI_PRED_LIST_0;
-
+#if !MEMORY_FOOTPRINT_OPT_ME_MV
     pu->mv[0] = 0;
 
     pu->mv[1] = 0;
-
+#endif
     return;
 }
 
