@@ -14378,8 +14378,10 @@ extern "C" {
 #if SETUP_SKIP
         SkipModeInfo                         skip_mode_info;
 #endif
+#if !MEMORY_FOOTPRINT_OPT_ME_MV
 #if NO_UNI
         uint8_t                              mrp_mode;
+#endif
 #endif
     } PictureParentControlSet;
 
@@ -14409,7 +14411,9 @@ extern "C" {
         //uint32_t                           encoder_bit_depth;
         EbBool                             ext_block_flag;
         EbBool                             in_loop_me_flag;
-
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+        uint8_t                            mrp_mode;
+#endif
     } PictureControlSetInitData;
 
     typedef struct Av1Comp 

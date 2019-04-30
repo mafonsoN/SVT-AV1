@@ -7155,13 +7155,16 @@ EbErrorType  BiPredictionCompensation(
 *******************************************/
 // This function enables all 16 Bipred candidates when MRP is ON
 EbErrorType  BiPredictionSearch(
-    MeContext                    *context_ptr,
-    uint32_t                        pu_index,
-    uint8_t                        candidateIndex,
-    uint32_t                        activeRefPicFirstLisNum,
-    uint32_t                        activeRefPicSecondLisNum,
-    uint8_t                        *total_me_candidate_index,
-    EbAsm                        asm_type,
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+    SequenceControlSet        *sequence_control_set_ptr,
+#endif                        
+    MeContext                 *context_ptr,
+    uint32_t                   pu_index,
+    uint8_t                    candidateIndex,
+    uint32_t                   activeRefPicFirstLisNum,
+    uint32_t                   activeRefPicSecondLisNum,
+    uint8_t                   *total_me_candidate_index,
+    EbAsm                      asm_type,
     PictureParentControlSet   *picture_control_set_ptr)
 {
     EbErrorType                 return_error = EB_ErrorNone;
@@ -7245,7 +7248,11 @@ EbErrorType  BiPredictionSearch(
 
 #if MRP_MD_UNI_DIR_BIPRED
 #if NO_UNI
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+    if (sequence_control_set_ptr->static_config.mrp_mode == 0)
+#else
     if (picture_control_set_ptr->mrp_mode == 0)
+#endif
     {
 #endif
         //NM: Within list 0    bipred: (LAST,LAST2)    (LAST,LAST3)    (LAST,GOLD)
@@ -9116,6 +9123,9 @@ EbErrorType motion_estimate_lcu(
             if (picture_control_set_ptr->cu8x8_mode == CU_8x8_MODE_0 || pu_index < 21 || (picture_control_set_ptr->pic_depth_mode <= PIC_ALL_C_DEPTH_MODE)) {
 
                 BiPredictionSearch(
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+                    sequence_control_set_ptr,
+#endif     
                     context_ptr,
                     pu_index,
                     candidateIndex,

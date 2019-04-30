@@ -1051,7 +1051,9 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
         inputData.ext_block_flag = (uint8_t)encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.ext_block_flag;
 
         inputData.in_loop_me_flag = (uint8_t)encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.in_loop_me_flag;
-
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+        inputData.mrp_mode =  encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.mrp_mode;
+#endif
         return_error = eb_system_resource_ctor(
             &(encHandlePtr->picture_parent_control_set_pool_ptr_array[instance_index]),
             encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->picture_control_set_pool_init_count,//encHandlePtr->picture_control_set_pool_total_count,
@@ -2226,6 +2228,12 @@ void SetParamBasedOnInput(SequenceControlSet *sequence_control_set_ptr)
     sequence_control_set_ptr->static_config.super_block_size = (sequence_control_set_ptr->static_config.rate_control_mode > 1) ? 64 : sequence_control_set_ptr->static_config.super_block_size;
    // sequence_control_set_ptr->static_config.hierarchical_levels = (sequence_control_set_ptr->static_config.rate_control_mode > 1) ? 3 : sequence_control_set_ptr->static_config.hierarchical_levels;
 #endif
+
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+    //0: ON- full
+    //1: OFF                            
+    sequence_control_set_ptr->static_config.mrp_mode = (uint8_t) (sequence_control_set_ptr->static_config.enc_mode == ENC_M0) ? 0 : 1;
+#endif
 }
 
 void CopyApiFromApp(
@@ -2868,7 +2876,7 @@ EbErrorType eb_svt_enc_init_parameter(
     config_ptr->injector_frame_rate = 60 << 16;
     config_ptr->speed_control_flag = 0;
     config_ptr->super_block_size = 128;
-
+ 
     config_ptr->sb_sz = 64;
     config_ptr->partition_depth = (uint8_t)EB_MAX_LCU_DEPTH;
     //config_ptr->latency_mode = 0;

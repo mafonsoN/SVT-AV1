@@ -1077,7 +1077,13 @@ EbErrorType picture_parent_control_set_ctor(
     object_ptr->max_number_of_pus_per_sb = (initDataPtr->ext_block_flag) ? MAX_ME_PU_COUNT : SQUARE_PU_COUNT;
 #if MRP_CONNECTION
 #if MRP_MEM_OPT
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+    object_ptr->max_number_of_candidates_per_block = (initDataPtr->mrp_mode == 0) ?
+        ME_RES_CAND : // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
+        3;            // [BiDir = 1] + [UniDir = 2 = 1 + 1]
+#else
     object_ptr->max_number_of_candidates_per_block = ME_RES_CAND; //[Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
+#endif
 #else
     object_ptr->max_number_of_candidates_per_block = 100;//(initDataPtr->mePictureSearchCount * initDataPtr->mePictureSearchCount) + (initDataPtr->mePictureSearchCount << 1);
 #endif

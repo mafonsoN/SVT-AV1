@@ -1576,7 +1576,11 @@ EbErrorType signal_derivation_multi_processes_oq(
 #if MRP_MVP
 int8_t av1_ref_frame_type(const MvReferenceFrame *const rf);
 //set the ref frame types used for this picture,
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+void set_all_ref_frame_type(SequenceControlSet *sequence_control_set_ptr, PictureParentControlSet  *parent_pcs_ptr, MvReferenceFrame ref_frame_arr[], uint8_t* tot_ref_frames)
+#else
 void set_all_ref_frame_type(PictureParentControlSet  *parent_pcs_ptr, MvReferenceFrame ref_frame_arr[], uint8_t* tot_ref_frames)
+#endif
 {
     MvReferenceFrame rf[2];
     *tot_ref_frames = 0;
@@ -1606,7 +1610,11 @@ void set_all_ref_frame_type(PictureParentControlSet  *parent_pcs_ptr, MvReferenc
 
 #if NO_UNI
 #if MRP_FIX_CLOSE_GOP
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+    if (sequence_control_set_ptr->static_config.mrp_mode == 0 && parent_pcs_ptr->slice_type == B_SLICE)
+#else
     if (parent_pcs_ptr->mrp_mode == 0 && parent_pcs_ptr->slice_type == B_SLICE)
+#endif
 #else
     if (parent_pcs_ptr->mrp_mode == 0)
 #endif
@@ -3893,12 +3901,14 @@ void* picture_decision_kernel(void *input_ptr)
                             // set the Reference Counts Based on Temporal Layer and how many frames are active
                             picture_control_set_ptr->ref_list0_count = (picture_type == I_SLICE) ? 0 : (uint8_t)predPositionPtr->ref_list0.reference_list_count;
                             picture_control_set_ptr->ref_list1_count = (picture_type == I_SLICE) ? 0 : (uint8_t)predPositionPtr->ref_list1.reference_list_count;
+#if !MEMORY_FOOTPRINT_OPT_ME_MV
 #if NO_UNI
                             //0: ON- full
                             //1: ON- no-uniDirection
                             //2: OFF                            
                             picture_control_set_ptr->mrp_mode = picture_control_set_ptr->enc_mode == ENC_M0 ? 0 : 2; 
                             
+#endif
 #endif
 #if MRP_M0_ONLY
 #if NO_UNI
@@ -4256,7 +4266,11 @@ void* picture_decision_kernel(void *input_ptr)
 
 #if MRP_MVP
                             //set the ref frame types used for this picture,
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+                            set_all_ref_frame_type(sequence_control_set_ptr, picture_control_set_ptr, picture_control_set_ptr->ref_frame_type_arr, &picture_control_set_ptr->tot_ref_frame_types);
+#else
                             set_all_ref_frame_type(picture_control_set_ptr, picture_control_set_ptr->ref_frame_type_arr, &picture_control_set_ptr->tot_ref_frame_types);
+#endif
 #endif
                             // Initialize Segments
                             picture_control_set_ptr->me_segments_column_count = (uint8_t)(sequence_control_set_ptr->me_segment_column_count_array[picture_control_set_ptr->temporal_layer_index]);

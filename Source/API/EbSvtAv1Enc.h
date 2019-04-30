@@ -158,7 +158,7 @@ typedef struct EbSvtAv1EncConfiguration
     * Default is 64. */
     uint32_t                 sb_sz;
 
-    /* Super block size
+    /* Super block size (mm-signal)
     *
     * Default is 128. */
     uint32_t                 super_block_size;
@@ -166,6 +166,13 @@ typedef struct EbSvtAv1EncConfiguration
     *
     * Default is 4. */
     uint32_t                 partition_depth;
+
+#if !MEMORY_FOOTPRINT_OPT_ME_MV
+    /* MRP (mm-signal)
+    *
+    * Default is 0. */
+    uint8_t                   mrp_mode;
+#endif
 
     // Quantization
     /* Initial quantization parameter for the Intra pictures used under constant
