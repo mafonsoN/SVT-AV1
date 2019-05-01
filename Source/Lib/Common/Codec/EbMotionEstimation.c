@@ -9164,8 +9164,11 @@ EbErrorType motion_estimate_lcu(
         mePuResult->me_nsq_0[pu_index] = l0_nsq;
         mePuResult->me_nsq_1[pu_index] = l1_nsq;
 #endif
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+        mePuResult->total_me_candidate_index[pu_index] = MIN(total_me_candidate_index, ME_RES_CAND_MRP_ON);
+#else
         mePuResult->total_me_candidate_index[pu_index] = MIN(total_me_candidate_index, ME_RES_CAND);
-
+#endif
         // Assining the ME candidates to the me Results buffer
         for (candidateIndex = 0; candidateIndex < total_me_candidate_index; ++candidateIndex) {
             me_candidate = &(context_ptr->me_candidate[candidateIndex].pu[pu_index]);

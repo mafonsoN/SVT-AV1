@@ -24,9 +24,14 @@ void MotionEstimetionPredUnitCtor(
     return;
 }
 
-
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+EbErrorType me_context_ctor(
+    MeContext     **object_dbl_ptr,
+    uint8_t         mrp_mode)
+#else
 EbErrorType me_context_ctor(
     MeContext     **object_dbl_ptr)
+#endif
 {
     uint32_t                   listIndex;
     uint32_t                   refPicIndex;
@@ -108,9 +113,12 @@ EbErrorType me_context_ctor(
 
     EB_MALLOC(EbByte, (*object_dbl_ptr)->one_d_intermediate_results_buf1, sizeof(uint8_t)*BLOCK_SIZE_64*BLOCK_SIZE_64, EB_N_PTR);
 
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+    EB_MALLOC(MotionEstimationTierZero *, (*object_dbl_ptr)->me_candidate, sizeof(MotionEstimationTierZero) * ((mrp_mode == 0) ? ME_RES_CAND_MRP_ON : ME_RES_CAND_MRP_OFF), EB_N_PTR);
+#endif
     for (pu_index = 0; pu_index < MAX_ME_PU_COUNT; pu_index++) {
 #if MEMORY_FOOTPRINT_OPT_ME_MV
-        for (meCandidateIndex = 0; meCandidateIndex < ME_RES_CAND; meCandidateIndex++) {
+        for (meCandidateIndex = 0; meCandidateIndex < ((mrp_mode == 0) ? ME_RES_CAND_MRP_ON : ME_RES_CAND_MRP_OFF); meCandidateIndex++) {
 #else
         for (meCandidateIndex = 0; meCandidateIndex < MAX_ME_CANDIDATE_PER_PU; meCandidateIndex++) {
 #endif

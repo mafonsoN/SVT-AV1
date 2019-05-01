@@ -1079,8 +1079,8 @@ EbErrorType picture_parent_control_set_ctor(
 #if MRP_MEM_OPT
 #if MEMORY_FOOTPRINT_OPT_ME_MV
     object_ptr->max_number_of_candidates_per_block = (initDataPtr->mrp_mode == 0) ?
-        ME_RES_CAND : // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
-        3;            // [BiDir = 1] + [UniDir = 2 = 1 + 1]
+        ME_RES_CAND_MRP_ON : // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
+        ME_RES_CAND_MRP_OFF; // [BiDir = 1] + [UniDir = 2 = 1 + 1]
 #else
     object_ptr->max_number_of_candidates_per_block = ME_RES_CAND; //[Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
 #endif

@@ -1667,12 +1667,18 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
     EB_MALLOC(EbPtr*, encHandlePtr->motion_estimation_context_ptr_array, sizeof(EbPtr) * encHandlePtr->sequence_control_set_instance_array[0]->sequence_control_set_ptr->motion_estimation_process_init_count, EB_N_PTR);
 
     for (processIndex = 0; processIndex < encHandlePtr->sequence_control_set_instance_array[0]->sequence_control_set_ptr->motion_estimation_process_init_count; ++processIndex) {
-
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+        return_error = motion_estimation_context_ctor(
+            (MotionEstimationContext_t**)&encHandlePtr->motion_estimation_context_ptr_array[processIndex],
+            encHandlePtr->picture_decision_results_consumer_fifo_ptr_array[processIndex],
+            encHandlePtr->motion_estimation_results_producer_fifo_ptr_array[processIndex],
+            encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.mrp_mode);
+#else
         return_error = motion_estimation_context_ctor(
             (MotionEstimationContext_t**)&encHandlePtr->motion_estimation_context_ptr_array[processIndex],
             encHandlePtr->picture_decision_results_consumer_fifo_ptr_array[processIndex],
             encHandlePtr->motion_estimation_results_producer_fifo_ptr_array[processIndex]);
-
+#endif
         if (return_error == EB_ErrorInsufficientResources) {
             return EB_ErrorInsufficientResources;
         }

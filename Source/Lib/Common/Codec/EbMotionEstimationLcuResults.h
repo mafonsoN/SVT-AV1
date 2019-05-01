@@ -13,7 +13,13 @@ extern "C" {
 #endif
 
 #define MAX_ME_PU_COUNT          209           // Sum of all the possible partitions which have both deminsions greater than 4.
+
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+#define ME_RES_CAND_MRP_ON       23            // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
+#define ME_RES_CAND_MRP_OFF      23            // [BiDir = 1] + [UniDir = 2 = 1+1]
+#else
 #define ME_RES_CAND              23            // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
+#endif
 #define MAX_SS_ME_PU_COUNT       (849 * 4 + 5) // Sum of all the possible partitions which have both deminsions greater or equal to 4.
 
     // i.e. no 4x4, 8x4, or 4x8 partitions

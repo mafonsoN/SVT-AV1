@@ -316,7 +316,7 @@ extern "C" {
         uint32_t                      interpolated_stride;
         uint32_t                      interpolated_full_stride[MAX_NUM_OF_REF_PIC_LIST][MAX_REF_IDX];
 #if MEMORY_FOOTPRINT_OPT_ME_MV
-        MotionEstimationTierZero      me_candidate[ME_RES_CAND];
+        MotionEstimationTierZero     *me_candidate;
 #else
         MotionEstimationTierZero    me_candidate[MAX_ME_CANDIDATE_PER_PU];
 #endif
@@ -459,7 +459,7 @@ extern "C" {
         uint32_t                      interpolated_stride;
         uint32_t                      interpolated_full_stride[MAX_NUM_OF_REF_PIC_LIST][MAX_REF_IDX];
 #if MEMORY_FOOTPRINT_OPT_ME_MV
-        MotionEstimationTierZero      me_candidate[ME_RES_CAND];
+        MotionEstimationTierZero     *me_candidate;
 #else
         MotionEstimationTierZero    me_candidate[MAX_ME_CANDIDATE_PER_PU];
 #endif
@@ -615,8 +615,15 @@ extern "C" {
         uint32_t                     ref_stride,
         uint32_t                     width,
         uint32_t                     height);
+
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+    extern EbErrorType me_context_ctor(
+        MeContext     **object_dbl_ptr,
+        uint8_t         mrp_mode);
+#else
     extern EbErrorType me_context_ctor(
         MeContext     **object_dbl_ptr);
+#endif
 
 #ifdef __cplusplus
 }
