@@ -14408,11 +14408,11 @@ extern "C" {
         EbEncMode                          enc_mode;
         uint8_t                            speed_control;
         uint16_t                           film_grain_noise_level;
-        //uint32_t                           encoder_bit_depth;
         EbBool                             ext_block_flag;
         EbBool                             in_loop_me_flag;
 #if MEMORY_FOOTPRINT_OPT_ME_MV
         uint8_t                            mrp_mode;
+        uint8_t                            cdf_mode;
 #endif
     } PictureControlSetInitData;
 

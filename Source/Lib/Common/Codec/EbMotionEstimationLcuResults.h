@@ -16,7 +16,7 @@ extern "C" {
 
 #if MEMORY_FOOTPRINT_OPT_ME_MV
 #define ME_RES_CAND_MRP_ON       23            // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
-#define ME_RES_CAND_MRP_OFF      23            // [BiDir = 1] + [UniDir = 2 = 1+1]
+#define ME_RES_CAND_MRP_OFF      10            // [Single Ref = 7] + [BiDir = 1] + [UniDir = 2 = 1+1]
 #else
 #define ME_RES_CAND              23            // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
 #endif

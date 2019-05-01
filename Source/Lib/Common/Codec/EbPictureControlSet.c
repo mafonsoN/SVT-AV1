@@ -290,8 +290,15 @@ EbErrorType picture_control_set_ctor(
     }
 
 #if CABAC_UP   
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+    if (initDataPtr->cdf_mode == 0) {
+        EB_MALLOC(FRAME_CONTEXT*, object_ptr->ec_ctx_array, sizeof(FRAME_CONTEXT) * all_sb, EB_N_PTR);
+        EB_MALLOC(MdRateEstimationContext*, object_ptr->rate_est_array, sizeof(MdRateEstimationContext) * all_sb, EB_N_PTR);
+    }
+#else
     EB_MALLOC(FRAME_CONTEXT*, object_ptr->ec_ctx_array, sizeof(FRAME_CONTEXT)             * all_sb, EB_N_PTR);
     EB_MALLOC(MdRateEstimationContext*, object_ptr->rate_est_array, sizeof(MdRateEstimationContext) * all_sb, EB_N_PTR);
+#endif
 #endif
 #if !MEMORY_FOOTPRINT_OPT
     // Copy SB array map

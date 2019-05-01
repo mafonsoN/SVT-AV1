@@ -1052,7 +1052,7 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
 
         inputData.in_loop_me_flag = (uint8_t)encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.in_loop_me_flag;
 #if MEMORY_FOOTPRINT_OPT_ME_MV
-        inputData.mrp_mode =  encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.mrp_mode;
+        inputData.mrp_mode = encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.mrp_mode;
 #endif
         return_error = eb_system_resource_ctor(
             &(encHandlePtr->picture_parent_control_set_pool_ptr_array[instance_index]),
@@ -1104,6 +1104,9 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
         inputData.sb_sz = encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->sb_sz;
         inputData.sb_size_pix = scs_init.sb_size;
         inputData.max_depth = encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->max_sb_depth;
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+        inputData.cdf_mode = encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.cdf_mode;
+#endif
         return_error = eb_system_resource_ctor(
             &(encHandlePtr->picture_control_set_pool_ptr_array[instance_index]),
             encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->picture_control_set_pool_init_count_child, //EB_PictureControlSetPoolInitCountChild,
@@ -2236,9 +2239,13 @@ void SetParamBasedOnInput(SequenceControlSet *sequence_control_set_ptr)
 #endif
 
 #if MEMORY_FOOTPRINT_OPT_ME_MV
-    //0: ON- full
+    //0: ON
     //1: OFF                            
     sequence_control_set_ptr->static_config.mrp_mode = (uint8_t) (sequence_control_set_ptr->static_config.enc_mode == ENC_M0) ? 0 : 1;
+
+    //0: ON
+    //1: OFF                            
+    sequence_control_set_ptr->static_config.cdf_mode = (uint8_t)(sequence_control_set_ptr->static_config.enc_mode <= ENC_M6) ? 0 : 1;
 #endif
 }
 

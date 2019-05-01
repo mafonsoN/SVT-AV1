@@ -172,6 +172,11 @@ typedef struct EbSvtAv1EncConfiguration
     *
     * Default is 0. */
     uint8_t                   mrp_mode;
+
+    /* CDF (mm-signal; 0: CDF update, 1: no CDF update)
+    *
+    * Default is 0. */
+    uint8_t                   cdf_mode;
 #endif
 
     // Quantization
