@@ -41,10 +41,10 @@ extern "C" {
 #define NEW_PRESETS                       1
 #define NEW_BUFF_CFG                      1
 /************************* Omar to remove disable_ang_uv *************************/
-#define MEMORY_FOOTPRINT_OPT_ME_MV        0
+#define MEMORY_FOOTPRINT_OPT_ME_MV        1
 #if MEMORY_FOOTPRINT_OPT_ME_MV
 #define MEMORY_FOOTPRINT_OPT              1     
-#define FROM_7_TO_2_MV                    0
+#define FROM_7_TO_4_MV                    1
 #endif
 #define CHECK_MEM_REDUCTION               0
 

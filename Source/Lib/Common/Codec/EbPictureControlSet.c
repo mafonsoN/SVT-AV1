@@ -87,10 +87,10 @@ EbErrorType me_sb_results_ctor(
         objectPtr->me_candidate[puIndex][1].direction = 1;
         objectPtr->me_candidate[puIndex][2].direction = 2;
 #if MEMORY_FOOTPRINT_OPT_ME_MV   
-#if FROM_7_TO_2_MV
-        EB_MALLOC(MvCandidate*, objectPtr->me_mv_array[puIndex], sizeof(MvCandidate) * (mrp_mode ? ME_MV_MRP_OFF : ME_MV_MRP_ON), EB_N_PTR);
+#if FROM_7_TO_4_MV
+        EB_MALLOC(MvCandidate*, objectPtr->me_mv_array[puIndex], sizeof(MvCandidate) * ((mrp_mode == 0) ? ME_MV_MRP_MODE_0 : ME_MV_MRP_MODE_1), EB_N_PTR);
 #else
-        EB_MALLOC(MvCandidate*, objectPtr->me_mv_array[puIndex], sizeof(MvCandidate) * (mrp_mode ? ME_MV_MRP_ON : ME_MV_MRP_ON), EB_N_PTR);
+        EB_MALLOC(MvCandidate*, objectPtr->me_mv_array[puIndex], sizeof(MvCandidate) * (mrp_mode ? ME_MV_MRP_MODE_0 : ME_MV_MRP_MODE_0), EB_N_PTR);
 #endif
 #endif
     }
@@ -1093,8 +1093,8 @@ EbErrorType picture_parent_control_set_ctor(
 #if MRP_MEM_OPT
 #if MEMORY_FOOTPRINT_OPT_ME_MV
     object_ptr->max_number_of_candidates_per_block = (initDataPtr->mrp_mode == 0) ?
-        ME_RES_CAND_MRP_ON : // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
-        ME_RES_CAND_MRP_OFF; // [BiDir = 1] + [UniDir = 2 = 1 + 1]
+        ME_RES_CAND_MRP_MODE_0 : // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
+        ME_RES_CAND_MRP_MODE_1; // [BiDir = 1] + [UniDir = 2 = 1 + 1]
 #else
     object_ptr->max_number_of_candidates_per_block = ME_RES_CAND; //[Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
 #endif

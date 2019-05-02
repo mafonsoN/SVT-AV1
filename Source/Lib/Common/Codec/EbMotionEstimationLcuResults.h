@@ -16,11 +16,12 @@ extern "C" {
 
 #if MEMORY_FOOTPRINT_OPT_ME_MV
 
-#define ME_RES_CAND_MRP_ON       23            // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
-#define ME_MV_MRP_ON              7            // [7 = 4+3]
+#define ME_RES_CAND_MRP_MODE_0   23            // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
+#define ME_MV_MRP_MODE_0          7            // [7 = 4+3]
+                                 
+#define ME_RES_CAND_MRP_MODE_1   10            // [Single Ref = 4] + [UniDir = 4 = 2*2] + [UniDir = 2 = 1+1]
+#define ME_MV_MRP_MODE_1          4            // [4 = 2+2]
 
-#define ME_RES_CAND_MRP_OFF      10            // [Single Ref = 3] + [UniDir = 2 = 1+1]
-#define ME_MV_MRP_OFF             2            // [2 = 1+1]
 #else
 #define ME_RES_CAND              23            // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
 #endif
@@ -101,9 +102,8 @@ extern "C" {
 
 #if MEMORY_FOOTPRINT_OPT_ME_MV        
         MvCandidate    **me_mv_array; 
-        // [PU][LAST, LAST2, LAST3, GOLD, BWD, ALT2, ALT] if MRP_ON, 
-        // [PU][LAST, LAST2, LAST3] if MRP_OFF @ BASE, 
-        // [PU][LAST, BWD] if MRP_OFF @ non BASE, 
+        // [PU][LAST, LAST2, LAST3, GOLD, BWD, ALT2, ALT] if MRP Mode 0, 
+        // [PU][LAST, LAST2, BWD, ALT2] if MRP Mode 1, 
 #endif
     } MeLcuResults;
 #if !MRP_ME
