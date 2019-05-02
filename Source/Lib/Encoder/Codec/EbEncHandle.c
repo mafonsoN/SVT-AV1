@@ -437,11 +437,22 @@ int32_t set_parent_pcs(EbSvtAv1EncConfiguration*   config, uint32_t core_count, 
                         config->frame_rate >> 16 :
                         config->frame_rate);
         uint32_t ppcs_count     = fps;
+#if MINI_GOP_PCS
+        uint32_t min_ppcs_count = (1 << config->hierarchical_levels) + 1; // min picture count to start encoding
+#else
         uint32_t min_ppcs_count = (2 << config->hierarchical_levels) + 1; // min picture count to start encoding
-
+#endif
         fps        = fps > 120 ? 120   : fps;
         fps        = fps < 24  ? 24    : fps;
+
+#if MINI_GOP_PCS
+        if (core_count == 4) 
+            return min_ppcs_count;
+        else
+            ppcs_count = MAX(min_ppcs_count, fps);
+#else
         ppcs_count = MAX(min_ppcs_count, fps);
+#endif
 #if NEW_BUFF_CFG        
         if (core_count <= SINGLE_CORE_COUNT)
             ppcs_count = min_ppcs_count;
@@ -2454,7 +2465,11 @@ void CopyApiFromApp(
     }
 
     if (sequence_control_set_ptr->static_config.look_ahead_distance == (uint32_t)~0)
+#if SHUT_LOOKAHEAD
+        sequence_control_set_ptr->static_config.look_ahead_distance = 0;
+#else
         sequence_control_set_ptr->static_config.look_ahead_distance = compute_default_look_ahead(&sequence_control_set_ptr->static_config);
+#endif
     else
         sequence_control_set_ptr->static_config.look_ahead_distance = cap_look_ahead_distance(&sequence_control_set_ptr->static_config);
 

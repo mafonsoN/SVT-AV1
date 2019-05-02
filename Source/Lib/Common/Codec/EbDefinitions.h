@@ -48,6 +48,9 @@ extern "C" {
 #define REDUCE_BLOCK_COUNT_ME             1
 #define REDUCE_ME_SEARCH_AREA             1
 #endif
+#define SHUT_LOOKAHEAD                    0
+#define MINI_GOP_PCS                      0
+
 #define CHECK_MEM_REDUCTION               1
 
 #define CDEF_AVX_OPT                      1
