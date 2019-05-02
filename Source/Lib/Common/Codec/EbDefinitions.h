@@ -45,8 +45,9 @@ extern "C" {
 #if MEMORY_FOOTPRINT_OPT_ME_MV
 #define MEMORY_FOOTPRINT_OPT              1     
 #define FROM_7_TO_4_MV                    1
+#define REDUCE_BLOCK_COUNT_ME             1
 #endif
-#define CHECK_MEM_REDUCTION               0
+#define CHECK_MEM_REDUCTION               1
 
 #define CDEF_AVX_OPT                      1
 #define MOD_M0                            0 // Sub-SAD for @ HME and ME, 12 NFL, frequency see

@@ -14413,6 +14413,7 @@ extern "C" {
 #if MEMORY_FOOTPRINT_OPT_ME_MV
         uint8_t                            mrp_mode;
         uint8_t                            cdf_mode;
+        uint8_t                            nsq_present;
 #endif
     } PictureControlSetInitData;
 

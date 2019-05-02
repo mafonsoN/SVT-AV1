@@ -529,7 +529,7 @@ EbErrorType load_default_buffer_configuration_settings(
         core_count = lp_count;
 #endif
 #if CHECK_MEM_REDUCTION
-    core_count = 56;
+    core_count = 4;
 #endif
     int32_t return_ppcs = set_parent_pcs(&sequence_control_set_ptr->static_config, 
                     core_count, sequence_control_set_ptr->input_resolution);
@@ -1053,6 +1053,7 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
         inputData.in_loop_me_flag = (uint8_t)encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.in_loop_me_flag;
 #if MEMORY_FOOTPRINT_OPT_ME_MV
         inputData.mrp_mode = encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.mrp_mode;
+        inputData.nsq_present = encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.nsq_present;
 #endif
         return_error = eb_system_resource_ctor(
             &(encHandlePtr->picture_parent_control_set_pool_ptr_array[instance_index]),
@@ -2246,6 +2247,11 @@ void SetParamBasedOnInput(SequenceControlSet *sequence_control_set_ptr)
     //0: ON
     //1: OFF                            
     sequence_control_set_ptr->static_config.cdf_mode = (uint8_t)(sequence_control_set_ptr->static_config.enc_mode <= ENC_M6) ? 0 : 1;
+
+
+    //0: NSQ absent
+    //1: NSQ present                            
+    sequence_control_set_ptr->static_config.nsq_present = (uint8_t)(sequence_control_set_ptr->static_config.enc_mode <= ENC_M5) ? 1 : 0;
 #endif
 }
 
