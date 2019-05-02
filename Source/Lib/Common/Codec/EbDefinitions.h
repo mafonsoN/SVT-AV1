@@ -46,6 +46,7 @@ extern "C" {
 #define MEMORY_FOOTPRINT_OPT              1     
 #define FROM_7_TO_4_MV                    1
 #define REDUCE_BLOCK_COUNT_ME             1
+#define REDUCE_ME_SEARCH_AREA             1
 #endif
 #define CHECK_MEM_REDUCTION               1
 

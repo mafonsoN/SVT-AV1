@@ -1676,6 +1676,10 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
             (MotionEstimationContext_t**)&encHandlePtr->motion_estimation_context_ptr_array[processIndex],
             encHandlePtr->picture_decision_results_consumer_fifo_ptr_array[processIndex],
             encHandlePtr->motion_estimation_results_producer_fifo_ptr_array[processIndex],
+#if REDUCE_ME_SEARCH_AREA
+            encHandlePtr->sequence_control_set_instance_array[0]->sequence_control_set_ptr->max_input_luma_width,
+            encHandlePtr->sequence_control_set_instance_array[0]->sequence_control_set_ptr->max_input_luma_height,
+#endif
             encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.nsq_present,
             encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.mrp_mode);
 #else
