@@ -864,13 +864,8 @@ void PredictionPartitionLoop(
                     context_ptr->mdc_candidate_ptr->drl_index = 0;
 #if MD_INJECTION
 #if MEMORY_FOOTPRINT_OPT_ME_MV
-#if FROM_7_TO_2_MV
-                    context_ptr->mdc_candidate_ptr->motion_vector_xl0 = me_results->me_mv_array[cuIndexInRaterScan][((sequence_control_set_ptr->static_config.mrp_mode == 0) ? 4 : 1) + me_block_results->ref_idx_l1].x_mv << 1;
-                    context_ptr->mdc_candidate_ptr->motion_vector_yl0 = me_results->me_mv_array[cuIndexInRaterScan][((sequence_control_set_ptr->static_config.mrp_mode == 0) ? 4 : 1) + me_block_results->ref_idx_l1].y_mv << 1;
-#else
                     context_ptr->mdc_candidate_ptr->motion_vector_xl0 = me_results->me_mv_array[cuIndexInRaterScan][4 + me_block_results->ref_idx_l1].x_mv << 1;
                     context_ptr->mdc_candidate_ptr->motion_vector_yl0 = me_results->me_mv_array[cuIndexInRaterScan][4 + me_block_results->ref_idx_l1].y_mv << 1;
-#endif
 #else
                     context_ptr->mdc_candidate_ptr->motion_vector_xl0 = me_block_results[me_index].x_mv_l0 << 1;
                     context_ptr->mdc_candidate_ptr->motion_vector_yl0 = me_block_results[me_index].y_mv_l0 << 1;

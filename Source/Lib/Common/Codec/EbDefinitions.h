@@ -44,7 +44,6 @@ extern "C" {
 #define MEMORY_FOOTPRINT_OPT_ME_MV        0
 #if MEMORY_FOOTPRINT_OPT_ME_MV
 #define MEMORY_FOOTPRINT_OPT              1     
-#define FROM_7_TO_2_MV                    0
 #endif
 #define CHECK_MEM_REDUCTION               0
 

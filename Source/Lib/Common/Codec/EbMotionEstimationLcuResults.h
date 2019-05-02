@@ -15,12 +15,8 @@ extern "C" {
 #define MAX_ME_PU_COUNT          209           // Sum of all the possible partitions which have both deminsions greater than 4.
 
 #if MEMORY_FOOTPRINT_OPT_ME_MV
-
 #define ME_RES_CAND_MRP_ON       23            // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
-#define ME_MV_MRP_ON              7            // [7 = 4+3]
-
-#define ME_RES_CAND_MRP_OFF      10            // [Single Ref = 3] + [UniDir = 2 = 1+1]
-#define ME_MV_MRP_OFF             2            // [2 = 1+1]
+#define ME_RES_CAND_MRP_OFF      10            // [Single Ref = 7] + [BiDir = 1] + [UniDir = 2 = 1+1]
 #else
 #define ME_RES_CAND              23            // [Single Ref = 7] + [BiDir = 12 = 3*4 ] + [UniDir = 4 = 3+1]
 #endif
@@ -100,10 +96,7 @@ extern "C" {
 #endif
 
 #if MEMORY_FOOTPRINT_OPT_ME_MV        
-        MvCandidate    **me_mv_array; 
-        // [PU][LAST, LAST2, LAST3, GOLD, BWD, ALT2, ALT] if MRP_ON, 
-        // [PU][LAST, LAST2, LAST3] if MRP_OFF @ BASE, 
-        // [PU][LAST, BWD] if MRP_OFF @ non BASE, 
+        MvCandidate    **me_mv_array; // [PU][LAST, LAST2, L0-Ref2, LAST3, GOLD, BWD, ALT2, ALT]
 #endif
     } MeLcuResults;
 #if !MRP_ME

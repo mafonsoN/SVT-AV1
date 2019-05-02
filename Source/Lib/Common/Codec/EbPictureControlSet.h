@@ -14658,9 +14658,6 @@ extern "C" {
     extern EbErrorType me_sb_results_ctor(
         MeLcuResults     **objectDblPtr,
         uint32_t           maxNumberOfPusPerLcu,
-#if MEMORY_FOOTPRINT_OPT_ME_MV
-        uint8_t            mrp_mode,
-#endif
         uint32_t           maxNumberOfMeCandidatesPerPU);
 #endif
 #ifdef __cplusplus
