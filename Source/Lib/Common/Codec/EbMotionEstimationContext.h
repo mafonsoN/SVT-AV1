@@ -619,6 +619,7 @@ extern "C" {
 #if MEMORY_FOOTPRINT_OPT_ME_MV
     extern EbErrorType me_context_ctor(
         MeContext     **object_dbl_ptr,
+        uint8_t         nsq_present,
         uint8_t         mrp_mode);
 #else
     extern EbErrorType me_context_ctor(

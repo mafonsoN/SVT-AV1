@@ -34,6 +34,7 @@ extern EbErrorType motion_estimation_context_ctor(
     MotionEstimationContext_t **context_dbl_ptr,
     EbFifo                     *picture_decision_results_input_fifo_ptr,
     EbFifo                     *motion_estimation_results_output_fifo_ptr,
+    uint8_t                     nsq_present,
     uint8_t                     mrp_mode);
 #else
 extern EbErrorType motion_estimation_context_ctor(

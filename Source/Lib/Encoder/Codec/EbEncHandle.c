@@ -1676,6 +1676,7 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
             (MotionEstimationContext_t**)&encHandlePtr->motion_estimation_context_ptr_array[processIndex],
             encHandlePtr->picture_decision_results_consumer_fifo_ptr_array[processIndex],
             encHandlePtr->motion_estimation_results_producer_fifo_ptr_array[processIndex],
+            encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.nsq_present,
             encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.mrp_mode);
 #else
         return_error = motion_estimation_context_ctor(
@@ -2250,8 +2251,12 @@ void SetParamBasedOnInput(SequenceControlSet *sequence_control_set_ptr)
 
 
     //0: NSQ absent
-    //1: NSQ present                            
+    //1: NSQ present    
+#if REDUCE_BLOCK_COUNT_ME
     sequence_control_set_ptr->static_config.nsq_present = (uint8_t)(sequence_control_set_ptr->static_config.enc_mode <= ENC_M5) ? 1 : 0;
+#else
+    sequence_control_set_ptr->static_config.nsq_present = 1;
+#endif
 #endif
 }
 
