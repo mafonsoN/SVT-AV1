@@ -9092,7 +9092,7 @@ EbErrorType motion_estimate_lcu(
         else {
             nIdx = pu_index;
         }
-
+        
 
         for (listIndex = REF_LIST_0; listIndex <= numOfListToSearch; ++listIndex) {
 #if MRP_ME
@@ -9115,6 +9115,7 @@ EbErrorType motion_estimate_lcu(
             }
 #endif
         }
+
 
 
         total_me_candidate_index = candidateIndex;
@@ -9164,6 +9165,12 @@ EbErrorType motion_estimate_lcu(
         mePuResult->me_nsq_0[pu_index] = l0_nsq;
         mePuResult->me_nsq_1[pu_index] = l1_nsq;
 #endif
+
+
+        if (total_me_candidate_index > 3) {
+            printf("");
+        }
+
 #if MEMORY_FOOTPRINT_OPT_ME_MV
         mePuResult->total_me_candidate_index[pu_index] = MIN(total_me_candidate_index, ME_RES_CAND_MRP_ON);
 #else
@@ -9195,9 +9202,13 @@ EbErrorType motion_estimate_lcu(
 
             // Ref Picture Loop
             for (ref_pic_index = 0; ref_pic_index < num_of_ref_pic_to_search; ++ref_pic_index) {
-                picture_control_set_ptr->me_results[sb_index]->me_mv_array[pu_index][(listIndex << 2) + ref_pic_index].x_mv = _MVXT(context_ptr->p_sb_best_mv[listIndex][ref_pic_index][nIdx]);
-                picture_control_set_ptr->me_results[sb_index]->me_mv_array[pu_index][(listIndex << 2) + ref_pic_index].y_mv = _MVYT(context_ptr->p_sb_best_mv[listIndex][ref_pic_index][nIdx]);
-
+#if FROM_7_TO_2_MV
+               picture_control_set_ptr->me_results[sb_index]->me_mv_array[pu_index][((listIndex && sequence_control_set_ptr->static_config.mrp_mode == 0) ? 4 : listIndex ? 1 : 0) + ref_pic_index].x_mv = _MVXT(context_ptr->p_sb_best_mv[listIndex][ref_pic_index][nIdx]);
+               picture_control_set_ptr->me_results[sb_index]->me_mv_array[pu_index][((listIndex && sequence_control_set_ptr->static_config.mrp_mode == 0) ? 4 : listIndex ? 1 : 0) + ref_pic_index].y_mv = _MVYT(context_ptr->p_sb_best_mv[listIndex][ref_pic_index][nIdx]);              
+#else
+               picture_control_set_ptr->me_results[sb_index]->me_mv_array[pu_index][(listIndex << 2) + ref_pic_index].x_mv = _MVXT(context_ptr->p_sb_best_mv[listIndex][ref_pic_index][nIdx]);
+               picture_control_set_ptr->me_results[sb_index]->me_mv_array[pu_index][(listIndex << 2) + ref_pic_index].y_mv = _MVYT(context_ptr->p_sb_best_mv[listIndex][ref_pic_index][nIdx]);
+#endif
             }
         }
 #endif

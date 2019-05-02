@@ -51,6 +51,9 @@ static void set_restoration_unit_size(int32_t width, int32_t height, int32_t sx,
 EbErrorType me_sb_results_ctor(
     MeLcuResults     **objectDblPtr,
     uint32_t           maxNumberOfPusPerLcu,
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+    uint8_t            mrp_mode,
+#endif
     uint32_t           maxNumberOfMeCandidatesPerPU){
 
     uint32_t  puIndex;
@@ -84,7 +87,11 @@ EbErrorType me_sb_results_ctor(
         objectPtr->me_candidate[puIndex][1].direction = 1;
         objectPtr->me_candidate[puIndex][2].direction = 2;
 #if MEMORY_FOOTPRINT_OPT_ME_MV   
-        EB_MALLOC(MvCandidate*, objectPtr->me_mv_array[puIndex], sizeof(MvCandidate) * 7, EB_N_PTR);
+#if FROM_7_TO_2_MV
+        EB_MALLOC(MvCandidate*, objectPtr->me_mv_array[puIndex], sizeof(MvCandidate) * (mrp_mode ? ME_MV_MRP_OFF : ME_MV_MRP_ON), EB_N_PTR);
+#else
+        EB_MALLOC(MvCandidate*, objectPtr->me_mv_array[puIndex], sizeof(MvCandidate) * (mrp_mode ? ME_MV_MRP_ON : ME_MV_MRP_ON), EB_N_PTR);
+#endif
 #endif
     }
 #if 0
@@ -1098,12 +1105,16 @@ EbErrorType picture_parent_control_set_ctor(
 
     for (sb_index = 0; sb_index < object_ptr->sb_total_count; ++sb_index) {
 
+
         return_error = me_sb_results_ctor(
             &(object_ptr->me_results[sb_index]),
 #if NO_CFG_FILE
             MAX_ME_PU_COUNT,
 #else
             object_ptr->max_number_of_pus_per_sb,
+#endif
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+            initDataPtr->mrp_mode,
 #endif
             object_ptr->max_number_of_candidates_per_block);
     }
