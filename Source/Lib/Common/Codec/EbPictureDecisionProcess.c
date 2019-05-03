@@ -4103,6 +4103,11 @@ void* picture_decision_kernel(void *input_ptr)
                                             paReferenceEntryPtr->p_pcs_ptr->p_pcs_wrapper_ptr,
                                             1);
 #endif
+#if BUG_FIX_INPUT_LIVE_COUNT
+                                        eb_object_inc_live_count(
+                                            ((EbPaReferenceObject*)picture_control_set_ptr->ref_pa_pic_ptr_array[REF_LIST_0][ref_pic_index]->object_ptr)->p_pcs_ptr->input_picture_wrapper_ptr,
+                                            1);
+#endif
                                         --paReferenceEntryPtr->dependent_count;
                                     }
                                 }
@@ -4172,6 +4177,11 @@ void* picture_decision_kernel(void *input_ptr)
 #if !BUG_FIX_PCS_LIVE_COUNT
                                         eb_object_inc_live_count(
                                             paReferenceEntryPtr->p_pcs_ptr->p_pcs_wrapper_ptr,
+                                            1);
+#endif
+#if BUG_FIX_INPUT_LIVE_COUNT
+                                        eb_object_inc_live_count(
+                                            ((EbPaReferenceObject*)picture_control_set_ptr->ref_pa_pic_ptr_array[REF_LIST_1][ref_pic_index]->object_ptr)->p_pcs_ptr->input_picture_wrapper_ptr,
                                             1);
 #endif
                                         --paReferenceEntryPtr->dependent_count;
