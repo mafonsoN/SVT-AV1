@@ -168,7 +168,7 @@ typedef struct EbSvtAv1EncConfiguration
     uint32_t                 partition_depth;
 
 #if !MEMORY_FOOTPRINT_OPT_ME_MV
-    /* MRP (mm-signal)
+    /* MRP (mm-signal; 0: MRP mode 0, 1: MRP mode 1)
     *
     * Default is 0. */
     uint8_t                   mrp_mode;

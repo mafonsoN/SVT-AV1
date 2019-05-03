@@ -904,6 +904,9 @@ Input   : encoder mode and tune
 Output  : Multi-Processes signal(s)
 ******************************************************/
 EbErrorType signal_derivation_multi_processes_oq(
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+    SequenceControlSet        *sequence_control_set_ptr,
+#endif
     PictureParentControlSet   *picture_control_set_ptr) {
 
     EbErrorType return_error = EB_ErrorNone;
@@ -973,6 +976,11 @@ EbErrorType signal_derivation_multi_processes_oq(
             else
                 picture_control_set_ptr->pic_depth_mode = PIC_SB_SWITCH_DEPTH_MODE;
         }
+#endif
+
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+        if (picture_control_set_ptr->pic_depth_mode < PIC_SQ_DEPTH_MODE)
+            assert(sequence_control_set_ptr->static_config.nsq_present == 1 && "use nsq_present 1");
 #endif
 
     picture_control_set_ptr->max_number_of_pus_per_sb = (picture_control_set_ptr->pic_depth_mode <= PIC_ALL_C_DEPTH_MODE) ? MAX_ME_PU_COUNT : SQUARE_PU_COUNT;
@@ -1050,6 +1058,11 @@ EbErrorType signal_derivation_multi_processes_oq(
             picture_control_set_ptr->nsq_search_level = NSQ_SEARCH_OFF;
     else
         picture_control_set_ptr->nsq_search_level = NSQ_SEARCH_OFF;
+#endif
+
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+    if (picture_control_set_ptr->nsq_search_level > NSQ_SEARCH_OFF)
+        assert(sequence_control_set_ptr->static_config.nsq_present == 1 && "use nsq_present 1");
 #endif
 
 #if  RED_CU_DEBUG
@@ -1207,7 +1220,6 @@ EbErrorType signal_derivation_multi_processes_oq(
     // 3                                            8 step refinement
     // 4                                            16 step refinement
     // 5                                            64 step refinement
-    SequenceControlSet                    *sequence_control_set_ptr;
     sequence_control_set_ptr = (SequenceControlSet*)picture_control_set_ptr->sequence_control_set_wrapper_ptr->object_ptr;
     if (sequence_control_set_ptr->enable_cdef && picture_control_set_ptr->allow_intrabc == 0) {
 #if NEW_PRESETS
@@ -3774,6 +3786,9 @@ void* picture_decision_kernel(void *input_ptr)
 
                             // ME Kernel Multi-Processes Signal(s) derivation
                             signal_derivation_multi_processes_oq(
+#if MEMORY_FOOTPRINT_OPT_ME_MV
+                                sequence_control_set_ptr,
+#endif
                                 picture_control_set_ptr);
 
                             // Set the default settings of  subpel
