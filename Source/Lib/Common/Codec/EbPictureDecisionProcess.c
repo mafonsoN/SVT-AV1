@@ -4098,11 +4098,11 @@ void* picture_decision_kernel(void *input_ptr)
                                             1);
 
                                         ((EbPaReferenceObject*)picture_control_set_ptr->ref_pa_pic_ptr_array[REF_LIST_0][ref_pic_index]->object_ptr)->p_pcs_ptr = paReferenceEntryPtr->p_pcs_ptr;
-
+#if !BUG_FIX_PCS_LIVE_COUNT
                                         eb_object_inc_live_count(
                                             paReferenceEntryPtr->p_pcs_ptr->p_pcs_wrapper_ptr,
                                             1);
-
+#endif
                                         --paReferenceEntryPtr->dependent_count;
                                     }
                                 }
@@ -4169,11 +4169,11 @@ void* picture_decision_kernel(void *input_ptr)
                                             1);
 
                                         ((EbPaReferenceObject*)picture_control_set_ptr->ref_pa_pic_ptr_array[REF_LIST_1][ref_pic_index]->object_ptr)->p_pcs_ptr = paReferenceEntryPtr->p_pcs_ptr;
-
+#if !BUG_FIX_PCS_LIVE_COUNT
                                         eb_object_inc_live_count(
                                             paReferenceEntryPtr->p_pcs_ptr->p_pcs_wrapper_ptr,
                                             1);
-
+#endif
                                         --paReferenceEntryPtr->dependent_count;
                                     }
                                 }
@@ -4348,7 +4348,9 @@ void* picture_decision_kernel(void *input_ptr)
                     // Remove the entry
                     if ((inputEntryPtr->dependent_count == 0) &&
                         (inputEntryPtr->input_object_ptr)) {
+#if !BUG_FIX_PCS_LIVE_COUNT
                         eb_release_object(inputEntryPtr->p_pcs_ptr->p_pcs_wrapper_ptr);
+#endif
                         // Release the nominal live_count value
                         eb_release_object(inputEntryPtr->input_object_ptr);
                         inputEntryPtr->input_object_ptr = (EbObjectWrapper*)EB_NULL;
