@@ -47,13 +47,14 @@ extern "C" {
 #define FROM_7_TO_4_MV                    1
 #define REDUCE_BLOCK_COUNT_ME             1
 #define REDUCE_ME_SEARCH_AREA             1
+#define BUG_FIX_LOOKAHEAD                 1
 #endif
 
-#define BUG_FIX_LOOKAHEAD                 1
+
 #define SHUT_LOOKAHEAD                    0
 #define MINI_GOP_PCS                      0
 
-#define CHECK_MEM_REDUCTION               1
+#define CHECK_MEM_REDUCTION               0
 
 #define CDEF_AVX_OPT                      1
 #define MOD_M0                            0 // Sub-SAD for @ HME and ME, 12 NFL, frequency see

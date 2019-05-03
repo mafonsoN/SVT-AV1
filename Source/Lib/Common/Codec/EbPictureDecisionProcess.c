@@ -1220,7 +1220,10 @@ EbErrorType signal_derivation_multi_processes_oq(
     // 3                                            8 step refinement
     // 4                                            16 step refinement
     // 5                                            64 step refinement
+#if !MEMORY_FOOTPRINT_OPT_ME_MV
+    SequenceControlSet                    *sequence_control_set_ptr;
     sequence_control_set_ptr = (SequenceControlSet*)picture_control_set_ptr->sequence_control_set_wrapper_ptr->object_ptr;
+#endif
     if (sequence_control_set_ptr->enable_cdef && picture_control_set_ptr->allow_intrabc == 0) {
 #if NEW_PRESETS
 #if SCREEN_CONTENT_SETTINGS
