@@ -547,9 +547,12 @@ EbErrorType load_default_buffer_configuration_settings(
     if (return_ppcs == -1)
         return EB_ErrorInsufficientResources;
     uint32_t input_pic = (uint32_t)return_ppcs;
-
+#if BUG_FIX_LOOKAHEAD
+    sequence_control_set_ptr->input_buffer_fifo_init_count = input_pic + SCD_LAD + sequence_control_set_ptr->static_config.look_ahead_distance;
+#else
     sequence_control_set_ptr->input_buffer_fifo_init_count         =
         input_pic + SCD_LAD + sequence_control_set_ptr->static_config.look_ahead_distance ;
+#endif
     sequence_control_set_ptr->output_stream_buffer_fifo_init_count =
         sequence_control_set_ptr->input_buffer_fifo_init_count + 4;
 
@@ -596,7 +599,7 @@ EbErrorType load_default_buffer_configuration_settings(
 
     //#====================== Data Structures and Picture Buffers ======================
 #if BUG_FIX_LOOKAHEAD
-    sequence_control_set_ptr->picture_control_set_pool_init_count       = input_pic + SCD_LAD;
+    sequence_control_set_ptr->picture_control_set_pool_init_count       = input_pic + SCD_LAD + sequence_control_set_ptr->static_config.look_ahead_distance;
 #else
     sequence_control_set_ptr->picture_control_set_pool_init_count       = input_pic + sequence_control_set_ptr->static_config.look_ahead_distance + SCD_LAD;
 #endif
@@ -977,8 +980,9 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
     uint32_t instance_index;
     uint32_t processIndex;
     uint32_t max_picture_width;
+#if !BUG_FIX_LOOKAHEAD
     uint32_t maxLookAheadDistance = 0;
-
+#endif
     EbBool is16bit = (EbBool)(encHandlePtr->sequence_control_set_instance_array[0]->sequence_control_set_ptr->static_config.encoder_bit_depth > EB_8BIT);
     EbColorFormat color_format = encHandlePtr->sequence_control_set_instance_array[0]->sequence_control_set_ptr->static_config.encoder_color_format;
 
@@ -1033,11 +1037,12 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
 
 
     EB_MALLOC(EbFifo***, encHandlePtr->picture_parent_control_set_pool_producer_fifo_ptr_dbl_array, sizeof(EbSystemResource**) * encHandlePtr->encode_instance_total_count, EB_N_PTR);
-
+#if !BUG_FIX_LOOKAHEAD
     // Updating the picture_control_set_pool_total_count based on the maximum look ahead distance
     for (instance_index = 0; instance_index < encHandlePtr->encode_instance_total_count; ++instance_index) {
         maxLookAheadDistance = MAX(maxLookAheadDistance, encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.look_ahead_distance);
     }
+#endif
 
 
     for (instance_index = 0; instance_index < encHandlePtr->encode_instance_total_count; ++instance_index) {
@@ -1057,10 +1062,7 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
         inputData.max_depth = encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->max_sb_depth;
         inputData.ten_bit_format = encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.ten_bit_format;
         inputData.compressed_ten_bit_format = encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.compressed_ten_bit_format;
-#if BUG_FIX_LOOKAHEAD
-        // Add pre-analysis delays
-        encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->picture_control_set_pool_init_count += maxLookAheadDistance;
-#else
+#if !BUG_FIX_LOOKAHEAD
         encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->picture_control_set_pool_init_count += maxLookAheadDistance;
 #endif
         inputData.enc_mode = encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->static_config.enc_mode;
