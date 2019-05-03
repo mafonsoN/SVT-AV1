@@ -48,7 +48,7 @@ extern "C" {
 #define REDUCE_BLOCK_COUNT_ME             1
 #define REDUCE_ME_SEARCH_AREA             1
 #define BUG_FIX_LOOKAHEAD                 1
-#define BUG_FIX_PCS_LIVE_COUNT            1
+#define BUG_FIX_PCS_LIVE_COUNT            0
 #define BUG_FIX_INPUT_LIVE_COUNT          0
 #endif
 
