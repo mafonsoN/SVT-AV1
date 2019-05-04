@@ -36,12 +36,18 @@ extern "C" {
 #endif
 
 #define MRP_SUPPORT            1// MRP Main Flag
+#define ALT_REF_SUPPORT                   1 // ALT_REF main flag
 
+#if ALT_REF_SUPPORT
+#define ALT_REF_OVERLAY                   1 // support for ALT_REF overlay frames
+#define ALT_REF_PRINTS                    1
+
+#endif
 // New  presets
 #define NEW_PRESETS                       1
 #define NEW_BUFF_CFG                      1
 /************************* Omar to remove disable_ang_uv *************************/
-#define MEMORY_FOOTPRINT_OPT_ME_MV        1
+#define MEMORY_FOOTPRINT_OPT_ME_MV        0
 #if MEMORY_FOOTPRINT_OPT_ME_MV
 #define MEMORY_FOOTPRINT_OPT              1     
 #define FROM_7_TO_4_MV                    1

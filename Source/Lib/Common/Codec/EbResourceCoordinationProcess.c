@@ -548,137 +548,184 @@ void* resource_coordination_kernel(void *input_ptr)
             sequence_control_set_ptr->max_frame_window_to_ref_islice = (sequence_control_set_ptr->extra_frames_to_ref_islice + 1)*(1 << sequence_control_set_ptr->static_config.hierarchical_levels) + 1;
 #endif  
         }
+#if ALT_REF_OVERLAY
+        // Since at this stage we do not know the prediction structure and the location of ALT_REF pictures, 
+        // for every picture (except first picture), we allocate two: 1. original picture, 2. potential Overlay picture. 
+        // In Picture Decision Process, where the overlay frames are known, they extra pictures are released      
+        uint8_t has_overlay = context_ptr->sequence_control_set_instance_array[instance_index]->encode_context_ptr->initial_picture ? 0 : 1;
+        for (uint8_t loop_index = 0; loop_index <= has_overlay; loop_index++) {
+#endif
+            //Get a New ParentPCS where we will hold the new inputPicture
+            eb_get_empty_object(
+                context_ptr->picture_control_set_fifo_ptr_array[instance_index],
+                &picture_control_set_wrapper_ptr);
 
-        //Get a New ParentPCS where we will hold the new inputPicture
-        eb_get_empty_object(
-            context_ptr->picture_control_set_fifo_ptr_array[instance_index],
-            &picture_control_set_wrapper_ptr);
+            // Parent PCS is released by the Rate Control after passing through MDC->MD->ENCDEC->Packetization
+            eb_object_inc_live_count(
+                picture_control_set_wrapper_ptr,
+                1);
 
-        // Parent PCS is released by the Rate Control after passing through MDC->MD->ENCDEC->Packetization
-        eb_object_inc_live_count(
-            picture_control_set_wrapper_ptr,
-            1);
+            picture_control_set_ptr = (PictureParentControlSet*)picture_control_set_wrapper_ptr->object_ptr;
 
-        picture_control_set_ptr = (PictureParentControlSet*)picture_control_set_wrapper_ptr->object_ptr;
+            picture_control_set_ptr->p_pcs_wrapper_ptr = picture_control_set_wrapper_ptr;
 
-        picture_control_set_ptr->p_pcs_wrapper_ptr = picture_control_set_wrapper_ptr;
+#if ALT_REF_OVERLAY
+            
+            picture_control_set_ptr->overlay_ppcs_ptr = NULL;
+            picture_control_set_ptr->is_alt_ref       = 0;
+            if (loop_index) {
+                picture_control_set_ptr->is_overlay = 1;
+                // set the overlay_ppcs_ptr in the original (ALT_REF) ppcs to the current ppcs
+                EbObjectWrapper               *alt_ref_picture_control_set_wrapper_ptr = (context_ptr->sequence_control_set_instance_array[instance_index]->encode_context_ptr->initial_picture) ?
+                    picture_control_set_wrapper_ptr :
+                    sequence_control_set_ptr->encode_context_ptr->previous_picture_control_set_wrapper_ptr;
 
-        // Set the Encoder mode
-        picture_control_set_ptr->enc_mode = sequence_control_set_ptr->static_config.enc_mode;
+                picture_control_set_ptr->alt_ref_ppcs_ptr = ((PictureParentControlSet*)alt_ref_picture_control_set_wrapper_ptr->object_ptr);
+                picture_control_set_ptr->alt_ref_ppcs_ptr->overlay_ppcs_ptr = picture_control_set_ptr;
+            }
+            else {
+                picture_control_set_ptr->is_overlay = 0;
+                picture_control_set_ptr->alt_ref_ppcs_ptr = NULL;
+            }
+#endif
+            // Set the Encoder mode
+            picture_control_set_ptr->enc_mode = sequence_control_set_ptr->static_config.enc_mode;
 
-        // Keep track of the previous input for the ZZ SADs computation
-        picture_control_set_ptr->previous_picture_control_set_wrapper_ptr = (context_ptr->sequence_control_set_instance_array[instance_index]->encode_context_ptr->initial_picture) ?
-            picture_control_set_wrapper_ptr :
-            sequence_control_set_ptr->encode_context_ptr->previous_picture_control_set_wrapper_ptr;
+            // Keep track of the previous input for the ZZ SADs computation
+            // AMIR: check this
+            picture_control_set_ptr->previous_picture_control_set_wrapper_ptr = (context_ptr->sequence_control_set_instance_array[instance_index]->encode_context_ptr->initial_picture) ?
+                picture_control_set_wrapper_ptr :
+                sequence_control_set_ptr->encode_context_ptr->previous_picture_control_set_wrapper_ptr;
+#if ALT_REF_OVERLAY
+            if (loop_index == 0) 
+#endif
+                sequence_control_set_ptr->encode_context_ptr->previous_picture_control_set_wrapper_ptr = picture_control_set_wrapper_ptr;
+            // Copy data from the svt buffer to the input frame
+            // *Note - Assumes 4:2:0 planar
+            input_picture_wrapper_ptr = ebInputWrapperPtr;
+            picture_control_set_ptr->enhanced_picture_ptr = (EbPictureBufferDesc*)ebInputPtr->p_buffer;
+            picture_control_set_ptr->input_ptr = ebInputPtr;
+            end_of_sequence_flag = (picture_control_set_ptr->input_ptr->flags & EB_BUFFERFLAG_EOS) ? EB_TRUE : EB_FALSE;
+            EbStartTime(&picture_control_set_ptr->start_time_seconds, &picture_control_set_ptr->start_time_u_seconds);
 
-        sequence_control_set_ptr->encode_context_ptr->previous_picture_control_set_wrapper_ptr = picture_control_set_wrapper_ptr;
+            picture_control_set_ptr->sequence_control_set_wrapper_ptr = context_ptr->sequenceControlSetActiveArray[instance_index];
+            picture_control_set_ptr->sequence_control_set_ptr = sequence_control_set_ptr;
+            picture_control_set_ptr->input_picture_wrapper_ptr = input_picture_wrapper_ptr;
+            picture_control_set_ptr->end_of_sequence_flag = end_of_sequence_flag;
 
-        // Copy data from the svt buffer to the input frame
-        // *Note - Assumes 4:2:0 planar
-        input_picture_wrapper_ptr = ebInputWrapperPtr;
-        picture_control_set_ptr->enhanced_picture_ptr = (EbPictureBufferDesc*)ebInputPtr->p_buffer;
-        picture_control_set_ptr->input_ptr            = ebInputPtr;
-        end_of_sequence_flag = (picture_control_set_ptr->input_ptr->flags & EB_BUFFERFLAG_EOS) ? EB_TRUE : EB_FALSE;
-        EbStartTime(&picture_control_set_ptr->start_time_seconds, &picture_control_set_ptr->start_time_u_seconds);
-        
-        picture_control_set_ptr->sequence_control_set_wrapper_ptr = context_ptr->sequenceControlSetActiveArray[instance_index];
-        picture_control_set_ptr->sequence_control_set_ptr = sequence_control_set_ptr;
-        picture_control_set_ptr->input_picture_wrapper_ptr = input_picture_wrapper_ptr;
-        picture_control_set_ptr->end_of_sequence_flag = end_of_sequence_flag;
+            // Set Picture Control Flags
+            picture_control_set_ptr->idr_flag = sequence_control_set_ptr->encode_context_ptr->initial_picture || (picture_control_set_ptr->input_ptr->pic_type == EB_AV1_KEY_PICTURE);
+            picture_control_set_ptr->cra_flag = (picture_control_set_ptr->input_ptr->pic_type == EB_AV1_INTRA_ONLY_PICTURE) ? EB_TRUE : EB_FALSE;
+            picture_control_set_ptr->scene_change_flag = EB_FALSE;
+            picture_control_set_ptr->qp_on_the_fly = EB_FALSE;
+            picture_control_set_ptr->sb_total_count = sequence_control_set_ptr->sb_total_count;
+            picture_control_set_ptr->eos_coming = (ebInputPtr->flags & (EB_BUFFERFLAG_EOS << 1)) ? EB_TRUE : EB_FALSE;
 
-        // Set Picture Control Flags
-        picture_control_set_ptr->idr_flag = sequence_control_set_ptr->encode_context_ptr->initial_picture || (picture_control_set_ptr->input_ptr->pic_type == EB_AV1_KEY_PICTURE);
-        picture_control_set_ptr->cra_flag = (picture_control_set_ptr->input_ptr->pic_type == EB_AV1_INTRA_ONLY_PICTURE) ? EB_TRUE : EB_FALSE;
-        picture_control_set_ptr->scene_change_flag = EB_FALSE;
-        picture_control_set_ptr->qp_on_the_fly = EB_FALSE;
-        picture_control_set_ptr->sb_total_count = sequence_control_set_ptr->sb_total_count;
-        picture_control_set_ptr->eos_coming = (ebInputPtr->flags & (EB_BUFFERFLAG_EOS << 1)) ? EB_TRUE : EB_FALSE;
+            if (sequence_control_set_ptr->static_config.speed_control_flag) {
+                SpeedBufferControl(
+                    context_ptr,
+                    picture_control_set_ptr,
+                    sequence_control_set_ptr);
+            }
+            else {
+                picture_control_set_ptr->enc_mode = (EbEncMode)sequence_control_set_ptr->static_config.enc_mode;
+            }
 
-        if (sequence_control_set_ptr->static_config.speed_control_flag) {
-            SpeedBufferControl(
-                context_ptr,
-                picture_control_set_ptr,
-                sequence_control_set_ptr);
-        }
-        else {
-            picture_control_set_ptr->enc_mode = (EbEncMode)sequence_control_set_ptr->static_config.enc_mode;
-        }
+            aspectRatio = (sequence_control_set_ptr->luma_width * 10) / sequence_control_set_ptr->luma_height;
+            aspectRatio = (aspectRatio <= ASPECT_RATIO_4_3) ? ASPECT_RATIO_CLASS_0 : (aspectRatio <= ASPECT_RATIO_16_9) ? ASPECT_RATIO_CLASS_1 : ASPECT_RATIO_CLASS_2;
 
-        aspectRatio = (sequence_control_set_ptr->luma_width * 10) / sequence_control_set_ptr->luma_height;
-        aspectRatio = (aspectRatio <= ASPECT_RATIO_4_3) ? ASPECT_RATIO_CLASS_0 : (aspectRatio <= ASPECT_RATIO_16_9) ? ASPECT_RATIO_CLASS_1 : ASPECT_RATIO_CLASS_2;
+            // Set the SCD Mode
+            sequence_control_set_ptr->scd_mode = sequence_control_set_ptr->static_config.scene_change_detection == 0 ?
+                SCD_MODE_0 :
+                SCD_MODE_1;
 
-        // Set the SCD Mode
-        sequence_control_set_ptr->scd_mode = sequence_control_set_ptr->static_config.scene_change_detection == 0 ?
-            SCD_MODE_0 :
-            SCD_MODE_1;
+            // Set the block mean calculation prec
+            sequence_control_set_ptr->block_mean_calc_prec = BLOCK_MEAN_PREC_SUB;
 
-        // Set the block mean calculation prec
-        sequence_control_set_ptr->block_mean_calc_prec = BLOCK_MEAN_PREC_SUB;
-    
-        // Pre-Analysis Signal(s) derivation
-        signal_derivation_pre_analysis_oq(
-            sequence_control_set_ptr,
-            picture_control_set_ptr);
-    
-        // Rate Control
-        // Set the ME Distortion and OIS Historgrams to zero
-        if (sequence_control_set_ptr->static_config.rate_control_mode) {
-            EB_MEMSET(picture_control_set_ptr->me_distortion_histogram, 0, NUMBER_OF_SAD_INTERVALS * sizeof(uint16_t));
-            EB_MEMSET(picture_control_set_ptr->ois_distortion_histogram, 0, NUMBER_OF_INTRA_SAD_INTERVALS * sizeof(uint16_t));
-        }
-        picture_control_set_ptr->full_sb_count = 0;
-    
-        if (sequence_control_set_ptr->static_config.use_qp_file == 1) {
-            picture_control_set_ptr->qp_on_the_fly = EB_TRUE;
-            if (picture_control_set_ptr->input_ptr->qp > MAX_QP_VALUE){
-                SVT_LOG("SVT [WARNING]: INPUT QP OUTSIDE OF RANGE\n");
+            // Pre-Analysis Signal(s) derivation
+            signal_derivation_pre_analysis_oq(
+                sequence_control_set_ptr,
+                picture_control_set_ptr);
+
+            // Rate Control
+            // Set the ME Distortion and OIS Historgrams to zero
+            if (sequence_control_set_ptr->static_config.rate_control_mode) {
+                EB_MEMSET(picture_control_set_ptr->me_distortion_histogram, 0, NUMBER_OF_SAD_INTERVALS * sizeof(uint16_t));
+                EB_MEMSET(picture_control_set_ptr->ois_distortion_histogram, 0, NUMBER_OF_INTRA_SAD_INTERVALS * sizeof(uint16_t));
+            }
+            picture_control_set_ptr->full_sb_count = 0;
+
+            if (sequence_control_set_ptr->static_config.use_qp_file == 1) {
+                picture_control_set_ptr->qp_on_the_fly = EB_TRUE;
+                if (picture_control_set_ptr->input_ptr->qp > MAX_QP_VALUE) {
+                    SVT_LOG("SVT [WARNING]: INPUT QP OUTSIDE OF RANGE\n");
+                    picture_control_set_ptr->qp_on_the_fly = EB_FALSE;
+                    picture_control_set_ptr->picture_qp = (uint8_t)sequence_control_set_ptr->qp;
+                }
+                picture_control_set_ptr->picture_qp = (uint8_t)picture_control_set_ptr->input_ptr->qp;
+            }
+            else {
                 picture_control_set_ptr->qp_on_the_fly = EB_FALSE;
                 picture_control_set_ptr->picture_qp = (uint8_t)sequence_control_set_ptr->qp;
             }
-            picture_control_set_ptr->picture_qp = (uint8_t)picture_control_set_ptr->input_ptr->qp;
-        }
-        else {
-            picture_control_set_ptr->qp_on_the_fly = EB_FALSE;
-            picture_control_set_ptr->picture_qp = (uint8_t)sequence_control_set_ptr->qp;
-        }
 
-        // Picture Stats
-        picture_control_set_ptr->picture_number = context_ptr->picture_number_array[instance_index]++;
-        ResetPcsAv1(picture_control_set_ptr);
-
-        sequence_control_set_ptr->encode_context_ptr->initial_picture = EB_FALSE;
-
-        // Get Empty Reference Picture Object
-        eb_get_empty_object(
-            sequence_control_set_ptr->encode_context_ptr->pa_reference_picture_pool_fifo_ptr,
-            &reference_picture_wrapper_ptr);
-
-        picture_control_set_ptr->pa_reference_picture_wrapper_ptr = reference_picture_wrapper_ptr;
-
-        // Give the new Reference a nominal live_count of 1
-        eb_object_inc_live_count(
-            picture_control_set_ptr->pa_reference_picture_wrapper_ptr,
-            2);
-#if !BUG_FIX_PCS_LIVE_COUNT
-        eb_object_inc_live_count(
-            picture_control_set_wrapper_ptr,
-            2);
+            // Picture Stats
+#if ALT_REF_OVERLAY
+            if (loop_index == has_overlay)
+                picture_control_set_ptr->picture_number = context_ptr->picture_number_array[instance_index]++;
+            else
+                picture_control_set_ptr->picture_number = context_ptr->picture_number_array[instance_index];
+#else
+            picture_control_set_ptr->picture_number = context_ptr->picture_number_array[instance_index]++;
 #endif
-        ((EbPaReferenceObject*)picture_control_set_ptr->pa_reference_picture_wrapper_ptr->object_ptr)->input_padded_picture_ptr->buffer_y = picture_control_set_ptr->enhanced_picture_ptr->buffer_y;
-        // Get Empty Output Results Object
-        if (picture_control_set_ptr->picture_number > 0 && (prevPictureControlSetWrapperPtr != NULL))
-        {
-            ((PictureParentControlSet       *)prevPictureControlSetWrapperPtr->object_ptr)->end_of_sequence_flag = end_of_sequence_flag;
-            eb_get_empty_object(
-                context_ptr->resource_coordination_results_output_fifo_ptr,
-                &outputWrapperPtr);
-            outputResultsPtr = (ResourceCoordinationResults*)outputWrapperPtr->object_ptr;
-            outputResultsPtr->picture_control_set_wrapper_ptr = prevPictureControlSetWrapperPtr;
+            ResetPcsAv1(picture_control_set_ptr);
 
-            // Post the finished Results Object
-            eb_post_full_object(outputWrapperPtr);
+            sequence_control_set_ptr->encode_context_ptr->initial_picture = EB_FALSE;
+
+            // Get Empty Reference Picture Object
+            // AMIR: Do we need this for overlay pictures?
+#if 0//ALT_REF_OVERLAY
+            if (!picture_control_set_ptr->is_overlay)
+#endif
+            {
+                eb_get_empty_object(
+                    sequence_control_set_ptr->encode_context_ptr->pa_reference_picture_pool_fifo_ptr,
+                    &reference_picture_wrapper_ptr);
+
+                picture_control_set_ptr->pa_reference_picture_wrapper_ptr = reference_picture_wrapper_ptr;
+
+                // Give the new Reference a nominal live_count of 1
+                eb_object_inc_live_count(
+                    picture_control_set_ptr->pa_reference_picture_wrapper_ptr,
+                    2);
+                ((EbPaReferenceObject*)picture_control_set_ptr->pa_reference_picture_wrapper_ptr->object_ptr)->input_padded_picture_ptr->buffer_y = picture_control_set_ptr->enhanced_picture_ptr->buffer_y;
+            }
+#if !BUG_FIX_PCS_LIVE_COUNT
+            eb_object_inc_live_count(
+                picture_control_set_wrapper_ptr,
+                2);
+#endif
+            // Get Empty Output Results Object
+            if (picture_control_set_ptr->picture_number > 0 && (prevPictureControlSetWrapperPtr != NULL))
+            {
+                ((PictureParentControlSet       *)prevPictureControlSetWrapperPtr->object_ptr)->end_of_sequence_flag = end_of_sequence_flag;
+                eb_get_empty_object(
+                    context_ptr->resource_coordination_results_output_fifo_ptr,
+                    &outputWrapperPtr);
+                outputResultsPtr = (ResourceCoordinationResults*)outputWrapperPtr->object_ptr;
+                outputResultsPtr->picture_control_set_wrapper_ptr = prevPictureControlSetWrapperPtr;
+#if ALT_REF_PRINTS
+               /* printf("RC POST: POC:%lld\tIsOverlay:%d\n",
+                    picture_control_set_ptr->picture_number,
+                    picture_control_set_ptr->is_overlay);*/
+#endif
+                // Post the finished Results Object
+                eb_post_full_object(outputWrapperPtr);
+            }
+            prevPictureControlSetWrapperPtr = picture_control_set_wrapper_ptr;
+#if ALT_REF_OVERLAY
         }
-        prevPictureControlSetWrapperPtr = picture_control_set_wrapper_ptr;
+#endif
     }
 
     return EB_NULL;

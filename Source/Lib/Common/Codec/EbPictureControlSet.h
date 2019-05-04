@@ -14383,6 +14383,12 @@ extern "C" {
         uint8_t                              mrp_mode;
 #endif
 #endif
+#if ALT_REF_OVERLAY
+        uint8_t                              is_alt_ref;
+        uint8_t                              is_overlay;
+        struct PictureParentControlSet      *overlay_ppcs_ptr;
+        struct PictureParentControlSet      *alt_ref_ppcs_ptr;
+#endif
     } PictureParentControlSet;
 
 
