@@ -1876,16 +1876,20 @@ void* picture_decision_kernel(void *input_ptr)
 
             // ----------------- Alt-Refs --------------------
 
+            // central location of alt-ref filtering
             alt_ref_central_loc = (mini_gop_count + 1) * (1 << sequence_control_set_ptr->static_config.hierarchical_levels);
+
             int altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
             int num_past_pics = altref_nframes/2;
 
+            // These conditions need to be met for temporal filtering to conducted
             if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE &&
+               altref_nframes > 1 &&
                alt_ref_created_flag == EB_FALSE) {
 
                 if(ParentPcsWindow[0]!=NULL && ParentPcsWindow[1]!=NULL){
 
-                    // get previous frames
+                    // get previous source pictures
                     if (pics_saved < num_past_pics) {
 
                         for (int pic_save = pics_saved; pic_save < num_past_pics; pic_save++) {
@@ -1903,6 +1907,7 @@ void* picture_decision_kernel(void *input_ptr)
                         }
                     }
 
+                    // get central and futute source pictures
                     if (pics_saved == num_past_pics) {
 
                         int window_index = 1;
@@ -1930,7 +1935,7 @@ void* picture_decision_kernel(void *input_ptr)
                         clock_t elapsed_time = clock() - start_time;
                         double time_taken = ((double) elapsed_time) / CLOCKS_PER_SEC; // in seconds
 
-                        printf("Producing the alt-ref frame at POC %d took %f seconds.\n", alt_ref_central_loc, time_taken);
+                        printf("Producing the alt-ref picture at POC %d took %f seconds.\n", alt_ref_central_loc, time_taken);
 
                         alt_ref_created_flag = EB_TRUE;
 

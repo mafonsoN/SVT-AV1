@@ -77,7 +77,7 @@ static const uint32_t subblock_xy_16x16[16][2] = { {0,0}, {0,1}, {0,2}, {0,3},
                                                    {2,0}, {2,1}, {2,2}, {2,3},
                                                    {3,0}, {3,1}, {3,2}, {3,3} };
 
-// delete when done debugging
+// Debug function
 void print_block_uint8(EbByte src, int width, int height, int stride){
 
     int i, j, k=0;
@@ -93,7 +93,7 @@ void print_block_uint8(EbByte src, int width, int height, int stride){
 
 }
 
-// delete when done debugging
+// Debug function
 void save_YUV_to_file(char *filename, EbByte buffer_y, EbByte buffer_u, EbByte buffer_v,
                       uint16_t width, uint16_t height,
                       uint16_t stride_y, uint16_t stride_u, uint16_t stride_v,
@@ -128,7 +128,7 @@ void save_YUV_to_file(char *filename, EbByte buffer_y, EbByte buffer_u, EbByte b
     }
 }
 
-// delete when done debugging
+// Debug function
 void save_Y_to_file(char *filename, EbByte buffer_y,
                     uint16_t width, uint16_t height,
                     uint16_t stride_y,
@@ -153,20 +153,8 @@ void save_Y_to_file(char *filename, EbByte buffer_y,
     }
 }
 
-void copy_block_and_remove_stride(EbByte dst, EbByte src, int width, int height, int stride ){
-
-    int h;
-    EbByte src_cpy = src, dst_cpy = dst;
-
-    for (h=0; h<height; h++){
-        memcpy(dst_cpy, src_cpy, width * sizeof(uint8_t));
-        dst_cpy += width;
-        src_cpy += stride;
-    }
-
-}
-
-void copy_block(EbByte dst, int stride_dst, EbByte src, int stride_src, int width, int height){
+// Copy block/picture of size width x height from src to dst
+void copy_pixels(EbByte dst, int stride_dst, EbByte src, int stride_src, int width, int height){
 
     int h;
     EbByte src_cpy = src, dst_cpy = dst;
@@ -179,7 +167,8 @@ void copy_block(EbByte dst, int stride_dst, EbByte src, int stride_src, int widt
 
 }
 
-void copy_picture_channel(EbByte dst, int stride_dst,
+// Copy block/picture of size width x height from src to dst with origin_src and origin_dst
+void copy_pixels_with_origin(EbByte dst, int stride_dst,
                           int origin_dst_y, int origin_dst_x,
                           EbByte src, int stride_src,
                           int origin_src_y, int origin_src_x,
@@ -197,6 +186,7 @@ void copy_picture_channel(EbByte dst, int stride_dst,
 
 }
 
+// assign a single value to all elements in an array
 static void populate_list_with_value(int *list, int nelements, const int value){
 
     for(int i=0; i<nelements; i++){
@@ -205,6 +195,7 @@ static void populate_list_with_value(int *list, int nelements, const int value){
 
 }
 
+// get block filter weights using a distance metric
 void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_subblock_sad, int *use_16x16_subblocks, int *blk_fw){
 
     int blk_idx;
@@ -249,6 +240,7 @@ void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_su
     }
 }
 
+// get distortion (SAD) from ME context
 void get_ME_distortion(MeContext_t *context_ptr, int* me_32x32_total_sad, int *me_16x16_subblock_sad){
 
     uint32_t mv_index;
@@ -283,6 +275,7 @@ void get_ME_distortion(MeContext_t *context_ptr, int* me_32x32_total_sad, int *m
 
 }
 
+// Create and initialize all necessary ME context structures
 void create_ME_context_and_picture_control(MotionEstimationContext_t *context_ptr,
                                             PictureParentControlSet_t *picture_control_set_ptr_frame,
                                             PictureParentControlSet_t *picture_control_set_ptr_central,
@@ -309,9 +302,8 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
     EbPictureBufferDesc_t *sixteenth_pic_ptr = src_object->sixteenthDecimatedPicturePtr;
 
     // Parts from MotionEstimationKernel()
-    uint16_t blk_index = (uint16_t)(blk_col + blk_row * blk_cols);
-    uint32_t sb_origin_x = blk_col * BW;
-    uint32_t sb_origin_y = blk_row * BH;
+    uint32_t sb_origin_x = (uint32_t)(blk_col * BW);
+    uint32_t sb_origin_y = (uint32_t)(blk_row * BH);
 
     uint32_t sb_width = (input_picture_ptr_central->width - sb_origin_x) < BLOCK_SIZE_64 ? input_picture_ptr_central->width - sb_origin_x : BLOCK_SIZE_64;
     uint32_t sb_height = (input_picture_ptr_central->height - sb_origin_y) < BLOCK_SIZE_64 ? input_picture_ptr_central->height - sb_origin_y : BLOCK_SIZE_64;
@@ -448,7 +440,8 @@ static INLINE int get_subblock_filter_weight(unsigned int y,
 
 }
 
-static INLINE int mod_index(int sum_dist,
+// Adjust value of the modified (weight of filtering) based on the distortion and strength parameter
+static INLINE int adjust_modifier(int sum_dist,
                             int index,
                             int rounding,
                             int strength,
@@ -491,6 +484,7 @@ static INLINE void calculate_squared_errors(const uint8_t *s,
 
 }
 
+// Main function that applies filtering to a block according to weights
 // TODO: libaom uses an intrinsics version of this function
 void apply_filtering(EbByte *src,
                     EbByte *pred,
@@ -567,7 +561,7 @@ void apply_filtering(EbByte *src,
 
             y_index += 2;
 
-            modifier = mod_index(modifier, y_index, rounding, strength, filter_weight);
+            modifier = adjust_modifier(modifier, y_index, rounding, strength, filter_weight);
 
             if(modifier==0){
                 modifier=0;
@@ -616,8 +610,8 @@ void apply_filtering(EbByte *src,
                 u_mod += y_diff;
                 v_mod += y_diff;
 
-                u_mod = mod_index(u_mod, cr_index, rounding, strength, filter_weight);
-                v_mod = mod_index(v_mod, cr_index, rounding, strength, filter_weight);
+                u_mod = adjust_modifier(u_mod, cr_index, rounding, strength, filter_weight);
+                v_mod = adjust_modifier(v_mod, cr_index, rounding, strength, filter_weight);
 
                 count_u[m] += u_mod;
                 accum_u[m] += u_mod * u_pixel_value;
@@ -677,6 +671,7 @@ static void apply_filtering_central(EbByte *pred,
 
 }
 
+// Unidirectional motion compensation using open-loop ME results and MC
 void uni_motion_compensation(MeContext_t* context_ptr,
                             EbPictureBufferDesc_t *pic_ptr_ref,
                             EbByte *pred,
@@ -808,7 +803,7 @@ void uni_motion_compensation(MeContext_t* context_ptr,
                    subblock_w, subblock_h,
                        comp_block_stride, 0, 0);
 #endif
-        copy_block(pred_ptr[0], BW, comp_block, comp_block_stride, subblock_w, subblock_h);
+        copy_pixels(pred_ptr[0], BW, comp_block, comp_block_stride, subblock_w, subblock_h);
 
         // ----- compensate chroma ------
 
@@ -919,7 +914,7 @@ void uni_motion_compensation(MeContext_t* context_ptr,
                            &comp_block_stride,
                            asm_type);
 
-        copy_block(pred_ptr[1], BW>>1, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
+        copy_pixels(pred_ptr[1], BW>>1, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
 
 #if 0
         save_Y_to_file("sub_block_U_MC.yuv", comp_block,
@@ -943,7 +938,7 @@ void uni_motion_compensation(MeContext_t* context_ptr,
                            &comp_block_stride,
                            asm_type);
 
-        copy_block(pred_ptr[2], BW>>1, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
+        copy_pixels(pred_ptr[2], BW>>1, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
 
     }
 
@@ -1086,9 +1081,9 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                     populate_list_with_value(blk_fw, 16, 2);
                     use_16x16_subblocks = 0;
 
-                    copy_block_and_remove_stride(pred[C_Y], src_central[C_Y] + blk_y_src_offset, BW, BH, stride[C_Y]);
-                    copy_block_and_remove_stride(pred[C_U], src_central[C_U] + blk_ch_src_offset, BW>>1, BH>>1, stride[C_U]);
-                    copy_block_and_remove_stride(pred[C_V], src_central[C_V] + blk_ch_src_offset, BW>>1, BH>>1, stride[C_V]);
+                    copy_pixels(pred[C_Y], BW, src_central[C_Y] + blk_y_src_offset, stride[C_Y], BW, BH);
+                    copy_pixels(pred[C_U], BW>>1, src_central[C_U] + blk_ch_src_offset, stride[C_U], BW>>1, BH>>1);
+                    copy_pixels(pred[C_V], BW>>1, src_central[C_V] + blk_ch_src_offset, stride[C_V], BW>>1, BH>>1);
 
                 }else{
 
@@ -1126,9 +1121,9 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
                     int shift_ch = search_region_index_ch + (y_Level2_search_center>>1)*stride[C_U] + (x_Level2_search_center>>1);
 
                     // get predicted block
-                    copy_block_and_remove_stride(pred[C_Y], src_central[C_Y] + shift_y, BW, BH, stride[C_Y]);
-                    copy_block_and_remove_stride(pred[C_U], src_central[C_U] + shift_ch, BW>>1, BH>>1, stride[C_U]);
-                    copy_block_and_remove_stride(pred[C_V], src_central[C_V] + shift_ch, BW>>1, BH>>1, stride[C_V]);
+                    copy_pixels_and_remove_stride(pred[C_Y], src_central[C_Y] + shift_y, BW, BH, stride[C_Y]);
+                    copy_pixels_and_remove_stride(pred[C_U], src_central[C_U] + shift_ch, BW>>1, BH>>1, stride[C_U]);
+                    copy_pixels_and_remove_stride(pred[C_V], src_central[C_V] + shift_ch, BW>>1, BH>>1, stride[C_V]);
 
 #else
 
@@ -1578,7 +1573,7 @@ int replace_src_pic_buffers(PictureParentControlSet_t *picture_control_set_ptr_c
 #endif
 
     // Y
-    copy_picture_channel(picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y,
+    copy_pixels_with_origin(picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y,
                          picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_y,
                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_x,
@@ -1590,7 +1585,7 @@ int replace_src_pic_buffers(PictureParentControlSet_t *picture_control_set_ptr_c
                          picture_control_set_ptr_central->enhanced_picture_ptr->height);
 
     // U
-    copy_picture_channel(picture_control_set_ptr_central->enhanced_picture_ptr->bufferCb,
+    copy_pixels_with_origin(picture_control_set_ptr_central->enhanced_picture_ptr->bufferCb,
                          picture_control_set_ptr_central->enhanced_picture_ptr->strideCb,
                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_y >> 1,
                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_x >> 1,
@@ -1602,7 +1597,7 @@ int replace_src_pic_buffers(PictureParentControlSet_t *picture_control_set_ptr_c
                          picture_control_set_ptr_central->enhanced_picture_ptr->height >> 1);
 
     // V
-    copy_picture_channel(picture_control_set_ptr_central->enhanced_picture_ptr->bufferCr,
+    copy_pixels_with_origin(picture_control_set_ptr_central->enhanced_picture_ptr->bufferCr,
                          picture_control_set_ptr_central->enhanced_picture_ptr->strideCr,
                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_y >> 1,
                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_x >> 1,
@@ -1647,7 +1642,7 @@ int replace_src_pic_buffers(PictureParentControlSet_t *picture_control_set_ptr_c
                    0, 0);
 #endif
 
-    copy_picture_channel(padded_pic_ptr->buffer_y,
+    copy_pixels_with_origin(padded_pic_ptr->buffer_y,
                          padded_pic_ptr->stride_y,
                          padded_pic_ptr->origin_y,
                          padded_pic_ptr->origin_x,
@@ -1739,6 +1734,7 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_con
     uint8_t altref_strength, altref_nframes, index_center;
     EbPictureBufferDesc_t *input_picture_ptr;
     PictureParentControlSet_t *picture_control_set_ptr_central = list_picture_control_set_ptr[0]; // picture control set of the first frame
+    uint8_t *alt_ref_buffer[COLOR_CHANNELS];
 
     // user-defined encoder parameters related to alt-refs
     altref_strength = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_strength;
@@ -1762,26 +1758,6 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_con
     for(int i=0; i<altref_nframes; i++){
         list_input_picture_ptr[i] = list_picture_control_set_ptr[i]->enhanced_picture_ptr;
     }
-
-    //int which_arf = gf_group->arf_update_idx[gf_group->index];
-
-    // Set the temporal filtering status for the corresponding OVERLAY frame
-    if (altref_strength == 0 && altref_nframes == 1){
-        // temporal filtering is off
-        // is showable frame
-#if DEBUG
-        printf("It is not an alt-ref filtered frame\n");
-#endif
-    }
-    else{
-        // temporal filtering is on
-        // is not showable frame
-#if DEBUG
-        printf("It is an alt-ref filtered frame\n");
-#endif
-    }
-
-    uint8_t *alt_ref_buffer[COLOR_CHANNELS];
 
     // allocate memory for the alt-ref buffer - to be replaced by some other final structure
     for(int c=0; c<COLOR_CHANNELS; c++){
