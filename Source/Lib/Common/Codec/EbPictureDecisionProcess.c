@@ -2094,7 +2094,7 @@ void* picture_decision_kernel(void *input_ptr)
                         context_ptr,
                         encode_context_ptr);
 
-                    // ---- alt-refs ---- set state for next mini-gop
+                    // ---- Alt-refs ---- set state for next mini-gop
                     // TODO: testing purposes only - stategy to define which frames are alt-refs is required
                     if(picture_control_set_ptr->picture_number > 0){
                         pics_saved = 0;

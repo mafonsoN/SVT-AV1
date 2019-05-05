@@ -39,6 +39,7 @@
 #define BH 64
 #define BW 64
 #define BLK_PELS 4096  // Pixels in the block
+#define N_16X16_BLOCKS 16
 
 #define INT_MAX 2147483647 //max value for an int
 #define INT_MIN (-2147483647-1) //min value for an int
@@ -47,6 +48,9 @@
 #define THRES_HIGH 1280 // mean SAD of 5
 #define THRES_DIFF_LOW 300
 #define THRES_DIFF_HIGH 450
+
+#define INIT_WEIGHT 2
+#define WEIGHT_MULTIPLIER 16
 
 // Debug-specific defines
 #define DEBUG 0
@@ -72,10 +76,10 @@ static unsigned int index_mult[14] = {
 // relationship between pu_index and row and col of the 32x32 sub-blocks
 static const uint32_t subblock_xy_32x32[4][2] = { {0,0}, {0,1}, {1,0}, {1,1} };
 
-static const uint32_t subblock_xy_16x16[16][2] = { {0,0}, {0,1}, {0,2}, {0,3},
-                                                   {1,0}, {1,1}, {1,2}, {1,3},
-                                                   {2,0}, {2,1}, {2,2}, {2,3},
-                                                   {3,0}, {3,1}, {3,2}, {3,3} };
+static const uint32_t subblock_xy_16x16[N_16X16_BLOCKS][2] = { {0,0}, {0,1}, {0,2}, {0,3},
+                                                               {1,0}, {1,1}, {1,2}, {1,3},
+                                                               {2,0}, {2,1}, {2,2}, {2,3},
+                                                               {3,0}, {3,1}, {3,2}, {3,3} };
 
 // Debug function
 void print_block_uint8(EbByte src, int width, int height, int stride){
@@ -203,7 +207,7 @@ void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_su
     int me_sum_subblock_sad = 0;
     int max_me_sad = INT_MIN, min_me_sad = INT_MAX;
 
-    for (blk_idx = 0; blk_idx < 16; blk_idx++) {
+    for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
         if (min_me_sad > me_16x16_subblock_sad[blk_idx])
             min_me_sad = me_16x16_subblock_sad[blk_idx];
         if (max_me_sad < me_16x16_subblock_sad[blk_idx])
@@ -222,7 +226,7 @@ void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_su
                     ? 2
                     : *me_32x32_total_sad < (THRES_HIGH << THR_SHIFT) ? 1 : 0;
 
-        populate_list_with_value(blk_fw, 16, weight);
+        populate_list_with_value(blk_fw, N_16X16_BLOCKS, weight);
 
     } else {
 
@@ -230,7 +234,7 @@ void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_su
 
         *use_16x16_subblocks = 1;
 
-        for (blk_idx = 0; blk_idx < 16; blk_idx++){
+        for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++){
             blk_fw[blk_idx] = me_16x16_subblock_sad[blk_idx] < THRES_LOW
                               ? 2
                               : me_16x16_subblock_sad[blk_idx] < THRES_HIGH ? 1 : 0;
@@ -281,8 +285,7 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
                                             PictureParentControlSet_t *picture_control_set_ptr_central,
                                             EbPictureBufferDesc_t *input_picture_ptr_central,
                                             int blk_row,
-                                            int blk_col,
-                                            int blk_cols){
+                                            int blk_col){
 
     int lcuRow;
 
@@ -381,7 +384,7 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
 
 }
 
-// Get sub-block filter weights using
+// Get sub-block filter weights
 // blk_fw - block filter weight
 // TODO: ugly code, clean up
 static INLINE int get_subblock_filter_weight(unsigned int y,
@@ -477,7 +480,7 @@ static INLINE void calculate_squared_errors(const uint8_t *s,
     for (i = 0; i < h; i++) {
         for (j = 0; j < w; j++) {
             const int16_t diff = s[i * s_stride + j] - p[i * p_stride + j];
-            diff_sse[idx] = diff * diff;
+            diff_sse[idx] = (uint16_t) diff * diff;
             idx++;
         }
     }
@@ -624,7 +627,7 @@ void apply_filtering(EbByte *src,
     }
 }
 
-// buf_stride is the block size: 32 for Y and 16 for U and V
+// Apply filtering to the central picture
 static void apply_filtering_central(EbByte *pred,
                                     uint32_t **accum,
                                     uint16_t **count,
@@ -638,15 +641,15 @@ static void apply_filtering_central(EbByte *pred,
     unsigned int i, j, k;
     int blk_height_y = blk_height;
     int blk_width_y = blk_width;
-    int blk_height_ch= blk_height>>1; // only works for 420 now!
-    int blk_width_ch = blk_width>>1; // only works for 420 now!
+    int blk_height_ch= blk_height>>1;
+    int blk_width_ch = blk_width>>1;
     int blk_stride_y = blk_width;
-    int blk_stride_ch = blk_width>>1; // only works for 420 now!
+    int blk_stride_ch = blk_width>>1;
 
-    int filter_weight = 2; // TODO: defines with these constants
-    const int modifier = filter_weight * 16; // TODO: defines with these constants
+    int filter_weight = INIT_WEIGHT;
+    const int modifier = filter_weight * WEIGHT_MULTIPLIER;
 
-    // Y
+    // Luma
     k = 0;
     for (i = 0; i < blk_height_y; i++) {
         for (j = 0; j < blk_width_y; j++) {
@@ -656,7 +659,7 @@ static void apply_filtering_central(EbByte *pred,
         }
     }
 
-    // UV
+    // Chroma
     k = 0;
     for (i = 0; i < blk_height_ch; i++) {
         for (j = 0; j < blk_width_ch; j++) {
@@ -871,12 +874,12 @@ void uni_motion_compensation(MeContext_t* context_ptr,
 
         // get motion vectors
         if (use_16x16_subblocks) {
-            first_ref_pos_x = _MVXT(context_ptr->p_best_mv16x16[mv_index])/2;
-            first_ref_pos_y = _MVYT(context_ptr->p_best_mv16x16[mv_index])/2;
+            first_ref_pos_x = (int16_t)(_MVXT(context_ptr->p_best_mv16x16[mv_index])/2);
+            first_ref_pos_y = (int16_t)(_MVYT(context_ptr->p_best_mv16x16[mv_index])/2);
         }
         else {
-            first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[mv_index])/2;
-            first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[mv_index])/2;
+            first_ref_pos_x = (int16_t)(_MVXT(context_ptr->p_best_mv32x32[mv_index])/2);
+            first_ref_pos_y = (int16_t)(_MVYT(context_ptr->p_best_mv32x32[mv_index])/2);
         }
 
         first_ref_integ_pos_x = (first_ref_pos_x >> 2);
@@ -972,8 +975,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
     int index_center;
     uint32_t blk_row, blk_col;
     int stride_pred[COLOR_CHANNELS] = {BW, BW>>1, BW>>1};
-    uint16_t blk_width_ch = BW >> 1; // 420 // TODO: implement for 420 now and extend it later
-    uint16_t blk_height_ch = BW >> 1; // 420
+    uint16_t blk_width_ch = BW >> 1;
+    uint16_t blk_height_ch = BW >> 1;
     int blk_y_offset = 0, blk_y_src_offset = 0, blk_ch_offset = 0, blk_ch_src_offset = 0;
     EbByte src_central[COLOR_CHANNELS], src_altref_index[COLOR_CHANNELS];
     int i, j, k;
@@ -1019,10 +1022,12 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
             memset(accumulator, 0, BLK_PELS * COLOR_CHANNELS * sizeof(accumulator[0]));
             memset(counter, 0, BLK_PELS * COLOR_CHANNELS * sizeof(counter[0]));
 
-            int blk_fw[16] = { 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2 };
+            int blk_fw[N_16X16_BLOCKS];
             int use_16x16_subblocks = 0;
-            int me_16x16_subblock_sad[16];
+            int me_16x16_subblock_sad[N_16X16_BLOCKS];
             int me_32x32_total_sad = 0;
+
+            populate_list_with_value(blk_fw, 16, INIT_WEIGHT);
 
             // for every frame to filter
             for (frame_index = 0; frame_index < altref_nframes; frame_index++) {
@@ -1078,7 +1083,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
 
                     // skip MC (central frame)
 
-                    populate_list_with_value(blk_fw, 16, 2);
+                    populate_list_with_value(blk_fw, N_16X16_BLOCKS, 2);
                     use_16x16_subblocks = 0;
 
                     copy_pixels(pred[C_Y], BW, src_central[C_Y] + blk_y_src_offset, stride[C_Y], BW, BH);
@@ -1131,12 +1136,11 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
 
                     // Initialize ME context
                     create_ME_context_and_picture_control(me_context_ptr,
-                                                            list_picture_control_set_ptr[frame_index],
-                                                            list_picture_control_set_ptr[index_center],
-                                                            input_picture_ptr_central,
-                                                            blk_row,
-                                                            blk_col,
-                                                            blk_cols);
+                                                          list_picture_control_set_ptr[frame_index],
+                                                          list_picture_control_set_ptr[index_center],
+                                                          input_picture_ptr_central,
+                                                          blk_row,
+                                                          blk_col);
 
 #if DEBUG
 #if 0
@@ -1472,7 +1476,6 @@ static double highbd_estimate_noise(const uint8_t *src8, int width, int height,
 
 // Apply buffer limits and context specific adjustments to arnr filter.
 static void adjust_filter_params(EbPictureBufferDesc_t *input_picture_ptr,
-                        uint64_t distance_to_key,
                         uint8_t *altref_strength,
                         uint8_t *altref_nframes) {
 
@@ -1747,11 +1750,8 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_con
     // source central frame picture buffer
     input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
 
-    // distance to key frame
-    uint64_t distance_to_key = picture_control_set_ptr_central->picture_number - picture_control_set_ptr_central->decode_order;
-
     // adjust filter parameter based on the estimated noise of the picture
-    adjust_filter_params(input_picture_ptr, distance_to_key, &altref_strength, &altref_nframes);
+    adjust_filter_params(input_picture_ptr, &altref_strength, &altref_nframes);
 
     // populate source frames picture buffer list
     EbPictureBufferDesc_t *list_input_picture_ptr[ALTREF_MAX_NFRAMES] = { NULL };
