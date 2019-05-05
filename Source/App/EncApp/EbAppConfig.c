@@ -374,9 +374,9 @@ config_entry_t config_entry[] = {
     { ARRAY_INPUT,HME_LEVEL2_HEIGHT, "HmeLevel2SearchAreaInHeight", SetHmeLevel2SearchAreaInHeightArray },
 
     // Alt-ref frames related
-    { SINGLE_INPUT, ENABLE_ALTREFS, "ExtBlockFlag", SetEnableAltRefs },
-    { SINGLE_INPUT, ALTREF_STRENGTH, "ExtBlockFlag", SetAltRefStrength },
-    { SINGLE_INPUT, ALTREF_NFRAMES, "ExtBlockFlag", SetAltRefNFrames },
+    { SINGLE_INPUT, ENABLE_ALTREFS, "enableAltRefs", SetEnableAltRefs },
+    { SINGLE_INPUT, ALTREF_STRENGTH, "altRefStrength", SetAltRefStrength },
+    { SINGLE_INPUT, ALTREF_NFRAMES, "altRefNframes", SetAltRefNFrames },
 
     // Termination
     {SINGLE_INPUT,NULL,  NULL,                                NULL}
@@ -462,9 +462,6 @@ void EbConfigCtor(EbConfig_t *config_ptr)
     config_ptr->hmeLevel2SearchAreaInHeightArray[1]  = 1;
     config_ptr->constrained_intra                    = 0;
     config_ptr->film_grain_denoise_strength          = 0;
-    config_ptr->enable_altrefs                       = 0;
-    config_ptr->altref_strength                      = 3;
-    config_ptr->altref_nframes                       = 5;
 
     // Thresholds
     config_ptr->high_dynamic_range_input             = 0;
@@ -517,6 +514,11 @@ void EbConfigCtor(EbConfig_t *config_ptr)
 #endif
     config_ptr->byte_count_since_ivf                 = 0;
     config_ptr->ivf_count                            = 0;
+
+    config_ptr->enable_altrefs                       = EB_FALSE;
+    config_ptr->altref_strength                      = 5;
+    config_ptr->altref_nframes                       = 7;
+
     return;
 }
 
@@ -840,7 +842,7 @@ static EbErrorType VerifySettings(EbConfig_t *config, uint32_t channelNumber)
     }
 
     // alt-ref frames related
-    if (config->altref_strength < 0 || config->altref_strength > 5 ) {
+    if (config->altref_strength < 0 || config->altref_strength > 7 ) {
         fprintf(config->errorLogFile, "Error instance %u: invalid altref-strength, should be in the range [0 - 5] \n",channelNumber+1);
         return_error = EB_ErrorBadParameter;
     }

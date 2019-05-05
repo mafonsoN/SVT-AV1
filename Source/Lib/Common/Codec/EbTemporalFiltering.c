@@ -51,6 +51,7 @@
 // Debug-specific defines
 #define DEBUG 0
 #define VANILA_ME 0
+#define LIBAOM_FILTERING 0
 
 #define _MM_HINT_T2  1
 #define OD_DIVU_DMAX (1024)
@@ -1371,10 +1372,17 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet_t **l
     }
 
 #if 1
-    save_YUV_to_file("filtered_frame_svtav1.yuv", alt_ref_buffer[C_Y], alt_ref_buffer[C_U], alt_ref_buffer[C_V],
-                     input_picture_ptr_central->width, input_picture_ptr_central->height,
-                     input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr,
-                     0, 0);
+    {
+        char filename[30] = "filtered_frame_svtav1_";
+        char frame_index_str[4];
+        snprintf(frame_index_str, 4, "%d", (int)picture_control_set_ptr_central->picture_number);
+        strcat(filename, frame_index_str);
+        strcat(filename, ".yuv");
+        save_YUV_to_file(filename, alt_ref_buffer[C_Y], alt_ref_buffer[C_U], alt_ref_buffer[C_V],
+                         input_picture_ptr_central->width, input_picture_ptr_central->height,
+                         input_picture_ptr_central->stride_y, input_picture_ptr_central->strideCb, input_picture_ptr_central->strideCr,
+                         0, 0);
+    }
 #endif
 
 #if !VANILA_ME
@@ -1690,6 +1698,42 @@ int replace_src_pic_buffers(PictureParentControlSet_t *picture_control_set_ptr_c
 
 }
 
+int read_YUV_frame_from_file(uint8_t **alt_ref_buffer, int picture_number, int width, int height, int stride){
+
+    char filename[30] = "filtered_frame_libaom_";
+    char pic_num_str[4];
+    snprintf(pic_num_str, 4, "%d", picture_number);
+    strcat(filename, pic_num_str);
+    strcat(filename, ".yuv");
+
+    FILE *fid = NULL;
+
+    // save current source picture to a YUV file
+    if ((fid = fopen(filename, "rb")) == NULL) {
+        printf("Unable to open file %s for reading.\n", filename);
+    }else {
+
+        uint8_t* pic_point = alt_ref_buffer[C_Y];
+        for (int h = 0; h < height; h++) {
+            fread(pic_point, sizeof(uint8_t), (size_t)width, fid);
+            pic_point = pic_point + stride;
+        }
+        pic_point = alt_ref_buffer[C_U];
+        for (int h = 0; h < height >> 1; h++) {
+            fread(pic_point, sizeof(uint8_t), (size_t)width >> 1, fid);
+            pic_point = pic_point + (stride>>1);
+        }
+        pic_point = alt_ref_buffer[C_V];
+        for (int h = 0; h < height >> 1; h++) {
+            fread(pic_point, sizeof(uint8_t), (size_t)width >> 1, fid);
+            pic_point = pic_point + (stride>>1);
+        }
+        fclose(fid);
+    }
+
+    return 0;
+}
+
 EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_control_set_ptr) {
 
     uint8_t altref_strength, altref_nframes, index_center;
@@ -1744,8 +1788,16 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_con
         alt_ref_buffer[c] = (EbByte) malloc(input_picture_ptr->lumaSize * sizeof(uint8_t));
     }
 
+#if LIBAOM_FILTERING==0
     EbErrorType ret;
     ret = produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, altref_strength, altref_nframes, alt_ref_buffer);
+#else
+    int ret = read_YUV_frame_from_file(alt_ref_buffer,
+                            (int)picture_control_set_ptr_central->picture_number,
+                            list_input_picture_ptr[index_center]->width,
+                            list_input_picture_ptr[index_center]->height,
+                            list_input_picture_ptr[index_center]->stride_y);
+#endif
 
     // TODO: for test purposes only - replacing the src buffers with the filtered frame (milestone 0)
     replace_src_pic_buffers(picture_control_set_ptr_central, alt_ref_buffer);

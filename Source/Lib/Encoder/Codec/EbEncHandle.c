@@ -2821,9 +2821,9 @@ EbErrorType eb_svt_enc_init_parameter(
     config_ptr->recon_enabled = 0;
 
     // Alt-Ref default values
-    config_ptr->enable_altrefs = 0;
-    config_ptr->altref_nframes = 5;
-    config_ptr->altref_strength = 3;
+    config_ptr->enable_altrefs = EB_FALSE;
+    config_ptr->altref_nframes = 7;
+    config_ptr->altref_strength = 5;
 
     return return_error;
 }
