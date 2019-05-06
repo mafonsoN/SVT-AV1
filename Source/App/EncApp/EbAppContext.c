@@ -216,9 +216,11 @@ EbErrorType CopyConfigurationParameters(
     callbackData->ebEncParameters.logical_processors = config->logicalProcessors;
     callbackData->ebEncParameters.target_socket = config->targetSocket;
     callbackData->ebEncParameters.recon_enabled = config->reconFile ? EB_TRUE : EB_FALSE;
+    // --- start: ALTREF_FILTERING_SUPPORT
     callbackData->ebEncParameters.enable_altrefs  = (EbBool)config->enable_altrefs;
     callbackData->ebEncParameters.altref_strength = config->altref_strength;
     callbackData->ebEncParameters.altref_nframes  = config->altref_nframes;
+    // --- end: ALTREF_FILTERING_SUPPORT
 
     for (hmeRegionIndex = 0; hmeRegionIndex < callbackData->ebEncParameters.number_hme_search_region_in_width; ++hmeRegionIndex) {
         callbackData->ebEncParameters.hme_level0_search_area_in_width_array[hmeRegionIndex] = config->hmeLevel0SearchAreaInWidthArray[hmeRegionIndex];

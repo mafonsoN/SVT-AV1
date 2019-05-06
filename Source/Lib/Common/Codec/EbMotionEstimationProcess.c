@@ -378,41 +378,6 @@ EbErrorType ComputeDecimatedZzSad(
     return return_error;
 }
 
-// delete when done debugging
-void save_YUV_to_file2(char *filename, EbByte buffer_y, EbByte buffer_u, EbByte buffer_v,
-                      uint16_t width, uint16_t height,
-                      uint16_t stride_y, uint16_t stride_u, uint16_t stride_v,
-                      uint16_t origin_y, uint16_t origin_x){
-
-    FILE *fid = NULL;
-    EbByte pic_point;
-    int h;
-
-    // save current source picture to a YUV file
-    if ((fid = fopen(filename, "wb")) == NULL) {
-        printf("Unable to open file %s to write.\n", "temp_picture.yuv");
-    }else{
-
-        // the source picture saved in the enchanced_picture_ptr contains a border in x and y dimensions
-        pic_point = buffer_y + (origin_y*stride_y) + origin_x;
-        for (h = 0; h < height; h++) {
-            fwrite(pic_point, 1, (size_t)width, fid);
-            pic_point = pic_point + stride_y;
-        }
-        pic_point = buffer_u + ((origin_y>>1)*stride_u) + (origin_x>>1);
-        for (h = 0; h < height>>1; h++) {
-            fwrite(pic_point, 1, (size_t)width>>1, fid);
-            pic_point = pic_point + stride_u;
-        }
-        pic_point = buffer_v + ((origin_y>>1)*stride_v) + (origin_x>>1);
-        for (h = 0; h < height>>1; h++) {
-            fwrite(pic_point, 1, (size_t)width>>1, fid);
-            pic_point = pic_point + stride_v;
-        }
-        fclose(fid);
-    }
-}
-
 /************************************************
  * Motion Analysis Kernel
  * The Motion Analysis performs  Motion Estimation

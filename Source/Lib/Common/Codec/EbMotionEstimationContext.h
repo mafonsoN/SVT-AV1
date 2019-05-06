@@ -432,10 +432,12 @@ extern "C" {
         uint16_t                      hme_level2_search_area_in_height_array[EB_HME_SEARCH_AREA_ROW_MAX_COUNT];
         uint8_t                       update_hme_search_center_flag;
 
+#if ALTREF_FILTERING_SUPPORT
         // ------- Context for Alt-Ref ME ------
 
         EbBool                        me_alt_ref;
         void                          *alt_ref_reference_ptr;
+#endif
 
         // -------
 

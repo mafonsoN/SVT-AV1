@@ -8,7 +8,9 @@
 
 #include "EbDefinitions.h"
 #include "EbSystemResourceManager.h"
+#if ALTREF_FILTERING_SUPPORT
 #include "EbPictureControlSet.h"
+#endif
 
 /**************************************
  * Context
@@ -65,9 +67,11 @@ extern EbErrorType picture_decision_context_ctor(
 
 extern void* picture_decision_kernel(void *input_ptr);
 
+#if ALTREF_FILTERING_SUPPORT
 void DecimateInputPicture(PictureParentControlSet_t       *picture_control_set_ptr,
                           EbPictureBufferDesc_t           *inputPaddedPicturePtr,
                           EbPictureBufferDesc_t           *quarterDecimatedPicturePtr,
                           EbPictureBufferDesc_t           *sixteenthDecimatedPicturePtr);
+#endif
 
 #endif // EbPictureDecision_h

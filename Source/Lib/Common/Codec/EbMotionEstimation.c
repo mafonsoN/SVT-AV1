@@ -2210,6 +2210,8 @@ void InterpolateSearchRegionAVC(
 }
 
 
+#if ALTREF_FILTERING_SUPPORT
+
 /*******************************************
 * InterpolateSearchRegion AVC
 *   interpolates the search area
@@ -2348,6 +2350,8 @@ void interpolate_search_region_AVC_chroma(
     }
 
 }
+
+#endif
 
 
 /*******************************************
@@ -5447,6 +5451,8 @@ static void QuarterPelCompensation(
     return;
 }
 
+#if ALTREF_FILTERING_SUPPORT
+
 // TODO: Alt-refs - change previous SelectBuffer and QuarterPelCompensation to be applicable for both chroma and luma
 static void select_buffer(
         uint32_t                 pu_index,                         //[IN]
@@ -5696,6 +5702,8 @@ void uni_pred_averaging(
     }
 
 }
+
+#endif
 
 /*******************************************************************************
 * Requirement: pu_width      = 8, 16, 24, 32, 48 or 64
@@ -7040,6 +7048,8 @@ EbErrorType MotionEstimateLcu(
     is_nsq_table_used = EB_FALSE;
 #endif
 
+#if ALTREF_FILTERING_SUPPORT
+
     if(context_ptr->me_alt_ref == EB_TRUE){
 
         numOfListToSearch = 0;
@@ -7057,6 +7067,18 @@ EbErrorType MotionEstimateLcu(
 
     }
 
+#else
+
+    referenceObject = (EbPaReferenceObject_t*)picture_control_set_ptr->ref_pa_pic_ptr_array[0]->object_ptr;
+    ref0Poc = picture_control_set_ptr->ref_pic_poc_array[0];
+
+    if (numOfListToSearch) {
+        referenceObject = (EbPaReferenceObject_t*)picture_control_set_ptr->ref_pa_pic_ptr_array[1]->object_ptr;
+        ref1Poc = picture_control_set_ptr->ref_pic_poc_array[1];
+    }
+
+#endif
+
     // Uni-Prediction motion estimation loop
     // List Loop
     for (listIndex = REF_LIST_0; listIndex <= numOfListToSearch; ++listIndex) {
@@ -7064,34 +7086,23 @@ EbErrorType MotionEstimateLcu(
         // Ref Picture Loop
         {
 
+#if ALTREF_FILTERING_SUPPORT
+
             if(context_ptr->me_alt_ref == EB_FALSE){
                 referenceObject = (EbPaReferenceObject_t*)picture_control_set_ptr->ref_pa_pic_ptr_array[listIndex]->object_ptr;
             } else{
                 referenceObject = (EbPaReferenceObject_t*)context_ptr->alt_ref_reference_ptr;
             }
 
+#else
+
+            referenceObject = (EbPaReferenceObject_t*)picture_control_set_ptr->ref_pa_pic_ptr_array[listIndex]->object_ptr;
+
+#endif
+
             refPicPtr = (EbPictureBufferDesc_t*)referenceObject->inputPaddedPicturePtr;
             quarterRefPicPtr = (EbPictureBufferDesc_t*)referenceObject->quarterDecimatedPicturePtr;
             sixteenthRefPicPtr = (EbPictureBufferDesc_t*)referenceObject->sixteenthDecimatedPicturePtr;
-
-#if 0
-            if(context_ptr->me_alt_ref == EB_TRUE) {
-                // Alt-refs debug
-                save_Y_to_file2("ref_frame.yuv", refPicPtr->buffer_y, refPicPtr->stride_y,
-                               refPicPtr->height + 2 * refPicPtr->origin_x,
-                               refPicPtr->stride_y, 0, 0);
-
-                // Alt-refs debug - x1/2
-                save_Y_to_file2("ref_frame_quarter.yuv", quarterRefPicPtr->buffer_y, quarterRefPicPtr->stride_y,
-                               quarterRefPicPtr->height + 2 * quarterRefPicPtr->origin_x,
-                               quarterRefPicPtr->stride_y, 0, 0);
-
-                // Alt-refs debug - x1/4
-                save_Y_to_file2("ref_frame_sixteenth.yuv", sixteenthRefPicPtr->buffer_y, sixteenthRefPicPtr->stride_y,
-                               sixteenthRefPicPtr->height + 2 * sixteenthRefPicPtr->origin_x,
-                               sixteenthRefPicPtr->stride_y, 0, 0);
-            }
-#endif
 
 #if BASE_LAYER_REF
             if (picture_control_set_ptr->temporal_layer_index > 0 || listIndex == 0 || ((ref0Poc != ref1Poc) && (listIndex == 1))) {
@@ -7489,10 +7500,6 @@ EbErrorType MotionEstimateLcu(
             context_ptr->integer_buffer_ptr[listIndex][0] = &(refPicPtr->buffer_y[searchRegionIndex]);
             context_ptr->interpolated_full_stride[listIndex][0] = refPicPtr->stride_y;
 
-//            save_Y_to_file("integer_buffer_luma.yuv", context_ptr->integer_buffer_ptr[0][0],
-//                           context_ptr->interpolated_full_stride[0][0], 288,
-//                           context_ptr->interpolated_full_stride[0][0], 0, 0);
-
             // Move to the top left of the search region
             xTopLeftSearchRegion = (int16_t)(refPicPtr->origin_x + sb_origin_x) + x_search_area_origin;
             yTopLeftSearchRegion = (int16_t)(refPicPtr->origin_y + sb_origin_y) + y_search_area_origin;
@@ -7716,7 +7723,11 @@ EbErrorType MotionEstimateLcu(
         }
     }
 
+#if ALTREF_FILTERING_SUPPORT
+
     if(context_ptr->me_alt_ref == EB_FALSE){
+
+#endif
 
         // Bi-Prediction motion estimation loop
         for (pu_index = 0; pu_index < max_number_of_pus_per_sb; ++pu_index) {
@@ -7907,11 +7918,14 @@ EbErrorType MotionEstimateLcu(
                 }
 
             }
-    }
 
+#if ALTREF_FILTERING_SUPPORT
+    }
+#endif
 
     return return_error;
-        }
+
+}
 
 
 /*******************************************

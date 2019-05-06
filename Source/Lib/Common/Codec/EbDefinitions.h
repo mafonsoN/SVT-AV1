@@ -224,6 +224,8 @@ extern "C" {
 
 #define ADD_CDEF_FILTER_LEVEL                           1
 
+#define ALTREF_FILTERING_SUPPORT 0
+
 #define SC_HME_ME  0//use sc detector for hme/me setting
 
 #define AOM_INTERP_EXTEND 4

@@ -380,12 +380,14 @@ typedef struct EbConfig_s
     uint64_t                byte_count_since_ivf;
     uint64_t                ivf_count;
 
+    // --- start: ALTREF_FILTERING_SUPPORT
     /****************************************
      * ALT-REF related Parameters
      ****************************************/
     EbBool                  enable_altrefs;
     uint8_t                 altref_strength;
     uint8_t                 altref_nframes;
+    // --- end: ALTREF_FILTERING_SUPPORT
 
 } EbConfig_t;
 

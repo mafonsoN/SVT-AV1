@@ -27,6 +27,8 @@
 #include "EbPictureAnalysisProcess.h"
 #include "EbMcp.h"
 
+#if ALTREF_FILTERING_SUPPORT
+
 #define COLOR_CHANNELS 3
 #define C_Y 0
 #define C_U 1
@@ -1784,3 +1786,5 @@ EbErrorType init_temporal_filtering(PictureParentControlSet_t **list_picture_con
 
     return ret;
 }
+
+#endif

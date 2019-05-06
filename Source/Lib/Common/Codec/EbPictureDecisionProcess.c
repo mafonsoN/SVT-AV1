@@ -16,7 +16,9 @@
 #include "EbPictureDecisionResults.h"
 #include "EbReferenceObject.h"
 #include "EbSvtAv1ErrorCodes.h"
+#if ALTREF_FILTERING_SUPPORT
 #include "EbTemporalFiltering.h"
+#endif
 
 /************************************************
  * Defines
@@ -32,16 +34,12 @@
 #define HIGH_PICTURE_VARIANCE_TH            1500
 #define NUM64x64INPIC(w,h)          ((w*h)>> (LOG2F(BLOCK_SIZE_64)<<1))
 #define QUEUE_GET_PREVIOUS_SPOT(h)  ((h == 0) ? PICTURE_DECISION_REORDER_QUEUE_MAX_DEPTH - 1 : h - 1)
-#define QUEUE_GET_PREVIOUS_2_SPOT(h)  ((h < 2) ? PICTURE_DECISION_REORDER_QUEUE_MAX_DEPTH - 1 : h - 2)
 #define QUEUE_GET_NEXT_SPOT(h,off)  (( (h+off) >= PICTURE_DECISION_REORDER_QUEUE_MAX_DEPTH) ? h+off - PICTURE_DECISION_REORDER_QUEUE_MAX_DEPTH  : h + off)
 
 #define WTH 64
 #define OTH 64
 #define FC_SKIP_TX_SR_TH025                     125 // Fast cost skip tx search threshold.
 #define FC_SKIP_TX_SR_TH010                     110 // Fast cost skip tx search threshold.
-
-// alt-ref debug define
-#define ALT_REF_WAIT 0
 
  /************************************************
   * Picture Analysis Context Constructor
@@ -1759,7 +1757,6 @@ void* picture_decision_kernel(void *input_ptr)
     int32_t                           queueEntryIndex;
 
     int32_t                           previousEntryIndex;
-    int32_t                           previous2EntryIndex;
 
     PaReferenceQueueEntry_t         *inputEntryPtr;
     uint32_t                           inputQueueIndex;
@@ -1789,17 +1786,17 @@ void* picture_decision_kernel(void *input_ptr)
     // Debug
     uint64_t                           loopCount = 0;
 
+#if ALTREF_FILTERING_SUPPORT
+
     // ----- Alt-Refs variables
     PictureParentControlSet_t *list_picture_control_set_ptr[ALTREF_MAX_NFRAMES];
     int mini_gop_count = 0;
     int pics_saved = 0;
     int alt_ref_central_loc = 0;
     EbBool alt_ref_created_flag = EB_FALSE;
-#if ALT_REF_WAIT
-    EbObjectWrapper_t *outputResultsWrapperPtr_list[10];
-    int count_ME_wait_pics = 0;
-#endif
     // -----
+
+#endif
 
     for (;;) {
 
@@ -1851,7 +1848,9 @@ void* picture_decision_kernel(void *input_ptr)
             windowAvail = EB_TRUE;
             previousEntryIndex = QUEUE_GET_PREVIOUS_SPOT(encode_context_ptr->picture_decision_reorder_queue_head_index);
 
+#if ALTREF_FILTERING_SUPPORT
             ParentPcsWindow[0] = ParentPcsWindow[1] = ParentPcsWindow[2] = ParentPcsWindow[3] = ParentPcsWindow[4] = ParentPcsWindow[5] = NULL;
+#endif
 
             if (encode_context_ptr->picture_decision_reorder_queue[previousEntryIndex]->parentPcsWrapperPtr == NULL) {
                 windowAvail = EB_FALSE;
@@ -1874,6 +1873,8 @@ void* picture_decision_kernel(void *input_ptr)
                     }
                 }
             }
+
+#if ALTREF_FILTERING_SUPPORT
 
             // ----------------- Alt-Refs --------------------
 
@@ -1947,6 +1948,8 @@ void* picture_decision_kernel(void *input_ptr)
             }
 
             // ------------------- End of Alt-refs -------------------------
+
+#endif
 
             picture_control_set_ptr = (PictureParentControlSet_t*)queueEntryPtr->parentPcsWrapperPtr->object_ptr;
 
@@ -2095,6 +2098,8 @@ void* picture_decision_kernel(void *input_ptr)
                         context_ptr,
                         encode_context_ptr);
 
+#if ALTREF_FILTERING_SUPPORT
+
                     // ---- Alt-refs ---- set state for next mini-gop
                     // TODO: testing purposes only - stategy to define which frames are alt-refs is required
                     if(picture_control_set_ptr->picture_number > 0){
@@ -2102,6 +2107,8 @@ void* picture_decision_kernel(void *input_ptr)
                         mini_gop_count++;
                         alt_ref_created_flag = EB_FALSE;
                     }
+
+#endif
 
                     // Loop over Mini GOPs
 
@@ -2761,8 +2768,7 @@ void* picture_decision_kernel(void *input_ptr)
                             {
                                 uint32_t segment_index;
 
-                                for (segment_index = 0; segment_index <
-                                                        picture_control_set_ptr->me_segments_total_count; ++segment_index) {
+                                for (segment_index = 0; segment_index < picture_control_set_ptr->me_segments_total_count; ++segment_index) {
                                     // Get Empty Results Object
                                     eb_get_empty_object(
                                             context_ptr->picture_decision_results_output_fifo_ptr,
@@ -2774,26 +2780,9 @@ void* picture_decision_kernel(void *input_ptr)
 
                                     outputResultsPtr->segment_index = segment_index;
 
-#if ALT_REF_WAIT
-                                    // Post the Full Results Object
-                                    if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE &&
-                                            ((picture_control_set_ptr->ref_pic_poc_array[0]!=alt_ref_central_loc &&
-                                            picture_control_set_ptr->ref_pic_poc_array[1]!=alt_ref_central_loc) ||
-                                            alt_ref_created_flag == EB_TRUE)){
-
-                                        eb_post_full_object(outputResultsWrapperPtr);
-
-                                    }else{
-
-                                        outputResultsWrapperPtr_list[count_ME_wait_pics] = outputResultsWrapperPtr;
-                                        count_ME_wait_pics++;
-
-                                    }
-
-#else
                                     // Post the Full Results Object
                                     eb_post_full_object(outputResultsWrapperPtr);
-#endif
+
                                 }
                             }
 

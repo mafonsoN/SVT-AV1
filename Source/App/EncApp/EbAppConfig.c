@@ -72,9 +72,11 @@
 #define HME_LEVEL1_HEIGHT               "-hme-l1-h"
 #define HME_LEVEL2_WIDTH                "-hme-l2-w"
 #define HME_LEVEL2_HEIGHT               "-hme-l2-h"
+// --- start: ALTREF_FILTERING_SUPPORT
 #define ENABLE_ALTREFS                  "-enable-altrefs"
 #define ALTREF_STRENGTH                 "-altref-strength"
 #define ALTREF_NFRAMES                  "-altref-nframes"
+// --- end: ALTREF_FILTERING_SUPPORT
 #define CONSTRAINED_INTRA_ENABLE_TOKEN  "-constrd-intra"
 #define IMPROVE_SHARPNESS_TOKEN         "-sharp"
 #define HDR_INPUT_TOKEN                 "-hdr"
@@ -217,11 +219,11 @@ static void SetHmeLevel1SearchAreaInWidthArray  (const char *value, EbConfig_t *
 static void SetHmeLevel1SearchAreaInHeightArray (const char *value, EbConfig_t *cfg) {cfg->hmeLevel1SearchAreaInHeightArray[cfg->hmeLevel1RowIndex++] = strtoul(value, NULL, 0);};
 static void SetHmeLevel2SearchAreaInWidthArray  (const char *value, EbConfig_t *cfg) {cfg->hmeLevel2SearchAreaInWidthArray[cfg->hmeLevel2ColumnIndex++] = strtoul(value, NULL, 0);};
 static void SetHmeLevel2SearchAreaInHeightArray (const char *value, EbConfig_t *cfg) {cfg->hmeLevel2SearchAreaInHeightArray[cfg->hmeLevel2RowIndex++] = strtoul(value, NULL, 0);};
-
+// --- start: ALTREF_FILTERING_SUPPORT
 static void SetEnableAltRefs                    (const char *value, EbConfig_t *cfg) {cfg->enable_altrefs = (EbBool)strtoul(value, NULL, 0);};
 static void SetAltRefStrength                   (const char *value, EbConfig_t *cfg) {cfg->altref_strength = strtoul(value, NULL, 0);};
 static void SetAltRefNFrames                    (const char *value, EbConfig_t *cfg) {cfg->altref_nframes = strtoul(value, NULL, 0);};
-
+// --- end: ALTREF_FILTERING_SUPPORT
 static void SetEnableConstrainedIntra           (const char *value, EbConfig_t *cfg) {cfg->constrained_intra                                             = (EbBool)strtoul(value, NULL, 0);};
 static void SetImproveSharpness                 (const char *value, EbConfig_t *cfg) {cfg->improve_sharpness               = (EbBool)strtol(value,  NULL, 0);};
 static void SetHighDynamicRangeInput            (const char *value, EbConfig_t *cfg) {cfg->high_dynamic_range_input            = strtol(value,  NULL, 0);};
@@ -373,10 +375,11 @@ config_entry_t config_entry[] = {
     { ARRAY_INPUT,HME_LEVEL2_WIDTH, "HmeLevel2SearchAreaInWidth", SetHmeLevel2SearchAreaInWidthArray },
     { ARRAY_INPUT,HME_LEVEL2_HEIGHT, "HmeLevel2SearchAreaInHeight", SetHmeLevel2SearchAreaInHeightArray },
 
-    // Alt-ref frames related
+    // --- start: ALTREF_FILTERING_SUPPORT
     { SINGLE_INPUT, ENABLE_ALTREFS, "enableAltRefs", SetEnableAltRefs },
     { SINGLE_INPUT, ALTREF_STRENGTH, "altRefStrength", SetAltRefStrength },
     { SINGLE_INPUT, ALTREF_NFRAMES, "altRefNframes", SetAltRefNFrames },
+    // --- end: ALTREF_FILTERING_SUPPORT
 
     // Termination
     {SINGLE_INPUT,NULL,  NULL,                                NULL}
@@ -515,9 +518,11 @@ void EbConfigCtor(EbConfig_t *config_ptr)
     config_ptr->byte_count_since_ivf                 = 0;
     config_ptr->ivf_count                            = 0;
 
+    // --- start: ALTREF_FILTERING_SUPPORT
     config_ptr->enable_altrefs                       = EB_FALSE;
     config_ptr->altref_strength                      = 5;
     config_ptr->altref_nframes                       = 7;
+    // --- end: ALTREF_FILTERING_SUPPORT
 
     return;
 }
@@ -841,6 +846,7 @@ static EbErrorType VerifySettings(EbConfig_t *config, uint32_t channelNumber)
         return_error = EB_ErrorBadParameter;
     }
 
+    // --- start: ALTREF_FILTERING_SUPPORT
     // alt-ref frames related
     if (config->altref_strength < 0 || config->altref_strength > 7 ) {
         fprintf(config->errorLogFile, "Error instance %u: invalid altref-strength, should be in the range [0 - 5] \n",channelNumber+1);
@@ -851,6 +857,7 @@ static EbErrorType VerifySettings(EbConfig_t *config, uint32_t channelNumber)
         fprintf(config->errorLogFile, "Error instance %u: invalid altref-nframes, should be in the range [0 - 7] \n",channelNumber+1);
         return_error = EB_ErrorBadParameter;
     }
+    // --- end: ALTREF_FILTERING_SUPPORT
 
     return return_error;
 }

@@ -38,8 +38,11 @@ extern EbErrorType MotionEstimationContextCtor(
 
 extern void* MotionEstimationKernel(void *input_ptr);
 
+#if ALTREF_FILTERING_SUPPORT
+
 EbErrorType signal_derivation_me_kernel_oq(SequenceControlSet_t        *sequence_control_set_ptr,
                                            PictureParentControlSet_t   *picture_control_set_ptr,
                                            MotionEstimationContext_t   *context_ptr);
+#endif
 
 #endif // EbMotionEstimationProcess_h

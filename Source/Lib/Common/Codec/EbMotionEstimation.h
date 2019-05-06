@@ -19,6 +19,8 @@
 extern "C" {
 #endif
 
+#if ALTREF_FILTERING_SUPPORT
+
 void uni_pred_averaging(
         uint32_t              pu_index,
         EbBool                chroma,
@@ -49,6 +51,8 @@ void interpolate_search_region_AVC_chroma(
         uint32_t                search_area_height,
         uint32_t                input_bit_depth,
         EbAsm                   asm_type);
+
+#endif
 
     extern EbErrorType MotionEstimateLcu(
         PictureParentControlSet_t   *picture_control_set_ptr,
