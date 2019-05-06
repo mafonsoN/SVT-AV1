@@ -1785,7 +1785,6 @@ void* picture_decision_kernel(void *input_ptr)
     uint32_t                           windowIndex;
     uint32_t                           entryIndex;
     PictureParentControlSet_t        *ParentPcsWindow[FUTURE_WINDOW_WIDTH + 2];
-    PictureParentControlSet_t        *ParentPcsWindow_past[1];
 
     // Debug
     uint64_t                           loopCount = 0;
@@ -1851,6 +1850,8 @@ void* picture_decision_kernel(void *input_ptr)
             }
             windowAvail = EB_TRUE;
             previousEntryIndex = QUEUE_GET_PREVIOUS_SPOT(encode_context_ptr->picture_decision_reorder_queue_head_index);
+
+            ParentPcsWindow[0] = ParentPcsWindow[1] = ParentPcsWindow[2] = ParentPcsWindow[3] = ParentPcsWindow[4] = ParentPcsWindow[5] = NULL;
 
             if (encode_context_ptr->picture_decision_reorder_queue[previousEntryIndex]->parentPcsWrapperPtr == NULL) {
                 windowAvail = EB_FALSE;
