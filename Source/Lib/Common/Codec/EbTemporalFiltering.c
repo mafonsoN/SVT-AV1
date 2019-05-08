@@ -55,9 +55,10 @@
 #define WEIGHT_MULTIPLIER 16
 
 // Debug-specific defines
-#define DEBUG 0
+#define DEBUG_TEMPORAL_FILTER 0
 #define VANILA_ME 0
 #define LIBAOM_FILTERING 0
+#define MC_CHROMA 0
 
 #define _MM_HINT_T2  1
 #define OD_DIVU_DMAX (1024)
@@ -331,7 +332,7 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
         EB_MEMCPY((&(context_ptr->me_context_ptr->sb_buffer[lcuRow * BLOCK_SIZE_64])), (&(input_picture_ptr_central->buffer_y[bufferIndex + lcuRow * input_picture_ptr_central->stride_y])), BLOCK_SIZE_64 * sizeof(uint8_t));
     }
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
 #if 0
 //    printf("sb_buffer:\n");
 //    print_block_uint8(context_ptr->me_context_ptr->sb_buffer, 64, 64, 64);
@@ -360,7 +361,7 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
         EB_MEMCPY((&(context_ptr->me_context_ptr->quarter_sb_buffer[lcuRow * context_ptr->me_context_ptr->quarter_sb_buffer_stride])), (&(quarter_pic_ptr->buffer_y[bufferIndex + lcuRow * quarter_pic_ptr->stride_y])), (sb_width >> 1) * sizeof(uint8_t));
     }
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
 #if 0
 //    printf("quarter_sb_buffer:\n");
 //    print_block_uint8(context_ptr->me_context_ptr->quarter_sb_buffer, 32, 32, 32);
@@ -398,7 +399,7 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
 
     }
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
 #if 0
 //    printf("sixteenth_sb_buffer:\n");
 //    print_block_uint8(context_ptr->me_context_ptr->sixteenth_sb_buffer, 16, 16, 16);
@@ -833,6 +834,8 @@ void uni_motion_compensation(MeContext* context_ptr,
 
         // ----- compensate chroma ------
 
+#if MC_CHROMA
+
         // Interpolate chroma
         int x_top_left_search_region = (int16_t)((pic_ptr_ref->origin_x + sb_origin_x)>>1) - (ME_FILTER_TAP >> 1) + ((context_ptr->x_search_area_origin[0][0])/2);
         int y_top_left_search_region = (int16_t)((pic_ptr_ref->origin_y + sb_origin_y)>>1) - (ME_FILTER_TAP >> 1) + ((context_ptr->y_search_area_origin[0][0])/2);
@@ -877,7 +880,7 @@ void uni_motion_compensation(MeContext* context_ptr,
                                              8,
                                              0);
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
 #if 0
         save_Y_to_file("input_padded_ch.yuv", input_padded_ch[0],
                        interpolated_full_stride_ch, 144,
@@ -965,6 +968,7 @@ void uni_motion_compensation(MeContext* context_ptr,
                            asm_type);
 
         copy_pixels(pred_ptr[2], BW>>1, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
+#endif
 
     }
 
@@ -1041,7 +1045,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     MeContext *context_ptr = me_context_ptr->me_context_ptr;
 #endif
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
 
     save_YUV_to_file("input_frame.yuv", input_picture_ptr_central->buffer_y, input_picture_ptr_central->buffer_cb, input_picture_ptr_central->buffer_cr,
                      input_picture_ptr_central->width, input_picture_ptr_central->height,
@@ -1094,7 +1098,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                       (list_input_picture_ptr[index_center]->origin_y>>1)*list_input_picture_ptr[index_center]->stride_cr +
                                       (list_input_picture_ptr[index_center]->origin_x>>1);
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
                 char filename2[30] = "input_frame_";
                 char frame_index_str1[4];
                 snprintf(frame_index_str1, 4, "%d", frame_index);
@@ -1179,7 +1183,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                                           blk_row,
                                                           blk_col);
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
 #if 0
                     EbPaReferenceObject  *referenceObject;  // input parameter, reference Object Ptr
                     EbPictureBufferDesc  *refPicPtr;
@@ -1248,11 +1252,16 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                         use_16x16_subblocks,
                                         asm_type);
 
+#if MC_CHROMA==0
+                    copy_pixels(pred[C_U], BW>>1, src_frame_index[C_U] + blk_ch_src_offset, stride[C_U], BW>>1, BH>>1);
+                    copy_pixels(pred[C_V], BW>>1, src_frame_index[C_V] + blk_ch_src_offset, stride[C_V], BW>>1, BH>>1);
+#endif
+
 #endif
 
                 }
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
 
                 char filename3[30] = "input_block_";
                 char frame_index_str[4];
@@ -1332,7 +1341,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                 }
             }
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
 #if 0
             printf("ACCUM\n");
             printf("Y:\n");
@@ -1382,7 +1391,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                 byte += stride[C_U] - (BW>>1);
             }
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
             char filename[30] = "filtered_block_";
             char block_number[4];
             snprintf(block_number, 4, "%d", blk_row*blk_cols + blk_col);
@@ -1563,7 +1572,7 @@ static void adjust_filter_params(EbPictureBufferDesc *input_picture_ptr,
         adj_strength += noiselevel_adj;
     }
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
     printf("[DEBUG] noise level: %g, strength = %d, adj_strength = %d\n", noiselevel, strength, adj_strength);
 #endif
 
@@ -1597,7 +1606,7 @@ static void adjust_filter_params(EbPictureBufferDesc *input_picture_ptr,
 
 int replace_src_pic_buffers(PictureParentControlSet *picture_control_set_ptr_central, uint8_t **alt_ref_buffer){
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
     save_YUV_to_file("src_enhanced_picture.yuv",
                      picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y,
                      picture_control_set_ptr_central->enhanced_picture_ptr->buffer_cb,
@@ -1650,7 +1659,7 @@ int replace_src_pic_buffers(PictureParentControlSet *picture_control_set_ptr_cen
 
     // Replace enhanced picture buffer
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
     save_YUV_to_file("modified_enhanced_picture.yuv",
                      picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y,
                      picture_control_set_ptr_central->enhanced_picture_ptr->buffer_cb,
@@ -1672,7 +1681,7 @@ int replace_src_pic_buffers(PictureParentControlSet *picture_control_set_ptr_cen
     EbPictureBufferDesc *quarter_pic_ptr = src_object->quarter_decimated_picture_ptr;
     EbPictureBufferDesc *sixteenth_pic_ptr = src_object->sixteenth_decimated_picture_ptr;
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
     save_Y_to_file("input_padded_picture.yuv",
                    padded_pic_ptr->buffer_y,
                    picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
@@ -1705,7 +1714,7 @@ int replace_src_pic_buffers(PictureParentControlSet *picture_control_set_ptr_cen
                          quarter_pic_ptr,
                          sixteenth_pic_ptr);
 
-#if DEBUG
+#if DEBUG_TEMPORAL_FILTER
     save_Y_to_file("padded_picture.yuv",
             padded_pic_ptr->buffer_y,
             picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
