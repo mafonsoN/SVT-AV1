@@ -9092,6 +9092,13 @@ EbErrorType motion_estimate_lcu(
             context_ptr->y_search_area_origin[listIndex][0] = y_search_area_origin;
 #endif
 
+#if ALTREF_FILTERING_SUPPORT
+
+            context_ptr->search_area_width = search_area_width;
+            context_ptr->search_area_height = search_area_height;
+
+#endif
+
             xTopLeftSearchRegion = (int16_t)(refPicPtr->origin_x + sb_origin_x) - (ME_FILTER_TAP >> 1) + x_search_area_origin;
             yTopLeftSearchRegion = (int16_t)(refPicPtr->origin_y + sb_origin_y) - (ME_FILTER_TAP >> 1) + y_search_area_origin;
             searchRegionIndex = (xTopLeftSearchRegion)+(yTopLeftSearchRegion)* refPicPtr->stride_y;
