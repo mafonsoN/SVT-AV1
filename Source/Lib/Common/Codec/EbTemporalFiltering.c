@@ -38,8 +38,10 @@
 #define SQRT_PI_BY_2 1.25331413732
 #define SMOOTH_THRESHOLD 16
 // Block size used in temporal filtering
-#define BH 64
 #define BW 64
+#define BH 64
+#define BW_CH BW>>1
+#define BH_CH BH>>1
 #define BLK_PELS 4096  // Pixels in the block
 #define N_16X16_BLOCKS 16
 
@@ -881,8 +883,8 @@ void uni_motion_compensation(MeContext* context_ptr,
         }
 
         pred_ptr[0] = pred[0] + row*subblock_h*BW + col*subblock_w;
-        pred_ptr[1] = pred[1] + row*(subblock_h>>1)*(BW>>1) + col*(subblock_h>>1);
-        pred_ptr[2] = pred[2] + row*(subblock_h>>1)*(BW>>1) + col*(subblock_h>>1);
+        pred_ptr[1] = pred[1] + row*(subblock_h>>1)*(BW_CH) + col*(subblock_h>>1);
+        pred_ptr[2] = pred[2] + row*(subblock_h>>1)*(BW_CH) + col*(subblock_h>>1);
 
         // get motion vectors
         if (use_16x16_subblocks) {
@@ -986,7 +988,7 @@ void uni_motion_compensation(MeContext* context_ptr,
                            &comp_block_stride,
                            asm_type);
 
-        copy_pixels(pred_ptr[1], BW>>1, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
+        copy_pixels(pred_ptr[1], BW_CH, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
 
 #if 0
         save_Y_to_file("sub_block_U_MC.yuv", comp_block,
@@ -1010,7 +1012,7 @@ void uni_motion_compensation(MeContext* context_ptr,
                            &comp_block_stride,
                            asm_type);
 
-        copy_pixels(pred_ptr[2], BW>>1, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
+        copy_pixels(pred_ptr[2], BW_CH, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
 #endif
 
     }
@@ -1044,9 +1046,9 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     EbByte pred[COLOR_CHANNELS] = { predictor, predictor + BLK_PELS, predictor + (BLK_PELS<<1) };
     int index_center;
     uint32_t blk_row, blk_col;
-    int stride_pred[COLOR_CHANNELS] = {BW, BW>>1, BW>>1};
-    uint16_t blk_width_ch = BW >> 1;
-    uint16_t blk_height_ch = BW >> 1;
+    int stride_pred[COLOR_CHANNELS] = {BW, BW_CH, BW_CH};
+    uint16_t blk_width_ch = BW_CH;
+    uint16_t blk_height_ch = BH_CH;
     int blk_y_offset = 0, blk_y_src_offset = 0, blk_ch_offset = 0, blk_ch_src_offset = 0;
     EbByte src_frame_index[COLOR_CHANNELS], src_altref_index[COLOR_CHANNELS];
     int i, j, k;
@@ -1071,7 +1073,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     MotionEstimationContext_t *me_context_ptr;
     // Call ME context initializer
     me_context_ptr = (MotionEstimationContext_t*)malloc(sizeof(MotionEstimationContext_t));
-    //me_context_ctor(&(me_context_ptr->me_context_ptr));
 
 #if MEMORY_FOOTPRINT_OPT_ME_MV
     me_context_ctor(&(me_context_ptr->me_context_ptr),
@@ -1089,7 +1090,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 #endif
 
 #if DEBUG_TEMPORAL_FILTER
-
     save_YUV_to_file("central_frame.yuv", input_picture_ptr_central->buffer_y, input_picture_ptr_central->buffer_cb, input_picture_ptr_central->buffer_cr,
                      input_picture_ptr_central->width, input_picture_ptr_central->height,
                      input_picture_ptr_central->stride_y, input_picture_ptr_central->stride_cb, input_picture_ptr_central->stride_cr,
@@ -1157,7 +1157,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                 // ------------
 
                 // if frame to process is the center frame
-//                if(1){
                 if (frame_index == index_center) {
 
                     // skip MC (central frame)
@@ -1166,8 +1165,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                     use_16x16_subblocks = 0;
 
                     copy_pixels(pred[C_Y], BW, src_frame_index[C_Y] + blk_y_src_offset, stride[C_Y], BW, BH);
-                    copy_pixels(pred[C_U], BW>>1, src_frame_index[C_U] + blk_ch_src_offset, stride[C_U], BW>>1, BH>>1);
-                    copy_pixels(pred[C_V], BW>>1, src_frame_index[C_V] + blk_ch_src_offset, stride[C_V], BW>>1, BH>>1);
+                    copy_pixels(pred[C_U], BW_CH, src_frame_index[C_U] + blk_ch_src_offset, stride[C_U], BW_CH, BH_CH);
+                    copy_pixels(pred[C_V], BW_CH, src_frame_index[C_V] + blk_ch_src_offset, stride[C_V], BW_CH, BH_CH);
 
                 }else{
 
@@ -1206,8 +1205,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
                     // get predicted block
                     copy_pixels_and_remove_stride(pred[C_Y], src_frame_index[C_Y] + shift_y, BW, BH, stride[C_Y]);
-                    copy_pixels_and_remove_stride(pred[C_U], src_frame_index[C_U] + shift_ch, BW>>1, BH>>1, stride[C_U]);
-                    copy_pixels_and_remove_stride(pred[C_V], src_frame_index[C_V] + shift_ch, BW>>1, BH>>1, stride[C_V]);
+                    copy_pixels_and_remove_stride(pred[C_U], src_frame_index[C_U] + shift_ch, BW_CH, BH_CH, stride[C_U]);
+                    copy_pixels_and_remove_stride(pred[C_V], src_frame_index[C_V] + shift_ch, BW_CH, BH_CH, stride[C_V]);
 
 #else
 
@@ -1221,32 +1220,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                                           blk_row,
                                                           blk_col);
 
-#if DEBUG_TEMPORAL_FILTER
-#if 0
-                    EbPaReferenceObject  *referenceObject;  // input parameter, reference Object Ptr
-                    EbPictureBufferDesc  *refPicPtr;
-                    EbPictureBufferDesc  *quarterRefPicPtr;
-                    EbPictureBufferDesc  *sixteenthRefPicPtr;
-
-                    referenceObject = context_ptr->alt_ref_reference_ptr;
-                    refPicPtr = referenceObject->inputPaddedPicturePtr;
-                    quarterRefPicPtr = referenceObject->quarterDecimatedPicturePtr;
-                    sixteenthRefPicPtr = referenceObject->sixteenthDecimatedPicturePtr;
-
-                    // Alt-refs debug
-                    save_Y_to_file("ref_frame.yuv", refPicPtr->buffer_y, refPicPtr->stride_y, refPicPtr->height + 2*refPicPtr->origin_x,
-                                   refPicPtr->stride_y, 0, 0);
-
-                    // Alt-refs debug - x1/2
-                    save_Y_to_file("ref_frame_quarter.yuv", quarterRefPicPtr->buffer_y, quarterRefPicPtr->stride_y, quarterRefPicPtr->height + 2*quarterRefPicPtr->origin_x,
-                                   quarterRefPicPtr->stride_y, 0, 0);
-
-                    // Alt-refs debug - x1/4
-                    save_Y_to_file("ref_frame_sixteenth.yuv", sixteenthRefPicPtr->buffer_y, sixteenthRefPicPtr->stride_y, sixteenthRefPicPtr->height + 2*sixteenthRefPicPtr->origin_x,
-                                   sixteenthRefPicPtr->stride_y, 0, 0);
-#endif
-#endif
-
                     // Perform ME - context_ptr will store the outputs (MVs, buffers, etc)
                     motion_estimate_lcu( picture_control_set_ptr_central, // source picture control set -> references come from here
                                         (uint32_t)blk_row*blk_cols + blk_col,
@@ -1254,31 +1227,11 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                         (uint32_t)blk_row*BH, // y block
                                         context_ptr,
                                         list_input_picture_ptr[index_center]); // source picture
-#if 0
-                    save_YUV_to_file("sub_block_input.yuv", src_frame_index[C_Y] + blk_y_src_offset + 16*2*stride[C_Y] + 16,
-                                     src_frame_index[C_U] + blk_ch_src_offset + 8*2*stride[C_U] + 8,
-                                     src_frame_index[C_V] + blk_ch_src_offset + 8*2*stride[C_V] + 8,
-                                     subblock_w, subblock_h,
-                                     stride[C_Y], stride[C_U], stride[C_V],
-                                     0, 0);
 
-                    save_YUV_to_file("sub_block_central.yuv", src_altref_index[C_Y] + 16*2*stride[C_Y] + 16,
-                                     src_altref_index[C_U] + 8*2*stride[C_U] + 8,
-                                     src_altref_index[C_V] + 8*2*stride[C_V] + 8,
-                                     subblock_w, subblock_h,
-                                     stride[C_Y], stride[C_U], stride[C_V],
-                                   0, 0);
-
-                    save_Y_to_file("sub_block_input_U.yuv", src_frame_index[C_U] + blk_ch_src_offset + 8,
-                                     subblock_w>>1, subblock_h>>1,
-                                     stride[C_U],
-                                     0, 0);
-#endif
-
-                    // Find best match in this frame by MC
-
+                    // Retrieve distortion (SAD) on 32x32 and 16x16 sub-blocks
                     get_ME_distortion(context_ptr, &me_32x32_total_sad, me_16x16_subblock_sad);
 
+                    // Get sub-block filter weights depending on the SAD
                     get_blk_fw_using_dist(&me_32x32_total_sad, me_16x16_subblock_sad, &use_16x16_subblocks, blk_fw);
 
                     // Perform MC using the information acquired using the ME step
@@ -1291,8 +1244,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                         asm_type);
 
 #if MC_CHROMA==0
-                    copy_pixels(pred[C_U], BW>>1, src_frame_index[C_U] + blk_ch_src_offset, stride[C_U], BW>>1, BH>>1);
-                    copy_pixels(pred[C_V], BW>>1, src_frame_index[C_V] + blk_ch_src_offset, stride[C_V], BW>>1, BH>>1);
+                    copy_pixels(pred[C_U], BW_CH, src_frame_index[C_U] + blk_ch_src_offset, stride[C_U], BW_CH, BH_CH);
+                    copy_pixels(pred[C_V], BW_CH, src_frame_index[C_V] + blk_ch_src_offset, stride[C_V], BW_CH, BH_CH);
 #endif
 
 #endif
@@ -1300,7 +1253,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                 }
 
 #if DEBUG_TEMPORAL_FILTER
-
                 char filename3[30] = "input_block_";
                 char frame_index_str[4];
                 char block_number1[4];
@@ -1379,35 +1331,14 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                 }
             }
 
-#if DEBUG_TEMPORAL_FILTER
-#if 0
-            printf("ACCUM\n");
-            printf("Y:\n");
-            print_block_uint32(accum[C_Y], 32, 32, 32);
-            printf("U:\n");
-            print_block_uint32(accum[C_U], 16, 16, 16);
-            printf("V:\n");
-            print_block_uint32(accum[C_V], 16, 16, 16);
-
-            printf("COUNT\n");
-            printf("Y:\n");
-            print_block_uint16(count[C_Y], 32, 32, 32);
-            printf("U:\n");
-            print_block_uint16(count[C_U], 16, 16, 16);
-            printf("V:\n");
-            print_block_uint16(count[C_V], 16, 16, 16);
-#endif
-#endif
-
             // Normalize filter output to produce AltRef frame
             // Process luma
             int byte = blk_y_offset;
             for (i = 0, k = 0; i < BH; i++) {
                 for (j = 0; j < BW; j++, k++) {
 
-//                    alt_ref_buffer_y[byte] = (uint8_t)OD_DIVU(accum[C_Y][k] + (count[C_Y][k] >> 1), count[C_Y][k]);
+                    //alt_ref_buffer_y[byte] = (uint8_t)OD_DIVU(accum[C_Y][k] + (count[C_Y][k] >> 1), count[C_Y][k]);
                     alt_ref_buffer[C_Y][byte] = (accum[C_Y][k] + (count[C_Y][k] >> 1))/count[C_Y][k];
-//                    printf("accum = %d, count = %d and dst = %d\n", accum[C_Y][k], count[C_Y][k], alt_ref_buffer_y[byte]);
                     // move to next pixel
                     byte++;
                 }
@@ -1418,15 +1349,13 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
             for (i = 0, k = 0; i < blk_height_ch; i++) {
                 for (j = 0; j < blk_width_ch; j++, k++) {
                     // U
-//                    alt_ref_buffer_u[byte] = (uint8_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]);
                     alt_ref_buffer[C_U][byte] = (accum[C_U][k] + (count[C_U][k] >> 1))/count[C_U][k];
                     // V
-//                    alt_ref_buffer_v[byte] = (uint8_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]);
                     alt_ref_buffer[C_V][byte] = (accum[C_V][k] + (count[C_V][k] >> 1))/count[C_V][k];
                     // move to next pixel
                     byte++;
                 }
-                byte += stride[C_U] - (BW>>1);
+                byte += stride[C_U] - (BW_CH);
             }
 
 #if DEBUG_TEMPORAL_FILTER
