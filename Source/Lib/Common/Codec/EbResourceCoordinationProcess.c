@@ -553,7 +553,7 @@ void* resource_coordination_kernel(void *input_ptr)
         // for every picture (except first picture), we allocate two: 1. original picture, 2. potential Overlay picture. 
         // In Picture Decision Process, where the overlay frames are known, they extra pictures are released      
         uint8_t has_overlay = context_ptr->sequence_control_set_instance_array[instance_index]->encode_context_ptr->initial_picture ? 0 : 1;
-        for (uint8_t loop_index = 0; loop_index <= has_overlay; loop_index++) {
+        for (uint8_t loop_index = 0; loop_index <= has_overlay && !end_of_sequence_flag; loop_index++) {
 #endif
             //Get a New ParentPCS where we will hold the new inputPicture
             eb_get_empty_object(
@@ -671,7 +671,7 @@ void* resource_coordination_kernel(void *input_ptr)
 
             // Picture Stats
 #if ALT_REF_OVERLAY
-            if (loop_index == has_overlay)
+            if (loop_index == has_overlay || end_of_sequence_flag)
                 picture_control_set_ptr->picture_number = context_ptr->picture_number_array[instance_index]++;
             else
                 picture_control_set_ptr->picture_number = context_ptr->picture_number_array[instance_index];
@@ -714,10 +714,17 @@ void* resource_coordination_kernel(void *input_ptr)
                     &outputWrapperPtr);
                 outputResultsPtr = (ResourceCoordinationResults*)outputWrapperPtr->object_ptr;
                 outputResultsPtr->picture_control_set_wrapper_ptr = prevPictureControlSetWrapperPtr;
+#if ALT_REF_OVERLAY
+                // since overlay frame has the end of sequence set properly, set the end of sequence to true in the alt ref picture
+                if (((PictureParentControlSet       *)prevPictureControlSetWrapperPtr->object_ptr)->is_overlay && end_of_sequence_flag) {
+                    ((PictureParentControlSet       *)prevPictureControlSetWrapperPtr->object_ptr)->alt_ref_ppcs_ptr->end_of_sequence_flag = EB_TRUE;
+                }
+#endif
 #if ALT_REF_PRINTS
-               /* printf("RC POST: POC:%lld\tIsOverlay:%d\n",
-                    picture_control_set_ptr->picture_number,
-                    picture_control_set_ptr->is_overlay);*/
+                //printf("RC POST: POC:%lld\tIsOverlay:%d\tEOS:%d\n",
+                //    ((PictureParentControlSet       *)prevPictureControlSetWrapperPtr->object_ptr)->picture_number,
+                //    ((PictureParentControlSet       *)prevPictureControlSetWrapperPtr->object_ptr)->is_overlay,
+                //    end_of_sequence_flag);
 #endif
                 // Post the finished Results Object
                 eb_post_full_object(outputWrapperPtr);

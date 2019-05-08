@@ -2134,7 +2134,11 @@ void  Av1GenerateRpsInfo(
         //mini GOP toggling since last Key Frame.
         //a regular I keeps the toggling process and does not reset the toggle.  K-0-1-0-1-0-K-0-1-0-1-K-0-1.....
         //whoever needs a miniGOP Level toggling, this is the time
+#if ALT_REF_OVERLAY
+        if (pictureIndex == context_ptr->mini_gop_end_index[0] && !picture_control_set_ptr->is_overlay) {
+#else
         if (pictureIndex == context_ptr->mini_gop_end_index[0]) {
+#endif
             //Layer0 toggle 0->1->2                
             context_ptr->lay0_toggle = circ_inc(3, 1, context_ptr->lay0_toggle);
             //Layer1 toggle 3->4
@@ -2378,6 +2382,7 @@ void  Av1GenerateRpsInfo(
         case 0:
 
 #if MRP_BASE
+            //{16, 48, 0, 0},      // GOP Index 0 - Ref List 0
             //{16, 48, 0, 0},      // GOP Index 0 - Ref List 0
            //{16, 32, 0, 0}       // GOP Index 0 - Ref List 1
             av1Rps->ref_dpb_index[LAST] = base1_idx;
@@ -2937,7 +2942,11 @@ void  Av1GenerateRpsInfo(
         //mini GOP toggling since last Key Frame.
         //a regular I keeps the toggling process and does not reset the toggle.  K-0-1-0-1-0-K-0-1-0-1-K-0-1.....
         //whoever needs a miniGOP Level toggling, this is the time
+#if ALT_REF_OVERLAY
+        if (pictureIndex == context_ptr->mini_gop_end_index[0] && !picture_control_set_ptr->is_overlay) {
+#else
         if (pictureIndex == context_ptr->mini_gop_end_index[0]) {
+#endif
             //Layer0 toggle 0->1->2                
             context_ptr->lay0_toggle = circ_inc(3, 1, context_ptr->lay0_toggle);
             //Layer1 toggle 3->4
@@ -3358,11 +3367,12 @@ void* picture_decision_kernel(void *input_ptr)
         // P.S. Since the prior Picture Analysis processes stage is multithreaded, inputs to the Picture Decision Process
         // can arrive out-of-display-order, so a the Picture Decision Reordering Queue is used to enforce processing of
         // pictures in display order
-#if ALT_REF_PRINTS
+#if  ALT_REF_PRINTS
         printf("PD: POC:%lld\tIsOverlay:%d\n",
             picture_control_set_ptr->picture_number,
             picture_control_set_ptr->is_overlay);
 #endif      
+
 #if ALT_REF_OVERLAY
         if (!picture_control_set_ptr->is_overlay ) {
 #endif
@@ -3820,9 +3830,19 @@ void* picture_decision_kernel(void *input_ptr)
                                 picture_control_set_ptr->is_used_as_reference_flag = predPositionPtr->is_referenced;
 #endif
 
-#if ALT_REF_OVERLAY
+#if 0 //ALT_REF_OVERLAY
                                 // AMIR: update the decode order
-#endif
+                                // Set the Decode Order
+                                if ((context_ptr->mini_gop_idr_count[mini_gop_index] == 0) &&
+                                    (context_ptr->mini_gop_length[mini_gop_index] == picture_control_set_ptr->pred_struct_ptr->pred_struct_period) && !picture_control_set_ptr->is_overlay)
+
+                                {
+                                    picture_control_set_ptr->decode_order = encode_context_ptr->decode_base_number + predPositionPtr->decode_order;
+                                }
+                                else {
+                                    picture_control_set_ptr->decode_order = picture_control_set_ptr->picture_number_alt;
+                                }
+#else
                                 // Set the Decode Order
                                 if ((context_ptr->mini_gop_idr_count[mini_gop_index] == 0) &&
                                     (context_ptr->mini_gop_length[mini_gop_index] == picture_control_set_ptr->pred_struct_ptr->pred_struct_period))
@@ -3833,6 +3853,7 @@ void* picture_decision_kernel(void *input_ptr)
                                 else {
                                     picture_control_set_ptr->decode_order = picture_control_set_ptr->picture_number;
                                 }
+#endif
 
                                 encode_context_ptr->terminating_sequence_flag_received = (picture_control_set_ptr->end_of_sequence_flag == EB_TRUE) ?
                                     EB_TRUE :
@@ -4194,8 +4215,18 @@ void* picture_decision_kernel(void *input_ptr)
                             if (has_overlay && pictureIndex == context_ptr->mini_gop_end_index[mini_gop_index] + has_overlay)
                                 picture_control_set_ptr = ((PictureParentControlSet*)encode_context_ptr->pre_assignment_buffer[context_ptr->mini_gop_end_index[mini_gop_index]]->object_ptr)->overlay_ppcs_ptr;
                             else
-                                picture_control_set_ptr = (PictureParentControlSet*)encode_context_ptr->pre_assignment_buffer[pictureIndex]->object_ptr;                           
+                                picture_control_set_ptr = (PictureParentControlSet*)encode_context_ptr->pre_assignment_buffer[pictureIndex]->object_ptr;                  
 
+                            picture_control_set_ptr->picture_number_alt = encode_context_ptr->picture_number_alt++;
+
+                            //// Set the Decode Order
+                            //if ((context_ptr->mini_gop_idr_count[mini_gop_index] == 0) &&
+                            //    (context_ptr->mini_gop_length[mini_gop_index] == picture_control_set_ptr->pred_struct_ptr->pred_struct_period) && !picture_control_set_ptr->is_overlay){
+                            //    picture_control_set_ptr->decode_order = encode_context_ptr->decode_base_number + picture_control_set_ptr->pred_struct_ptr->pred_struct_entry_ptr_array[picture_control_set_ptr->pred_struct_index]->decode_order;
+                            //}
+                            //else {
+                            //    picture_control_set_ptr->decode_order = picture_control_set_ptr->picture_number_alt;
+                            //}
 #else
                         for (pictureIndex = context_ptr->mini_gop_start_index[mini_gop_index]; pictureIndex <= context_ptr->mini_gop_end_index[mini_gop_index]; ++pictureIndex) {
                             // 2nd Loop over Pictures in the Pre-Assignment Buffer
@@ -4528,7 +4559,7 @@ void* picture_decision_kernel(void *input_ptr)
                                 }
                             }
 
-#if ALT_REF_OVERLAY
+#if 0// ALT_REF_OVERLAY
                             if (pictureIndex == context_ptr->mini_gop_end_index[mini_gop_index] + has_overlay) {
                                 // Increment the Decode Base Number
                                 encode_context_ptr->decode_base_number += context_ptr->mini_gop_length[mini_gop_index] + has_overlay;

@@ -231,7 +231,9 @@ EbErrorType encode_context_ctor(
         *total_lib_memory += (sizeof(EbHandle));
     }
 
-
+#if ALT_REF_OVERLAY
+    encode_context_ptr->picture_number_alt = 0;
+#endif
     return EB_ErrorNone;
 }
 

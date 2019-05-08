@@ -14384,6 +14384,7 @@ extern "C" {
 #endif
 #endif
 #if ALT_REF_OVERLAY
+        uint64_t                             picture_number_alt; // The picture number overlay includes all the overlay frames
         uint8_t                              is_alt_ref;
         uint8_t                              is_overlay;
         struct PictureParentControlSet      *overlay_ppcs_ptr;

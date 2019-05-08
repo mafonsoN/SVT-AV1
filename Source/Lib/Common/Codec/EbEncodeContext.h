@@ -147,6 +147,9 @@ typedef struct EncodeContext
     EbObjectWrapper                                  *previous_picture_control_set_wrapper_ptr;
     EbHandle                                          shared_reference_mutex;
 
+#if ALT_REF_OVERLAY
+    uint64_t                                          picture_number_alt; // The picture number overlay includes all the overlay frames
+#endif
 } EncodeContext;
 
 typedef struct EncodeContextInitData {
