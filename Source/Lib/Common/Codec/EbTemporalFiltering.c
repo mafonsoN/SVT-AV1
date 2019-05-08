@@ -760,16 +760,11 @@ void uni_motion_compensation(MeContext* context_ptr,
     int     row, col;
 
     uint8_t *input_padded_ch[2];
-
+    uint8_t *integer_buffer_ptr_ch[2];
     uint32_t interpolated_stride_ch = MAX_SEARCH_AREA_WIDTH_CH;
     uint32_t interpolated_full_stride_ch = pic_ptr_ref->stride_cb;
 
     uint32_t mv_index;
-
-    // allocate chroma buffers missing in the open-loop ME operation
-    input_padded_ch[0] = (uint8_t*)malloc(sizeof(uint8_t) * pic_ptr_ref->chroma_size);
-    input_padded_ch[1] = (uint8_t*)malloc(sizeof(uint8_t) * pic_ptr_ref->chroma_size);
-
     uint32_t pu_index_min, pu_index_max;
     uint16_t subblock_w, subblock_h;
 
@@ -806,25 +801,25 @@ void uni_motion_compensation(MeContext* context_ptr,
     assert(x_top_left_search_region < pic_ptr_ref->stride_cb - search_area_width_ch);
     assert(y_top_left_search_region < (pic_ptr_ref->height)/2 + pic_ptr_ref->origin_y - search_area_height_ch);
 
-    uint8_t *integer_buffer_ptr_ch[2];
+    input_padded_ch[0] = pic_ptr_ref->buffer_cb;
+    input_padded_ch[1] = pic_ptr_ref->buffer_cr;
 
-    EB_MEMCPY(input_padded_ch[0], pic_ptr_ref->buffer_cb, pic_ptr_ref->chroma_size);
-    EB_MEMCPY(input_padded_ch[1], pic_ptr_ref->buffer_cr, pic_ptr_ref->chroma_size);
+    // Pad chroma reference samples - once only per picture
+    if(sb_origin_x == 0 && sb_origin_y == 0){
+        generate_padding(input_padded_ch[0],
+                         pic_ptr_ref->stride_cb,
+                         pic_ptr_ref->width >> 1,
+                         pic_ptr_ref->height >> 1,
+                         pic_ptr_ref->origin_x >> 1,
+                         pic_ptr_ref->origin_y >> 1);
 
-    // TODO: move this - to be computed only once per reference frame
-    generate_padding(input_padded_ch[0],
-                     pic_ptr_ref->stride_cb,
-                     pic_ptr_ref->width >> 1,
-                     pic_ptr_ref->height >> 1,
-                     pic_ptr_ref->origin_x >> 1,
-                     pic_ptr_ref->origin_y >> 1);
-
-    generate_padding(input_padded_ch[1],
-                     pic_ptr_ref->stride_cr,
-                     pic_ptr_ref->width >> 1,
-                     pic_ptr_ref->height >> 1,
-                     pic_ptr_ref->origin_x >> 1,
-                     pic_ptr_ref->origin_y >> 1);
+        generate_padding(input_padded_ch[1],
+                         pic_ptr_ref->stride_cr,
+                         pic_ptr_ref->width >> 1,
+                         pic_ptr_ref->height >> 1,
+                         pic_ptr_ref->origin_x >> 1,
+                         pic_ptr_ref->origin_y >> 1);
+    }
 
     integer_buffer_ptr_ch[0] = &(input_padded_ch[0][searchRegionIndex_cb]);
     integer_buffer_ptr_ch[1] = &(input_padded_ch[1][searchRegionIndex_cr]);
@@ -1006,9 +1001,6 @@ void uni_motion_compensation(MeContext* context_ptr,
 #endif
 
     }
-
-    free(input_padded_ch[0]);
-    free(input_padded_ch[1]);
 
 }
 
