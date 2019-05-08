@@ -736,6 +736,10 @@ void uni_motion_compensation(MeContext* context_ptr,
                             EbByte *pred,
                             uint32_t sb_origin_x,
                             uint32_t sb_origin_y,
+                            uint8_t **pos_b_buffer_ch,
+                            uint8_t **pos_h_buffer_ch,
+                            uint8_t **pos_j_buffer_ch,
+                            uint8_t **one_d_intermediate_results_buf_ch,
                             int use_16x16_subblocks,
                             EbAsm asm_type){
 
@@ -756,10 +760,6 @@ void uni_motion_compensation(MeContext* context_ptr,
     int     row, col;
 
     uint8_t *input_padded_ch[2];
-    uint8_t *pos_b_buffer_ch[2];
-    uint8_t *pos_h_buffer_ch[2];
-    uint8_t *pos_j_buffer_ch[2];
-    uint8_t *one_d_intermediate_results_buf_ch[2];
 
     uint32_t interpolated_stride_ch = MAX_SEARCH_AREA_WIDTH_CH;
     uint32_t interpolated_full_stride_ch = pic_ptr_ref->stride_cb;
@@ -769,16 +769,6 @@ void uni_motion_compensation(MeContext* context_ptr,
     // allocate chroma buffers missing in the open-loop ME operation
     input_padded_ch[0] = (uint8_t*)malloc(sizeof(uint8_t) * pic_ptr_ref->chroma_size);
     input_padded_ch[1] = (uint8_t*)malloc(sizeof(uint8_t) * pic_ptr_ref->chroma_size);
-
-    pos_b_buffer_ch[0] = (uint8_t *)malloc(sizeof(uint8_t) * interpolated_stride_ch * MAX_SEARCH_AREA_HEIGHT_CH);
-    pos_h_buffer_ch[0] = (uint8_t *)malloc(sizeof(uint8_t) * interpolated_stride_ch * MAX_SEARCH_AREA_HEIGHT_CH);
-    pos_j_buffer_ch[0] = (uint8_t *)malloc(sizeof(uint8_t) * interpolated_stride_ch * MAX_SEARCH_AREA_HEIGHT_CH);
-    pos_b_buffer_ch[1] = (uint8_t *)malloc(sizeof(uint8_t) * interpolated_stride_ch * MAX_SEARCH_AREA_HEIGHT_CH);
-    pos_h_buffer_ch[1] = (uint8_t *)malloc(sizeof(uint8_t) * interpolated_stride_ch * MAX_SEARCH_AREA_HEIGHT_CH);
-    pos_j_buffer_ch[1] = (uint8_t *)malloc(sizeof(uint8_t) * interpolated_stride_ch * MAX_SEARCH_AREA_HEIGHT_CH);
-
-    one_d_intermediate_results_buf_ch[0] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
-    one_d_intermediate_results_buf_ch[1] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
 
     uint32_t pu_index_min, pu_index_max;
     uint16_t subblock_w, subblock_h;
@@ -1019,14 +1009,6 @@ void uni_motion_compensation(MeContext* context_ptr,
 
     free(input_padded_ch[0]);
     free(input_padded_ch[1]);
-    free(pos_b_buffer_ch[0]);
-    free(pos_h_buffer_ch[0]);
-    free(pos_j_buffer_ch[0]);
-    free(pos_b_buffer_ch[1]);
-    free(pos_h_buffer_ch[1]);
-    free(pos_j_buffer_ch[1]);
-    free(one_d_intermediate_results_buf_ch[0]);
-    free(one_d_intermediate_results_buf_ch[1]);
 
 }
 
@@ -1069,7 +1051,25 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
     int stride[COLOR_CHANNELS] = { input_picture_ptr_central->stride_y, input_picture_ptr_central->stride_cb, input_picture_ptr_central->stride_cr };
 
-#if VANILA_ME==0
+#if !VANILA_ME
+    // initialize chroma interpolated buffers and auxiliary buffers
+    uint8_t *pos_b_buffer_ch[2];
+    uint8_t *pos_h_buffer_ch[2];
+    uint8_t *pos_j_buffer_ch[2];
+    uint8_t *one_d_intermediate_results_buf_ch[2];
+
+    pos_b_buffer_ch[0] = (uint8_t *)malloc(sizeof(uint8_t) * MAX_SEARCH_AREA_WIDTH_CH * MAX_SEARCH_AREA_HEIGHT_CH);
+    pos_h_buffer_ch[0] = (uint8_t *)malloc(sizeof(uint8_t) * MAX_SEARCH_AREA_WIDTH_CH * MAX_SEARCH_AREA_HEIGHT_CH);
+    pos_j_buffer_ch[0] = (uint8_t *)malloc(sizeof(uint8_t) * MAX_SEARCH_AREA_WIDTH_CH * MAX_SEARCH_AREA_HEIGHT_CH);
+    pos_b_buffer_ch[1] = (uint8_t *)malloc(sizeof(uint8_t) * MAX_SEARCH_AREA_WIDTH_CH * MAX_SEARCH_AREA_HEIGHT_CH);
+    pos_h_buffer_ch[1] = (uint8_t *)malloc(sizeof(uint8_t) * MAX_SEARCH_AREA_WIDTH_CH * MAX_SEARCH_AREA_HEIGHT_CH);
+    pos_j_buffer_ch[1] = (uint8_t *)malloc(sizeof(uint8_t) * MAX_SEARCH_AREA_WIDTH_CH * MAX_SEARCH_AREA_HEIGHT_CH);
+
+    one_d_intermediate_results_buf_ch[0] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
+    one_d_intermediate_results_buf_ch[1] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
+#endif
+
+#if !VANILA_ME
     MotionEstimationContext_t *me_context_ptr;
     // Call ME context initializer
     me_context_ptr = (MotionEstimationContext_t*)malloc(sizeof(MotionEstimationContext_t));
@@ -1240,6 +1240,10 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                         pred,
                                         (uint32_t)blk_col*BW,
                                         (uint32_t)blk_row*BH,
+                                        pos_b_buffer_ch,
+                                        pos_h_buffer_ch,
+                                        pos_j_buffer_ch,
+                                        one_d_intermediate_results_buf_ch,
                                         use_16x16_subblocks,
                                         asm_type);
 
@@ -1336,9 +1340,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
             int byte = blk_y_offset;
             for (i = 0, k = 0; i < BH; i++) {
                 for (j = 0; j < BW; j++, k++) {
-
                     //alt_ref_buffer_y[byte] = (uint8_t)OD_DIVU(accum[C_Y][k] + (count[C_Y][k] >> 1), count[C_Y][k]);
-                    alt_ref_buffer[C_Y][byte] = (accum[C_Y][k] + (count[C_Y][k] >> 1))/count[C_Y][k];
+                    alt_ref_buffer[C_Y][byte] = (uint8_t)((accum[C_Y][k] + (count[C_Y][k] >> 1))/count[C_Y][k]);
                     // move to next pixel
                     byte++;
                 }
@@ -1349,9 +1352,9 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
             for (i = 0, k = 0; i < blk_height_ch; i++) {
                 for (j = 0; j < blk_width_ch; j++, k++) {
                     // U
-                    alt_ref_buffer[C_U][byte] = (accum[C_U][k] + (count[C_U][k] >> 1))/count[C_U][k];
+                    alt_ref_buffer[C_U][byte] = (uint8_t)((accum[C_U][k] + (count[C_U][k] >> 1))/count[C_U][k]);
                     // V
-                    alt_ref_buffer[C_V][byte] = (accum[C_V][k] + (count[C_V][k] >> 1))/count[C_V][k];
+                    alt_ref_buffer[C_V][byte] = (uint8_t)((accum[C_V][k] + (count[C_V][k] >> 1))/count[C_V][k]);
                     // move to next pixel
                     byte++;
                 }
@@ -1399,6 +1402,14 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
 #if !VANILA_ME
     free(me_context_ptr);
+    free(pos_b_buffer_ch[0]);
+    free(pos_h_buffer_ch[0]);
+    free(pos_j_buffer_ch[0]);
+    free(pos_b_buffer_ch[1]);
+    free(pos_h_buffer_ch[1]);
+    free(pos_j_buffer_ch[1]);
+    free(one_d_intermediate_results_buf_ch[0]);
+    free(one_d_intermediate_results_buf_ch[1]);
 #endif
 
     return EB_ErrorNone;
