@@ -165,15 +165,14 @@ void* picture_manager_kernel(void *input_ptr)
 
             //printf("\nPicture Manager Process @ %d \n ", picture_control_set_ptr->picture_number);
 #if ALT_REF_PRINTS
-            printf("PM: POC:%lld\tIsOverlay:%d\n",
+            printf("PM: POC:%lld\tPOCALT:%lld\tIsOverlay:%d\n",
                 picture_control_set_ptr->picture_number,
+                picture_control_set_ptr->picture_number_alt,
                 picture_control_set_ptr->is_overlay);
-            if (picture_control_set_ptr->is_overlay)
-                printf("");
+
 #endif  
 #if ALT_REF_OVERLAY
             queueEntryIndex = (int32_t)(picture_control_set_ptr->picture_number_alt - encode_context_ptr->picture_manager_reorder_queue[encode_context_ptr->picture_manager_reorder_queue_head_index]->picture_number);
-
 #else
             queueEntryIndex = (int32_t)(picture_control_set_ptr->picture_number - encode_context_ptr->picture_manager_reorder_queue[encode_context_ptr->picture_manager_reorder_queue_head_index]->picture_number);
 #endif
@@ -187,7 +186,6 @@ void* picture_manager_kernel(void *input_ptr)
             }
             else {
                 queueEntryPtr->parent_pcs_wrapper_ptr = inputPictureDemuxPtr->picture_control_set_wrapper_ptr;
-
 #if ALT_REF_OVERLAY
                 queueEntryPtr->picture_number = picture_control_set_ptr->picture_number_alt;
 #else
@@ -267,8 +265,11 @@ void* picture_manager_kernel(void *input_ptr)
 
                             // Update the dependant count update
                             dependant_list_removed_entries = referenceEntryPtr->dep_list0_count + referenceEntryPtr->dep_list1_count - referenceEntryPtr->dependent_count;
-
+#if ALT_REF_OVERLAY
+                            referenceEntryPtr->dep_list0_count = (referenceEntryPtr->is_alt_ref) ? referenceEntryPtr->list0.list_count + 1 : referenceEntryPtr->list0.list_count;
+#else
                             referenceEntryPtr->dep_list0_count = referenceEntryPtr->list0.list_count;
+#endif
 #if BASE_LAYER_REF
                             if (referenceEntryPtr->slice_type == I_SLICE)
                                 referenceEntryPtr->dep_list1_count = referenceEntryPtr->list1.list_count + sequence_control_set_ptr->extra_frames_to_ref_islice;
@@ -432,13 +433,9 @@ void* picture_manager_kernel(void *input_ptr)
                 inputEntryPtr = encode_context_ptr->input_picture_queue[encode_context_ptr->input_picture_queue_tail_index];
                 inputEntryPtr->input_object_ptr = queueEntryPtr->parent_pcs_wrapper_ptr;
 #if ALT_REF_OVERLAY
-
-                // AMIR to clean
-                if (picture_control_set_ptr->is_overlay) 
-                    inputEntryPtr->reference_entry_index = encode_context_ptr->reference_picture_queue_tail_index - 1;
-                else
-                    inputEntryPtr->reference_entry_index = encode_context_ptr->reference_picture_queue_tail_index;
-
+                // Since the overlay picture is not added to the reference queue, reference_entry_index points to the previous picture which is the alt ref
+                inputEntryPtr->reference_entry_index = (!picture_control_set_ptr->is_overlay) ? encode_context_ptr->reference_picture_queue_tail_index :
+                    (encode_context_ptr->reference_picture_queue_tail_index == 0) ? REFERENCE_QUEUE_MAX_DEPTH - 1 : encode_context_ptr->reference_picture_queue_tail_index - 1;
 #else
                 inputEntryPtr->reference_entry_index = encode_context_ptr->reference_picture_queue_tail_index;
 #endif
@@ -447,8 +444,10 @@ void* picture_manager_kernel(void *input_ptr)
 
                 // Copy the reference lists into the inputEntry and
                 // set the Reference Counts Based on Temporal Layer and how many frames are active
+#if !ALT_REF_OVERLAY
                 picture_control_set_ptr->ref_list0_count = (picture_control_set_ptr->slice_type == I_SLICE) ? 0 : (uint8_t)predPositionPtr->ref_list0.reference_list_count;
                 picture_control_set_ptr->ref_list1_count = (picture_control_set_ptr->slice_type == I_SLICE) ? 0 : (uint8_t)predPositionPtr->ref_list1.reference_list_count;
+#endif
 #if MRP_M0_ONLY
 #if NO_UNI
                 if (picture_control_set_ptr->mrp_mode == 2) {
@@ -498,6 +497,10 @@ void* picture_manager_kernel(void *input_ptr)
                     referenceEntryPtr->reference_object_ptr = (EbObjectWrapper*)EB_NULL;
                     referenceEntryPtr->release_enable = EB_TRUE;
                     referenceEntryPtr->reference_available = EB_FALSE;
+
+#if ALT_REF_OVERLAY               
+                    referenceEntryPtr->is_alt_ref = picture_control_set_ptr->is_alt_ref;
+#endif 
 #if RC_FEEDBACK
                     referenceEntryPtr->feedback_arrived = EB_FALSE;
 #endif
@@ -518,8 +521,12 @@ void* picture_manager_kernel(void *input_ptr)
                     for (depIdx = 0; depIdx < predPositionPtr->dep_list1.list_count; ++depIdx) {
                         referenceEntryPtr->list1.list[depIdx] = predPositionPtr->dep_list1.list[depIdx];
                     }
-
+#if ALT_REF_OVERLAY
+                    referenceEntryPtr->dep_list0_count = (picture_control_set_ptr->is_alt_ref) ? referenceEntryPtr->list0.list_count + 1 : referenceEntryPtr->list0.list_count;
+#else
                     referenceEntryPtr->dep_list0_count = referenceEntryPtr->list0.list_count;
+#endif
+
 #if BASE_LAYER_REF
                     if (picture_control_set_ptr->slice_type == I_SLICE)
                         referenceEntryPtr->dep_list1_count = referenceEntryPtr->list1.list_count + sequence_control_set_ptr->extra_frames_to_ref_islice;
@@ -579,9 +586,6 @@ void* picture_manager_kernel(void *input_ptr)
                 EB_ENC_PM_ERROR7);
 
             referenceQueueIndex = encode_context_ptr->reference_picture_queue_head_index;
-#if ALT_REF_OVERLAY
-            // Amir: update to support overlay
-#endif
             // Find the Reference in the Reference Queue
             do {
 
@@ -991,6 +995,14 @@ void* picture_manager_kernel(void *input_ptr)
                             uint8_t refIdx;
                             for (refIdx = 0; refIdx < entryPictureControlSetPtr->ref_list0_count; ++refIdx) {
                                 if (entryPictureControlSetPtr->ref_list0_count) {
+#if ALT_REF_OVERLAY
+                                    // hardcode the reference for the overlay frame
+                                    if (entryPictureControlSetPtr->is_overlay) 
+                                        referenceQueueIndex = (uint32_t)CIRCULAR_ADD(
+                                            ((int32_t)inputEntryPtr->reference_entry_index),
+                                            REFERENCE_QUEUE_MAX_DEPTH);
+                                    else
+#endif
                                     referenceQueueIndex = (uint32_t)CIRCULAR_ADD(
                                         ((int32_t)inputEntryPtr->reference_entry_index) - inputEntryPtr->list0_ptr->reference_list[refIdx],
                                         REFERENCE_QUEUE_MAX_DEPTH);                                                                                             // Max

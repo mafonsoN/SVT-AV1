@@ -41,7 +41,7 @@ extern "C" {
 #define ALT_REF_SUPPORT                   1 // ALT_REF main flag
 
 #if ALT_REF_SUPPORT
-#define ALT_REF_OVERLAY                   0 // support for ALT_REF overlay frames
+#define ALT_REF_OVERLAY                   1 // support for ALT_REF overlay frames
 #define ALT_REF_PRINTS                    0
 
 #endif
@@ -56,8 +56,8 @@ extern "C" {
 #define REDUCE_BLOCK_COUNT_ME             1
 #define REDUCE_ME_SEARCH_AREA             1
 #define BUG_FIX_LOOKAHEAD                 1
-#define BUG_FIX_PCS_LIVE_COUNT            0
-#define BUG_FIX_INPUT_LIVE_COUNT          0
+#define BUG_FIX_PCS_LIVE_COUNT            1
+#define BUG_FIX_INPUT_LIVE_COUNT          1
 #endif
 
 
@@ -154,7 +154,7 @@ extern "C" {
 #define TRELLIS_INTRA                                   0
 #define TRELLIS_CHROMA                                  0
 #define ENHANCED_TRELLIS                                0   // TBD
-#endif
+#endif 
 
 #define CHROMA_DC_ONLY                                  0
 #define SEARCH_UV_MODE                                  1

@@ -3917,9 +3917,9 @@ void* rate_control_kernel(void *input_ptr)
             sequence_control_set_ptr = (SequenceControlSet *)picture_control_set_ptr->sequence_control_set_wrapper_ptr->object_ptr;
 
 #if ALT_REF_PRINTS
-            printf("RateControl: POC:%lld\tIsOverlay:%d\n",
-                picture_control_set_ptr->parent_pcs_ptr->picture_number,
-                picture_control_set_ptr->parent_pcs_ptr->is_overlay);
+            //printf("RateControl: POC:%lld\tIsOverlay:%d\n",
+            //    picture_control_set_ptr->parent_pcs_ptr->picture_number,
+            //    picture_control_set_ptr->parent_pcs_ptr->is_overlay);
 #endif  
 
             if (picture_control_set_ptr->picture_number == 0) {

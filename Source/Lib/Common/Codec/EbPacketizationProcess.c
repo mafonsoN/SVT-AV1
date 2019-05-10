@@ -281,153 +281,162 @@ void* packetization_kernel(void *input_ptr)
         picture_control_set_ptr = (PictureControlSet*)entropyCodingResultsPtr->picture_control_set_wrapper_ptr->object_ptr;
         sequence_control_set_ptr = (SequenceControlSet*)picture_control_set_ptr->sequence_control_set_wrapper_ptr->object_ptr;
         encode_context_ptr = (EncodeContext*)sequence_control_set_ptr->encode_context_ptr;
-
+#if ALT_REF_PRINTS
+        //printf("PK: POC:%lld\tDECPOC:%lld\tIsOverlay:%d\n",
+        //    picture_control_set_ptr->parent_pcs_ptr->picture_number,
+        //    picture_control_set_ptr->parent_pcs_ptr->decode_order,
+        //    picture_control_set_ptr->parent_pcs_ptr->is_overlay);
+#endif  
         //****************************************************
         // Input Entropy Results into Reordering Queue
         //****************************************************
+#if ALT_REF_SUPPORT
+        /*if (!picture_control_set_ptr->parent_pcs_ptr->is_overlay)*/ {
+#endif
+            //get a new entry spot
+            queueEntryIndex = picture_control_set_ptr->parent_pcs_ptr->decode_order % PACKETIZATION_REORDER_QUEUE_MAX_DEPTH;
+            queueEntryPtr = encode_context_ptr->packetization_reorder_queue[queueEntryIndex];
+            queueEntryPtr->start_time_seconds = picture_control_set_ptr->parent_pcs_ptr->start_time_seconds;
+            queueEntryPtr->start_time_u_seconds = picture_control_set_ptr->parent_pcs_ptr->start_time_u_seconds;
 
-        //get a new entry spot
-        queueEntryIndex = picture_control_set_ptr->parent_pcs_ptr->decode_order % PACKETIZATION_REORDER_QUEUE_MAX_DEPTH;
-        queueEntryPtr = encode_context_ptr->packetization_reorder_queue[queueEntryIndex];
-        queueEntryPtr->start_time_seconds = picture_control_set_ptr->parent_pcs_ptr->start_time_seconds;
-        queueEntryPtr->start_time_u_seconds = picture_control_set_ptr->parent_pcs_ptr->start_time_u_seconds;
+            //TODO: The output buffer should be big enough to avoid a deadlock here. Add an assert that make the warning
+            // Get  Output Bitstream buffer
+            output_stream_wrapper_ptr = picture_control_set_ptr->parent_pcs_ptr->output_stream_wrapper_ptr;
+            output_stream_ptr = (EbBufferHeaderType*)output_stream_wrapper_ptr->object_ptr;
+            output_stream_ptr->flags = 0;
+            output_stream_ptr->flags |= (encode_context_ptr->terminating_sequence_flag_received == EB_TRUE && picture_control_set_ptr->parent_pcs_ptr->decode_order == encode_context_ptr->terminating_picture_number) ? EB_BUFFERFLAG_EOS : 0;
+            output_stream_ptr->n_filled_len = 0;
+            output_stream_ptr->pts = picture_control_set_ptr->parent_pcs_ptr->input_ptr->pts;
+            output_stream_ptr->dts = picture_control_set_ptr->parent_pcs_ptr->decode_order - (uint64_t)(1 << picture_control_set_ptr->parent_pcs_ptr->hierarchical_levels) + 1;
+            output_stream_ptr->pic_type = picture_control_set_ptr->parent_pcs_ptr->is_used_as_reference_flag ?
+                picture_control_set_ptr->parent_pcs_ptr->idr_flag ? EB_AV1_KEY_PICTURE :
+                picture_control_set_ptr->slice_type : EB_AV1_NON_REF_PICTURE;
+            output_stream_ptr->p_app_private = picture_control_set_ptr->parent_pcs_ptr->input_ptr->p_app_private;
 
-        //TODO: The output buffer should be big enough to avoid a deadlock here. Add an assert that make the warning
-        // Get  Output Bitstream buffer
-        output_stream_wrapper_ptr = picture_control_set_ptr->parent_pcs_ptr->output_stream_wrapper_ptr;
-        output_stream_ptr = (EbBufferHeaderType*)output_stream_wrapper_ptr->object_ptr;
-        output_stream_ptr->flags = 0;
-        output_stream_ptr->flags |= (encode_context_ptr->terminating_sequence_flag_received == EB_TRUE && picture_control_set_ptr->parent_pcs_ptr->decode_order == encode_context_ptr->terminating_picture_number) ? EB_BUFFERFLAG_EOS : 0;
-        output_stream_ptr->n_filled_len = 0;
-        output_stream_ptr->pts = picture_control_set_ptr->parent_pcs_ptr->input_ptr->pts;
-        output_stream_ptr->dts = picture_control_set_ptr->parent_pcs_ptr->decode_order - (uint64_t)(1 << picture_control_set_ptr->parent_pcs_ptr->hierarchical_levels) + 1;
-        output_stream_ptr->pic_type = picture_control_set_ptr->parent_pcs_ptr->is_used_as_reference_flag ?
-            picture_control_set_ptr->parent_pcs_ptr->idr_flag ? EB_AV1_KEY_PICTURE :
-            picture_control_set_ptr->slice_type : EB_AV1_NON_REF_PICTURE;
-        output_stream_ptr->p_app_private = picture_control_set_ptr->parent_pcs_ptr->input_ptr->p_app_private;
+            // Get Empty Rate Control Input Tasks
+            eb_get_empty_object(
+                context_ptr->rate_control_tasks_output_fifo_ptr,
+                &rateControlTasksWrapperPtr);
+            rateControlTasksPtr = (RateControlTasks*)rateControlTasksWrapperPtr->object_ptr;
+            rateControlTasksPtr->picture_control_set_wrapper_ptr = picture_control_set_ptr->picture_parent_control_set_wrapper_ptr;
+            rateControlTasksPtr->task_type = RC_PACKETIZATION_FEEDBACK_RESULT;
 
-        // Get Empty Rate Control Input Tasks
-        eb_get_empty_object(
-            context_ptr->rate_control_tasks_output_fifo_ptr,
-            &rateControlTasksWrapperPtr);
-        rateControlTasksPtr = (RateControlTasks*)rateControlTasksWrapperPtr->object_ptr;
-        rateControlTasksPtr->picture_control_set_wrapper_ptr = picture_control_set_ptr->picture_parent_control_set_wrapper_ptr;
-        rateControlTasksPtr->task_type = RC_PACKETIZATION_FEEDBACK_RESULT;
-
-        // slice_type = picture_control_set_ptr->slice_type;
-         // Reset the bitstream before writing to it
-        reset_bitstream(
-            picture_control_set_ptr->bitstream_ptr->output_bitstream_ptr);
-
-        // Code the SPS
-        if (picture_control_set_ptr->parent_pcs_ptr->av1_frame_type == KEY_FRAME) {
-            encode_sps_av1(
-                picture_control_set_ptr->bitstream_ptr,
-                sequence_control_set_ptr);
-        }
-
-        write_frame_header_av1(
-            picture_control_set_ptr->bitstream_ptr,
-            sequence_control_set_ptr,
-            picture_control_set_ptr,
-            0);
-
-        // Copy Slice Header to the Output Bitstream
-        copy_rbsp_bitstream_to_payload(
-            picture_control_set_ptr->bitstream_ptr,
-            output_stream_ptr->p_buffer,
-            (uint32_t*) &(output_stream_ptr->n_filled_len),
-            (uint32_t*) &(output_stream_ptr->n_alloc_len),
-            encode_context_ptr);
-        if (picture_control_set_ptr->parent_pcs_ptr->has_show_existing) {
-            // Reset the bitstream before writing to it
+            // slice_type = picture_control_set_ptr->slice_type;
+             // Reset the bitstream before writing to it
             reset_bitstream(
                 picture_control_set_ptr->bitstream_ptr->output_bitstream_ptr);
+
+            // Code the SPS
+            if (picture_control_set_ptr->parent_pcs_ptr->av1_frame_type == KEY_FRAME) {
+                encode_sps_av1(
+                    picture_control_set_ptr->bitstream_ptr,
+                    sequence_control_set_ptr);
+            }
+
             write_frame_header_av1(
                 picture_control_set_ptr->bitstream_ptr,
                 sequence_control_set_ptr,
                 picture_control_set_ptr,
-                1);
+                0);
 
             // Copy Slice Header to the Output Bitstream
             copy_rbsp_bitstream_to_payload(
                 picture_control_set_ptr->bitstream_ptr,
                 output_stream_ptr->p_buffer,
-                (uint32_t*)&(output_stream_ptr->n_filled_len),
-                (uint32_t*)&(output_stream_ptr->n_alloc_len),
+                (uint32_t*) &(output_stream_ptr->n_filled_len),
+                (uint32_t*) &(output_stream_ptr->n_alloc_len),
                 encode_context_ptr);
+            if (picture_control_set_ptr->parent_pcs_ptr->has_show_existing) {
+                // Reset the bitstream before writing to it
+                reset_bitstream(
+                    picture_control_set_ptr->bitstream_ptr->output_bitstream_ptr);
+                write_frame_header_av1(
+                    picture_control_set_ptr->bitstream_ptr,
+                    sequence_control_set_ptr,
+                    picture_control_set_ptr,
+                    1);
 
-            output_stream_ptr->flags |= EB_BUFFERFLAG_SHOW_EXT;
+                // Copy Slice Header to the Output Bitstream
+                copy_rbsp_bitstream_to_payload(
+                    picture_control_set_ptr->bitstream_ptr,
+                    output_stream_ptr->p_buffer,
+                    (uint32_t*)&(output_stream_ptr->n_filled_len),
+                    (uint32_t*)&(output_stream_ptr->n_alloc_len),
+                    encode_context_ptr);
 
-        }
+                output_stream_ptr->flags |= EB_BUFFERFLAG_SHOW_EXT;
 
-        // Send the number of bytes per frame to RC
-        picture_control_set_ptr->parent_pcs_ptr->total_num_bits = output_stream_ptr->n_filled_len << 3;
-#if  RC
-        queueEntryPtr->total_num_bits = picture_control_set_ptr->parent_pcs_ptr->total_num_bits;
-        // update the rate tables used in RC based on the encoded bits of each sb
-        update_rc_rate_tables(
-            picture_control_set_ptr,
-            sequence_control_set_ptr);
-#endif
-        queueEntryPtr->av1_frame_type = picture_control_set_ptr->parent_pcs_ptr->av1_frame_type;
-        queueEntryPtr->poc = picture_control_set_ptr->picture_number;
-        memcpy(&queueEntryPtr->av1_ref_signal, &picture_control_set_ptr->parent_pcs_ptr->av1_ref_signal, sizeof(Av1RpsNode));
-
-        queueEntryPtr->slice_type = picture_control_set_ptr->slice_type;
-#if DETAILED_FRAME_OUTPUT
-#if NEW_RPS
-        queueEntryPtr->ref_poc_list0 = picture_control_set_ptr->parent_pcs_ptr->ref_pic_poc_array[REF_LIST_0][0];
-        queueEntryPtr->ref_poc_list1 = picture_control_set_ptr->parent_pcs_ptr->ref_pic_poc_array[REF_LIST_1][0];
-#else
-        queueEntryPtr->ref_poc_list0 = picture_control_set_ptr->parent_pcs_ptr->ref_pic_poc_array[REF_LIST_0];
-        queueEntryPtr->ref_poc_list1 = picture_control_set_ptr->parent_pcs_ptr->ref_pic_poc_array[REF_LIST_1];
-#endif
-#if REF_ORDER        
-        memcpy(queueEntryPtr->ref_poc_array, picture_control_set_ptr->parent_pcs_ptr->av1RefSignal.ref_poc_array, 7 * sizeof(uint64_t));
-#endif
-#endif
-        queueEntryPtr->show_frame = picture_control_set_ptr->parent_pcs_ptr->show_frame;
-        queueEntryPtr->has_show_existing = picture_control_set_ptr->parent_pcs_ptr->has_show_existing;
-        queueEntryPtr->show_existing_loc = picture_control_set_ptr->parent_pcs_ptr->show_existing_loc;
-
-        //Store the output buffer in the Queue
-        queueEntryPtr->output_stream_wrapper_ptr = output_stream_wrapper_ptr;
-
-        // Note: last chance here to add more output meta data for an encoded picture -->
-
-        // collect output meta data
-        queueEntryPtr->out_meta_data = concat_eb_linked_list(ExtractPassthroughData(&(picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr)),
-            picture_control_set_ptr->parent_pcs_ptr->app_out_data_ll_head_ptr);
-        picture_control_set_ptr->parent_pcs_ptr->app_out_data_ll_head_ptr = (EbLinkedListNode *)EB_NULL;
-
-        // Calling callback functions to release the memory allocated for data linked list in the application
-        while (picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr != EB_NULL) {
-            appDataLLHeadTempPtr = picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr->next;
-            if (picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr->release_cb_fnc_ptr != EB_NULL) {
-                picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr->release_cb_fnc_ptr(picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr);
             }
 
-            picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr = appDataLLHeadTempPtr;
+            // Send the number of bytes per frame to RC
+            picture_control_set_ptr->parent_pcs_ptr->total_num_bits = output_stream_ptr->n_filled_len << 3;
+#if  RC
+            queueEntryPtr->total_num_bits = picture_control_set_ptr->parent_pcs_ptr->total_num_bits;
+            // update the rate tables used in RC based on the encoded bits of each sb
+            update_rc_rate_tables(
+                picture_control_set_ptr,
+                sequence_control_set_ptr);
+#endif
+            queueEntryPtr->av1_frame_type = picture_control_set_ptr->parent_pcs_ptr->av1_frame_type;
+            queueEntryPtr->poc = picture_control_set_ptr->picture_number;
+            memcpy(&queueEntryPtr->av1_ref_signal, &picture_control_set_ptr->parent_pcs_ptr->av1_ref_signal, sizeof(Av1RpsNode));
+
+            queueEntryPtr->slice_type = picture_control_set_ptr->slice_type;
+#if DETAILED_FRAME_OUTPUT
+#if NEW_RPS
+            queueEntryPtr->ref_poc_list0 = picture_control_set_ptr->parent_pcs_ptr->ref_pic_poc_array[REF_LIST_0][0];
+            queueEntryPtr->ref_poc_list1 = picture_control_set_ptr->parent_pcs_ptr->ref_pic_poc_array[REF_LIST_1][0];
+#else
+            queueEntryPtr->ref_poc_list0 = picture_control_set_ptr->parent_pcs_ptr->ref_pic_poc_array[REF_LIST_0];
+            queueEntryPtr->ref_poc_list1 = picture_control_set_ptr->parent_pcs_ptr->ref_pic_poc_array[REF_LIST_1];
+#endif
+#if REF_ORDER        
+            memcpy(queueEntryPtr->ref_poc_array, picture_control_set_ptr->parent_pcs_ptr->av1RefSignal.ref_poc_array, 7 * sizeof(uint64_t));
+#endif
+#endif
+            queueEntryPtr->show_frame = picture_control_set_ptr->parent_pcs_ptr->show_frame;
+            queueEntryPtr->has_show_existing = picture_control_set_ptr->parent_pcs_ptr->has_show_existing;
+            queueEntryPtr->show_existing_loc = picture_control_set_ptr->parent_pcs_ptr->show_existing_loc;
+
+            //Store the output buffer in the Queue
+            queueEntryPtr->output_stream_wrapper_ptr = output_stream_wrapper_ptr;
+
+            // Note: last chance here to add more output meta data for an encoded picture -->
+
+            // collect output meta data
+            queueEntryPtr->out_meta_data = concat_eb_linked_list(ExtractPassthroughData(&(picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr)),
+                picture_control_set_ptr->parent_pcs_ptr->app_out_data_ll_head_ptr);
+            picture_control_set_ptr->parent_pcs_ptr->app_out_data_ll_head_ptr = (EbLinkedListNode *)EB_NULL;
+
+            // Calling callback functions to release the memory allocated for data linked list in the application
+            while (picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr != EB_NULL) {
+                appDataLLHeadTempPtr = picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr->next;
+                if (picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr->release_cb_fnc_ptr != EB_NULL) {
+                    picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr->release_cb_fnc_ptr(picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr);
+                }
+
+                picture_control_set_ptr->parent_pcs_ptr->data_ll_head_ptr = appDataLLHeadTempPtr;
+            }
+
+            if (sequence_control_set_ptr->static_config.speed_control_flag) {
+                // update speed control variables
+                eb_block_on_mutex(encode_context_ptr->sc_buffer_mutex);
+                encode_context_ptr->sc_frame_out++;
+                eb_release_mutex(encode_context_ptr->sc_buffer_mutex);
+            }
+
+            // Post Rate Control Taks
+            eb_post_full_object(rateControlTasksWrapperPtr);
+
+            //Release the Parent PCS then the Child PCS
+            eb_release_object(entropyCodingResultsPtr->picture_control_set_wrapper_ptr);//Child
+
+            // Release the Entropy Coding Result
+            eb_release_object(entropyCodingResultsWrapperPtr);
+
+#if ALT_REF_SUPPORT
         }
-
-        if (sequence_control_set_ptr->static_config.speed_control_flag) {
-            // update speed control variables
-            eb_block_on_mutex(encode_context_ptr->sc_buffer_mutex);
-            encode_context_ptr->sc_frame_out++;
-            eb_release_mutex(encode_context_ptr->sc_buffer_mutex);
-        }
-
-        // Post Rate Control Taks
-        eb_post_full_object(rateControlTasksWrapperPtr);
-
-        //Release the Parent PCS then the Child PCS
-        eb_release_object(entropyCodingResultsPtr->picture_control_set_wrapper_ptr);//Child
-
-        // Release the Entropy Coding Result
-        eb_release_object(entropyCodingResultsWrapperPtr);
-
-
+#endif
         //****************************************************
         // Process the head of the queue
         //****************************************************

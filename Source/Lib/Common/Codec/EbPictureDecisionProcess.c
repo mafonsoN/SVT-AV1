@@ -2117,9 +2117,6 @@ void  Av1GenerateRpsInfo(
                         picture_control_set_ptr->show_existing_loc = lay2_1_idx;
                     }
                     else if (pictureIndex == 6) { 
-#if ALT_REF_OVERLAY
-                        // AMIR: update the show_existing when there is an overlay
-#endif
                         picture_control_set_ptr->show_existing_loc = base2_idx;
                     }
                     else {
@@ -2925,9 +2922,6 @@ void  Av1GenerateRpsInfo(
                         picture_control_set_ptr->show_existing_loc = lay3_idx;
                     }
                     else if (pictureIndex == 14) {
-#if ALT_REF_OVERLAY
-                        // AMIR: update the show_existing when there is an overlay
-#endif
                         picture_control_set_ptr->show_existing_loc = base2_idx;
                     }
                     else {
@@ -3398,6 +3392,11 @@ void* picture_decision_kernel(void *input_ptr)
             queueEntryIndex += encode_context_ptr->picture_decision_reorder_queue_head_index;
             queueEntryIndex = (queueEntryIndex > PICTURE_DECISION_REORDER_QUEUE_MAX_DEPTH - 1) ? queueEntryIndex - PICTURE_DECISION_REORDER_QUEUE_MAX_DEPTH : queueEntryIndex;
             queueEntryPtr = encode_context_ptr->picture_decision_reorder_queue[queueEntryIndex];
+#if 0// ALT_REF_OVERLAY
+            if (picture_control_set_ptr->is_overlay)
+                queueEntryPtr->overlay_arrived = 1;
+            else
+#endif
             if (queueEntryPtr->parent_pcs_wrapper_ptr != NULL) {
                 CHECK_REPORT_ERROR_NC(
                     encode_context_ptr->app_callback_ptr,
@@ -3827,9 +3826,19 @@ void* picture_decision_kernel(void *input_ptr)
                             // At this stage we know the prediction structure and the location of ALT_REF pictures.
                             // For every ALTREF picture, there is an overlay picture. They extra pictures are released
                             // is_alt_ref flag is set for non-slice base layer pictures
-                            if (predPositionPtr->temporal_layer_index == 0 && picture_type != I_SLICE)
+                            if (predPositionPtr->temporal_layer_index == 0 && picture_type != I_SLICE) {
                                 picture_control_set_ptr->is_alt_ref = 1;
-
+                                ((PictureParentControlSet*)encode_context_ptr->pre_assignment_buffer[pictureIndex - 1]->object_ptr)->has_show_existing = EB_FALSE;
+                            }
+                            // release the overlay PCS for non alt ref pictures. First picture does not have overlay PCS
+                            else if (picture_control_set_ptr->picture_number){
+                                eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
+#if !BUG_FIX_PCS_LIVE_COUNT
+                                eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
+                                eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
+#endif
+                                picture_control_set_ptr->overlay_ppcs_ptr = EB_NULL;
+                            }
                             for (uint8_t loop_index = 0; loop_index <= picture_control_set_ptr->is_alt_ref; loop_index++) {
                                 // Set missing parts in the overlay  pictures
                                 if (loop_index == 1) {
@@ -3844,18 +3853,22 @@ void* picture_decision_kernel(void *input_ptr)
                                     picture_control_set_ptr->use_rps_in_sps         = EB_FALSE;
                                     picture_control_set_ptr->open_gop_cra_flag      = EB_FALSE;
                                     picture_control_set_ptr->pred_structure         = picture_control_set_ptr->alt_ref_ppcs_ptr->pred_structure;                                   
-                                    picture_control_set_ptr->pred_struct_ptr        = picture_control_set_ptr->alt_ref_ppcs_ptr->pred_struct_ptr; // AMIR: check this
+                                    picture_control_set_ptr->pred_struct_ptr        = picture_control_set_ptr->alt_ref_ppcs_ptr->pred_struct_ptr; 
                                     picture_control_set_ptr->hierarchical_levels    = picture_control_set_ptr->alt_ref_ppcs_ptr->hierarchical_levels;
                                     picture_control_set_ptr->hierarchical_layers_diff       = 0;
                                     picture_control_set_ptr->init_pred_struct_position_flag = EB_FALSE;
-                                    picture_control_set_ptr->pre_assignment_buffer_count    = picture_control_set_ptr->alt_ref_ppcs_ptr->pre_assignment_buffer_count;// AMIR: check this
+                                    picture_control_set_ptr->pre_assignment_buffer_count    = picture_control_set_ptr->alt_ref_ppcs_ptr->pre_assignment_buffer_count;
                                     picture_type = P_SLICE;
                                 }
 
 #endif
                             // Set the Slice type
                                 picture_control_set_ptr->slice_type = picture_type;
-                                ((EbPaReferenceObject*)picture_control_set_ptr->pa_reference_picture_wrapper_ptr->object_ptr)->slice_type = picture_control_set_ptr->slice_type;
+#if ALT_REF_OVERLAY
+                                // overlay picture do not have a seperate pa_reference_picture_wrapper_ptr and they share it with the alt_ref picture
+                                if (loop_index == 0)
+#endif
+                                    ((EbPaReferenceObject*)picture_control_set_ptr->pa_reference_picture_wrapper_ptr->object_ptr)->slice_type = picture_control_set_ptr->slice_type;
 
                                 switch (picture_type) {
 
@@ -3944,19 +3957,8 @@ void* picture_decision_kernel(void *input_ptr)
                                 picture_control_set_ptr->is_used_as_reference_flag = predPositionPtr->is_referenced;
 #endif
 
-#if 0 //ALT_REF_OVERLAY
-                                // AMIR: update the decode order
-                                // Set the Decode Order
-                                if ((context_ptr->mini_gop_idr_count[mini_gop_index] == 0) &&
-                                    (context_ptr->mini_gop_length[mini_gop_index] == picture_control_set_ptr->pred_struct_ptr->pred_struct_period) && !picture_control_set_ptr->is_overlay)
+#if !ALT_REF_OVERLAY
 
-                                {
-                                    picture_control_set_ptr->decode_order = encode_context_ptr->decode_base_number + predPositionPtr->decode_order;
-                                }
-                                else {
-                                    picture_control_set_ptr->decode_order = picture_control_set_ptr->picture_number_alt;
-                                }
-#else
                                 // Set the Decode Order
                                 if ((context_ptr->mini_gop_idr_count[mini_gop_index] == 0) &&
                                     (context_ptr->mini_gop_length[mini_gop_index] == picture_control_set_ptr->pred_struct_ptr->pred_struct_period))
@@ -3967,7 +3969,6 @@ void* picture_decision_kernel(void *input_ptr)
                                 else {
                                     picture_control_set_ptr->decode_order = picture_control_set_ptr->picture_number;
                                 }
-#endif
 
                                 encode_context_ptr->terminating_sequence_flag_received = (picture_control_set_ptr->end_of_sequence_flag == EB_TRUE) ?
                                     EB_TRUE :
@@ -3976,6 +3977,7 @@ void* picture_decision_kernel(void *input_ptr)
                                 encode_context_ptr->terminating_picture_number = (picture_control_set_ptr->end_of_sequence_flag == EB_TRUE) ?
                                     picture_control_set_ptr->picture_number :
                                     encode_context_ptr->terminating_picture_number;
+#endif
 
                                 preAssignmentBufferFirstPassFlag = EB_FALSE;
 
@@ -3987,9 +3989,6 @@ void* picture_decision_kernel(void *input_ptr)
                                     if (!(*fgn_random_seed_ptr))     // Random seed should not be zero
                                         *fgn_random_seed_ptr += 7391;
                                 }
-#if ALT_REF_OVERLAY
-                                // AMIR: update RPS for the overlay frame. Change the showexisting frame for the last non ref
-#endif
                                 Av1GenerateRpsInfo(
                                     picture_control_set_ptr,
                                     encode_context_ptr,
@@ -4257,12 +4256,17 @@ void* picture_decision_kernel(void *input_ptr)
                                             inputEntryPtr->list0.list[inputEntryPtr->list0.list_count++] = predPositionPtr->dep_list0.list[depIdx];
                                         }
                                     }
-
                                     inputEntryPtr->list1.list_count = predPositionPtr->dep_list1.list_count;
                                     for (depIdx = 0; depIdx < predPositionPtr->dep_list1.list_count; ++depIdx) {
                                         inputEntryPtr->list1.list[depIdx] = predPositionPtr->dep_list1.list[depIdx];
                                     }
+#if ALT_REF_OVERLAY
+                                    // add the overlay picture to the dependant list
+                                    inputEntryPtr->dep_list0_count = (picture_control_set_ptr->is_alt_ref) ? inputEntryPtr->list0.list_count + 1 : inputEntryPtr->list0.list_count;
+#else
                                     inputEntryPtr->dep_list0_count = inputEntryPtr->list0.list_count;
+#endif
+
 #if BASE_LAYER_REF
                                     if (picture_control_set_ptr->slice_type == I_SLICE)
                                         inputEntryPtr->dep_list1_count = inputEntryPtr->list1.list_count + sequence_control_set_ptr->extra_frames_to_ref_islice;
@@ -4334,14 +4338,23 @@ void* picture_decision_kernel(void *input_ptr)
 
                             picture_control_set_ptr->picture_number_alt = encode_context_ptr->picture_number_alt++;
 
-                            //// Set the Decode Order
-                            //if ((context_ptr->mini_gop_idr_count[mini_gop_index] == 0) &&
-                            //    (context_ptr->mini_gop_length[mini_gop_index] == picture_control_set_ptr->pred_struct_ptr->pred_struct_period) && !picture_control_set_ptr->is_overlay){
-                            //    picture_control_set_ptr->decode_order = encode_context_ptr->decode_base_number + picture_control_set_ptr->pred_struct_ptr->pred_struct_entry_ptr_array[picture_control_set_ptr->pred_struct_index]->decode_order;
-                            //}
-                            //else {
-                            //    picture_control_set_ptr->decode_order = picture_control_set_ptr->picture_number_alt;
-                            //}
+                            // Set the Decode Order
+                            if ((context_ptr->mini_gop_idr_count[mini_gop_index] == 0) &&
+                                (context_ptr->mini_gop_length[mini_gop_index] == picture_control_set_ptr->pred_struct_ptr->pred_struct_period) && !picture_control_set_ptr->is_overlay){
+                                picture_control_set_ptr->decode_order = encode_context_ptr->decode_base_number + picture_control_set_ptr->pred_struct_ptr->pred_struct_entry_ptr_array[picture_control_set_ptr->pred_struct_index]->decode_order;
+                            }
+                            else {
+                                picture_control_set_ptr->decode_order = picture_control_set_ptr->picture_number_alt;
+                            }
+
+                            encode_context_ptr->terminating_sequence_flag_received = (picture_control_set_ptr->end_of_sequence_flag == EB_TRUE) ?
+                                EB_TRUE :
+                                encode_context_ptr->terminating_sequence_flag_received;
+
+                            encode_context_ptr->terminating_picture_number = (picture_control_set_ptr->end_of_sequence_flag == EB_TRUE) ?
+                                picture_control_set_ptr->picture_number_alt :
+                                encode_context_ptr->terminating_picture_number;
+
 #else
                         for (pictureIndex = context_ptr->mini_gop_start_index[mini_gop_index]; pictureIndex <= context_ptr->mini_gop_end_index[mini_gop_index]; ++pictureIndex) {
                             // 2nd Loop over Pictures in the Pre-Assignment Buffer
@@ -4675,7 +4688,7 @@ void* picture_decision_kernel(void *input_ptr)
                                 }
                             }
 
-#if 0// ALT_REF_OVERLAY
+#if ALT_REF_OVERLAY
                             if (pictureIndex == context_ptr->mini_gop_end_index[mini_gop_index] + has_overlay) {
                                 // Increment the Decode Base Number
                                 encode_context_ptr->decode_base_number += context_ptr->mini_gop_length[mini_gop_index] + has_overlay;

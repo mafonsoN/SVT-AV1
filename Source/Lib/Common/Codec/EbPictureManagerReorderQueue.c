@@ -14,6 +14,8 @@ EbErrorType picture_decision_reorder_entry_ctor(
 
     (*entry_dbl_ptr)->picture_number = picture_number;
     (*entry_dbl_ptr)->parent_pcs_wrapper_ptr = (EbObjectWrapper *)EB_NULL;
-
+#if ALT_REF_OVERLAY
+    (*entry_dbl_ptr)->overlay_arrived = 0;
+#endif
     return EB_ErrorNone;
 }

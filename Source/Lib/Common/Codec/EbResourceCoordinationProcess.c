@@ -437,7 +437,9 @@ void* resource_coordination_kernel(void *input_ptr)
 
     uint32_t                         input_size = 0;
     EbObjectWrapper               *prevPictureControlSetWrapperPtr = 0;
-    
+#if ALT_REF_PRINTS
+    uint32_t loop_counter = 0;
+#endif
     for (;;) {
 
         // Tie instance_index to zero for now...
@@ -449,6 +451,13 @@ void* resource_coordination_kernel(void *input_ptr)
             &ebInputWrapperPtr);
         ebInputPtr = (EbBufferHeaderType*)ebInputWrapperPtr->object_ptr;
         sequence_control_set_ptr = context_ptr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr;
+#if ALT_REF_PRINTS
+        //printf("RC INPUT: POC:%lld\t%d\n",
+        //    loop_counter++,
+        //    (ebInputPtr->flags & EB_BUFFERFLAG_EOS)
+        //    );
+#endif
+
 
         // If config changes occured since the last picture began encoding, then
         //   prepare a new sequence_control_set_ptr containing the new changes and update the state
@@ -570,7 +579,6 @@ void* resource_coordination_kernel(void *input_ptr)
             picture_control_set_ptr->p_pcs_wrapper_ptr = picture_control_set_wrapper_ptr;
 
 #if ALT_REF_OVERLAY
-            
             picture_control_set_ptr->overlay_ppcs_ptr = NULL;
             picture_control_set_ptr->is_alt_ref       = 0;
             if (loop_index) {
@@ -684,8 +692,11 @@ void* resource_coordination_kernel(void *input_ptr)
 
             // Get Empty Reference Picture Object
             // AMIR: Do we need this for overlay pictures?
-#if 0//ALT_REF_OVERLAY
-            if (!picture_control_set_ptr->is_overlay)
+#if ALT_REF_OVERLAY
+            if (picture_control_set_ptr->is_overlay) {
+                picture_control_set_ptr->pa_reference_picture_wrapper_ptr = picture_control_set_ptr->alt_ref_ppcs_ptr->pa_reference_picture_wrapper_ptr;
+            }
+            else
 #endif
             {
                 eb_get_empty_object(

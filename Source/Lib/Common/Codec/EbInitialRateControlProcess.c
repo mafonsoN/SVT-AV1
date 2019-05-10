@@ -1751,11 +1751,11 @@ void* initial_rate_control_kernel(void *input_ptr)
             sequence_control_set_ptr = (SequenceControlSet*)picture_control_set_ptr->sequence_control_set_wrapper_ptr->object_ptr;
             encode_context_ptr = (EncodeContext*)sequence_control_set_ptr->encode_context_ptr;
 #if ALT_REF_PRINTS
-            //printf("IRC: POC:%lld\tPOCNew:%lld\tDecOrder:%lld\tIsOverlay:%d\n",
-            //    picture_control_set_ptr->picture_number,
-            //    picture_control_set_ptr->picture_number_alt,
-            //    picture_control_set_ptr->decode_order,
-            //    picture_control_set_ptr->is_overlay);
+            printf("IRC: POC:%lld\tPOCNew:%lld\tDecOrder:%lld\tIsOverlay:%d\n",
+                picture_control_set_ptr->picture_number,
+                picture_control_set_ptr->picture_number_alt,
+                picture_control_set_ptr->decode_order,
+                picture_control_set_ptr->is_overlay);
 #endif  
             // Mark picture when global motion is detected using ME results
             //reset intraCodedEstimationLcu
@@ -2045,38 +2045,28 @@ void* initial_rate_control_kernel(void *input_ptr)
                         DeriveBlockinessPresentFlag(
                             sequence_control_set_ptr,
                             picture_control_set_ptr);
+
+                        // Get Empty Reference Picture Object
+                        eb_get_empty_object(
+                            sequence_control_set_ptr->encode_context_ptr->reference_picture_pool_fifo_ptr,
+                            &reference_picture_wrapper_ptr);
 #if ALT_REF_OVERLAY
                         // AMIR: merge the if?
                         if (loop_index) {
-                            // Get Empty Reference Picture Object
-                            eb_get_empty_object(
-                                sequence_control_set_ptr->encode_context_ptr->reference_picture_pool_fifo_ptr,
-                                &reference_picture_wrapper_ptr);
                             picture_control_set_ptr->reference_picture_wrapper_ptr = reference_picture_wrapper_ptr;
-
                             // Give the new Reference a nominal live_count of 1
                             eb_object_inc_live_count(
                                 picture_control_set_ptr->reference_picture_wrapper_ptr,
                                 1);
                         }
                         else {
-                            // Get Empty Reference Picture Object
-                            eb_get_empty_object(
-                                sequence_control_set_ptr->encode_context_ptr->reference_picture_pool_fifo_ptr,
-                                &reference_picture_wrapper_ptr);
                             ((PictureParentControlSet*)(queueEntryPtr->parent_pcs_wrapper_ptr->object_ptr))->reference_picture_wrapper_ptr = reference_picture_wrapper_ptr;
-
                             // Give the new Reference a nominal live_count of 1
                             eb_object_inc_live_count(
                                 ((PictureParentControlSet*)(queueEntryPtr->parent_pcs_wrapper_ptr->object_ptr))->reference_picture_wrapper_ptr,
                                 1);
-
                         }
 #else
-                        // Get Empty Reference Picture Object
-                        eb_get_empty_object(
-                            sequence_control_set_ptr->encode_context_ptr->reference_picture_pool_fifo_ptr,
-                            &reference_picture_wrapper_ptr);
                         ((PictureParentControlSet*)(queueEntryPtr->parent_pcs_wrapper_ptr->object_ptr))->reference_picture_wrapper_ptr = reference_picture_wrapper_ptr;
 
                         // Give the new Reference a nominal live_count of 1
@@ -2098,6 +2088,14 @@ void* initial_rate_control_kernel(void *input_ptr)
                             &outputResultsWrapperPtr);
 
                         outputResultsPtr = (InitialRateControlResults*)outputResultsWrapperPtr->object_ptr;
+#if ALT_REF_PRINTS
+                        printf("IRC POST: POC:%lld\tPOCNew:%lld\tDecOrder:%lld\tIsOverlay:%d\t%d\n",
+                            picture_control_set_ptr->picture_number,
+                            picture_control_set_ptr->picture_number_alt,
+                            picture_control_set_ptr->decode_order,
+                            picture_control_set_ptr->is_overlay,
+                            encode_context_ptr->initial_rate_control_reorder_queue_head_index);
+#endif 
 #if ALT_REF_OVERLAY
                         if (loop_index)
                             outputResultsPtr->picture_control_set_wrapper_ptr = picture_control_set_ptr->p_pcs_wrapper_ptr;
