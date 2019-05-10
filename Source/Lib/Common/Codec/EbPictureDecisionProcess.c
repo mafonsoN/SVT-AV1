@@ -3380,9 +3380,9 @@ void* picture_decision_kernel(void *input_ptr)
         // can arrive out-of-display-order, so a the Picture Decision Reordering Queue is used to enforce processing of
         // pictures in display order
 #if  ALT_REF_PRINTS
-        printf("PD: POC:%lld\tIsOverlay:%d\n",
-            picture_control_set_ptr->picture_number,
-            picture_control_set_ptr->is_overlay);
+        //printf("PD: POC:%lld\tIsOverlay:%d\n",
+        //    picture_control_set_ptr->picture_number,
+        //    picture_control_set_ptr->is_overlay);
 #endif      
 
 #if ALT_REF_OVERLAY
@@ -3832,6 +3832,12 @@ void* picture_decision_kernel(void *input_ptr)
                             }
                             // release the overlay PCS for non alt ref pictures. First picture does not have overlay PCS
                             else if (picture_control_set_ptr->picture_number){
+#if  ALT_REF_PRINTS
+                                printf("PD: RELEASE POC:%lld\tIsOverlay:%d\t%lld\n",
+                                    picture_control_set_ptr->overlay_ppcs_ptr->picture_number,
+                                    picture_control_set_ptr->overlay_ppcs_ptr->is_overlay,
+                                    picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr->object_ptr);
+#endif
                                 eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
 #if !BUG_FIX_PCS_LIVE_COUNT
                                 eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
@@ -4725,7 +4731,12 @@ void* picture_decision_kernel(void *input_ptr)
                     // Remove the entry
                     if ((inputEntryPtr->dependent_count == 0) &&
                         (inputEntryPtr->input_object_ptr)) {
+
 #if !BUG_FIX_PCS_LIVE_COUNT
+#if ALT_REF_OVERLAY
+                        if(inputEntryPtr->p_pcs_ptr->is_alt_ref)
+                            eb_release_object(inputEntryPtr->p_pcs_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
+#endif
                         eb_release_object(inputEntryPtr->p_pcs_ptr->p_pcs_wrapper_ptr);
 #endif
                         // Release the nominal live_count value
