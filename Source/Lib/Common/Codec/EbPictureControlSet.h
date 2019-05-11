@@ -14390,6 +14390,22 @@ extern "C" {
         struct PictureParentControlSet      *overlay_ppcs_ptr;
         struct PictureParentControlSet      *alt_ref_ppcs_ptr;
 #endif
+#if MOVE_TF
+		uint8_t                               altref_strength;
+		int32_t                               pic_decision_reorder_queue_idx;
+		struct PictureParentControlSet       *temp_filt_pcs_list[10];
+		EbHandle temp_filt_done_semaphore;
+		EbHandle temp_filt_mutex;
+		EbHandle debug_mutex;
+
+		uint8_t  temp_filt_prep_done;
+		uint16_t temp_filt_seg_acc;		
+		EbPictureBufferDesc                  *new_enhanced_picture_ptr;
+		
+		int16_t                               tf_segments_total_count;
+		uint8_t                               tf_segments_column_count;
+		uint8_t                               tf_segments_row_count;
+#endif
     } PictureParentControlSet;
 
     typedef struct PictureControlSetInitData

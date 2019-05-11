@@ -9092,10 +9092,10 @@ EbErrorType motion_estimate_lcu(
             context_ptr->y_search_area_origin[listIndex][0] = y_search_area_origin;
 #endif
 
-#if ALTREF_FILTERING_SUPPORT
+#if   ALTREF_FILTERING_SUPPORT
 
-            context_ptr->search_area_width = search_area_width;
-            context_ptr->search_area_height = search_area_height;
+            context_ptr->adj_search_area_width = search_area_width;
+            context_ptr->adj_search_area_height = search_area_height;
 
 #endif
 

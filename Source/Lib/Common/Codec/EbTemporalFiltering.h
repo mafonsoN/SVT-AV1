@@ -23,5 +23,15 @@
 #include "EbBitstreamUnit.h"
 
 #define ALTREF_MAX_NFRAMES 10
+#if MOVE_TF
 
+
+EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
+#if ME_CLEAN
+struct MotionEstimationContext_s *me_context_ptr,
+#endif	
+	int32_t segment_index);
+
+#else
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr);
+#endif

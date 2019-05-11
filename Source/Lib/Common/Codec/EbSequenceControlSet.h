@@ -130,6 +130,10 @@ extern "C" {
 
         uint32_t                                rest_segment_column_count;
         uint32_t                                rest_segment_row_count;
+#if MOVE_TF
+		uint32_t                                tf_segment_column_count;
+		uint32_t                                tf_segment_row_count;
+#endif
 
         // Buffers
         uint32_t                                picture_control_set_pool_init_count;
