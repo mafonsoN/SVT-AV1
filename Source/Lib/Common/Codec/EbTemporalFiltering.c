@@ -58,9 +58,11 @@
 
 // Debug-specific defines
 #define DEBUG_TEMPORAL_FILTER 0
+#define DEBUG_MC 1
 #define VANILA_ME 0
 #define LIBAOM_FILTERING 0
 #define MC_CHROMA 1
+#define USE_16X16 1
 
 #define _MM_HINT_T2  1
 #define OD_DIVU_DMAX (1024)
@@ -210,6 +212,8 @@ void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_su
 
     int blk_idx;
 
+#if USE_16X16 == 0
+
     int me_sum_subblock_sad = 0;
     int max_me_sad = INT_MIN, min_me_sad = INT_MAX;
 
@@ -248,6 +252,20 @@ void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_su
         }
 
     }
+
+#else
+
+    *use_16x16_subblocks = 1;
+
+    for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++){
+        blk_fw[blk_idx] = me_16x16_subblock_sad[blk_idx] < THRES_LOW
+                          ? 2
+                          : me_16x16_subblock_sad[blk_idx] < THRES_HIGH ? 1 : 0;
+
+    }
+
+#endif
+
 }
 
 // get distortion (SAD) from ME context
@@ -1041,6 +1059,9 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     EbByte src_frame_index[COLOR_CHANNELS], src_altref_index[COLOR_CHANNELS];
     int i, j, k;
 
+    int blk_fw_hist[16] = {0};
+    int use_16x16_hist[2] = {0};
+
     PictureParentControlSet *picture_control_set_ptr_central;
     EbPictureBufferDesc *input_picture_ptr_central;
 
@@ -1056,6 +1077,15 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     uint32_t blk_rows = (uint32_t)(input_picture_ptr_central->height + BH - 1) / BH; // that fits to the 32x32 blocks are actually filtered
 
     int stride[COLOR_CHANNELS] = { input_picture_ptr_central->stride_y, input_picture_ptr_central->stride_cb, input_picture_ptr_central->stride_cr };
+
+#if DEBUG_MC
+    uint8_t* motion_compensated_pic[ALTREF_MAX_NFRAMES][COLOR_CHANNELS];
+    for(int iframe=0; iframe<altref_nframes; iframe++){
+        motion_compensated_pic[iframe][C_Y] = (uint8_t *)malloc(sizeof(uint8_t) * input_picture_ptr_central->luma_size);
+        motion_compensated_pic[iframe][C_U] = (uint8_t *)malloc(sizeof(uint8_t) * input_picture_ptr_central->chroma_size);
+        motion_compensated_pic[iframe][C_V] = (uint8_t *)malloc(sizeof(uint8_t) * input_picture_ptr_central->chroma_size);
+        }
+#endif
 
 #if !VANILA_ME
     // initialize chroma interpolated buffers and auxiliary buffers
@@ -1270,6 +1300,12 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                     // Get sub-block filter weights depending on the SAD
                     get_blk_fw_using_dist(&me_32x32_total_sad, me_16x16_subblock_sad, &use_16x16_subblocks, blk_fw);
 
+                    for (int ki = 0; ki < 16; ki++){
+                        blk_fw_hist[blk_fw[ki]] += 1;
+                    }
+
+                    use_16x16_hist[use_16x16_subblocks] += 1;
+
                     // Perform MC using the information acquired using the ME step
                     uni_motion_compensation(context_ptr,
                                         list_input_picture_ptr[frame_index],
@@ -1337,6 +1373,31 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                 print_block_uint8(pred[C_V], 16, 16, 16);
 #endif
 #endif
+
+#if DEBUG_MC
+    // Process luma
+    int byte = blk_y_offset;
+    for (i = 0, k = 0; i < BH; i++) {
+        for (j = 0; j < BW; j++, k++) {
+            motion_compensated_pic[frame_index][C_Y][byte] = pred[C_Y][k];
+            byte++;
+        }
+        byte += stride[C_Y] - BW;
+    }
+    // Process chroma
+    byte = blk_ch_offset;
+    for (i = 0, k = 0; i < blk_height_ch; i++) {
+        for (j = 0; j < blk_width_ch; j++, k++) {
+                // U
+                motion_compensated_pic[frame_index][C_U][byte] = pred[C_U][k];
+                // V
+                motion_compensated_pic[frame_index][C_V][byte] = pred[C_V][k];
+                byte++;
+            }
+        byte += stride[C_U] - (BW_CH);
+    }
+#endif
+
 
                 // ------------
                 // Step 2: temporal filtering using the motion compensated blocks
@@ -1426,19 +1487,34 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 #endif
     }
 
-#if 1
+#if DEBUG_MC
     {
-        char filename[30] = "filtered_frame_svtav1_";
-        char frame_index_str[4];
-        snprintf(frame_index_str, 4, "%d", (int)picture_control_set_ptr_central->picture_number);
-        strcat(filename, frame_index_str);
-        strcat(filename, ".yuv");
-        save_YUV_to_file(filename, alt_ref_buffer[C_Y], alt_ref_buffer[C_U], alt_ref_buffer[C_V],
-                         input_picture_ptr_central->width, input_picture_ptr_central->height,
-                         input_picture_ptr_central->stride_y, input_picture_ptr_central->stride_cb, input_picture_ptr_central->stride_cr,
-                         0, 0);
+        for(int iframe=0; iframe<altref_nframes; iframe++){
+            char filename[40] = "motion_compensated_frame_svtav1_";
+            char frame_index_str[4];
+            snprintf(frame_index_str, 4, "%d", (int)iframe);
+            strcat(filename, frame_index_str);
+            strcat(filename, ".yuv");
+            save_YUV_to_file(filename, motion_compensated_pic[iframe][C_Y], motion_compensated_pic[iframe][C_U], motion_compensated_pic[iframe][C_V],
+                             input_picture_ptr_central->width, input_picture_ptr_central->height,
+                             input_picture_ptr_central->stride_y, input_picture_ptr_central->stride_cb, input_picture_ptr_central->stride_cr,
+                             0, 0);
+        }
     }
+
+    for(int iframe=0; iframe<altref_nframes; iframe++){ free(motion_compensated_pic[iframe][C_Y]);
+        free(motion_compensated_pic[iframe][C_U]);
+        free(motion_compensated_pic[iframe][C_V]);
+    }
+
 #endif
+
+    for (int ki = 0; ki < 3; ki++){
+        printf("blk_fw_hist[%d] = %d\n", ki, blk_fw_hist[ki]);
+    }
+    for (int ki = 0; ki < 2; ki++){
+        printf("use_16x16_hist[%d] = %d\n", ki, use_16x16_hist[ki]);
+    }
 
 #if !VANILA_ME
 #if  ! ME_CLEAN
@@ -1450,7 +1526,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     
 	free(pos_b_buffer_ch[1]);
     free(pos_h_buffer_ch[1]);
-  //free(pos_j_buffer_ch[1]);//TODO: to fix this
+    free(pos_j_buffer_ch[1]);//TODO: to fix this
     
 	free(one_d_intermediate_results_buf_ch[0]);
     free(one_d_intermediate_results_buf_ch[1]);
@@ -1803,7 +1879,7 @@ int read_YUV_frame_from_file(uint8_t **alt_ref_buffer, int picture_number, int w
 #if MOVE_TF
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
 #if ME_CLEAN
-	 struct MotionEstimationContext_s *me_context_ptr,
+    MotionEstimationContext_t *me_context_ptr,
 #endif
 	int32_t segment_index) {
 #else
@@ -1922,8 +1998,20 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
 
     // TODO: for test purposes only - replacing the src buffers with the filtered frame (milestone 0)
     replace_src_pic_buffers(picture_control_set_ptr_central, alt_ref_buffer);
-	
-	
+
+#if 1
+        {
+            char filename[30] = "filtered_frame_svtav1_";
+            char frame_index_str[4];
+            snprintf(frame_index_str, 4, "%d", (int)picture_control_set_ptr_central->picture_number);
+            strcat(filename, frame_index_str);
+            strcat(filename, ".yuv");
+            save_YUV_to_file(filename, alt_ref_buffer[C_Y], alt_ref_buffer[C_U], alt_ref_buffer[C_V],
+                             input_picture_ptr->width, input_picture_ptr->height,
+                             input_picture_ptr->stride_y, input_picture_ptr->stride_cb, input_picture_ptr->stride_cr,
+                             0, 0);
+        }
+#endif
 
 #if MOVE_TF
 	    // signal that temp filt is done
