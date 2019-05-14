@@ -18,6 +18,7 @@
 #include <string.h>
 #include <assert.h>
 #include "EbPictureControlSet.h"
+#include "EbMotionEstimationProcess.h"
 #include "EbSequenceControlSet.h"
 #include "EbDefinitions.h"
 #include "EbBitstreamUnit.h"
@@ -28,8 +29,8 @@
 
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
 #if ME_CLEAN
-struct MotionEstimationContext_s *me_context_ptr,
-#endif	
+	MotionEstimationContext_t *me_context_ptr,
+#endif
 	int32_t segment_index);
 
 #else

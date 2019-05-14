@@ -26,6 +26,7 @@
 #include "EbLambdaRateTables.h"
 #include "EbPictureAnalysisProcess.h"
 #include "EbMcp.h"
+#include "av1me.h"
 
 #if ALTREF_FILTERING_SUPPORT
 
@@ -44,23 +45,36 @@
 #define BH_CH BH>>1
 #define BLK_PELS 4096  // Pixels in the block
 #define N_16X16_BLOCKS 16
+#define N_32X32_BLOCKS 4
 
 #define INT_MAX 2147483647 //max value for an int
 #define INT_MIN (-2147483647-1) //min value for an int
-#define THR_SHIFT 4
-#define THRES_LOW 768 // mean SAD of 3
-#define THRES_HIGH 1280 // mean SAD of 5
-#define THRES_DIFF_LOW 300
-#define THRES_DIFF_HIGH 450
+#define THR_SHIFT 2 // should be 2
 
 #define INIT_WEIGHT 2
 #define WEIGHT_MULTIPLIER 16
 
-// Debug-specific defines
+// ALT-REF debug-specific defines
 #define DEBUG_TEMPORAL_FILTER 0
+#define DEBUG_MC 0
 #define VANILA_ME 0
 #define LIBAOM_FILTERING 0
 #define MC_CHROMA 1
+#define USE_ONLY_16X16 1
+#define USE_ONLY_32X32 0
+#define LIBAOM_VF 1
+
+#if LIBAOM_VF
+#define THRES_LOW 10000
+#define THRES_HIGH 20000
+#define THRES_DIFF_LOW 6000
+#define THRES_DIFF_HIGH 12000
+#else
+#define THRES_LOW 768 // mean SAD of 3
+#define THRES_HIGH 1280 // mean SAD of 5
+#define THRES_DIFF_LOW 300
+#define THRES_DIFF_HIGH 450
+#endif
 
 #define _MM_HINT_T2  1
 #define OD_DIVU_DMAX (1024)
@@ -86,6 +100,12 @@ static const uint32_t subblock_xy_16x16[N_16X16_BLOCKS][2] = { {0,0}, {0,1}, {0,
                                                                {1,0}, {1,1}, {1,2}, {1,3},
                                                                {2,0}, {2,1}, {2,2}, {2,3},
                                                                {3,0}, {3,1}, {3,2}, {3,3} };
+
+static const uint32_t subblocks_from32x32_to_16x16[N_16X16_BLOCKS] = { 0, 0, 1, 1, 0, 0, 1, 1, 2, 2, 3, 3, 2, 2, 3, 3 };
+
+static const uint32_t index_16x16_from_subindexes[4][4] = { {0, 1, 4, 5}, {2, 3, 6, 7}, {8, 9, 12, 13}, {10, 11, 14, 15} };
+
+extern aom_variance_fn_ptr_t mefn_ptr[BlockSizeS_ALL];
 
 // Debug function
 void print_block_uint8(EbByte src, int width, int height, int stride){
@@ -206,56 +226,158 @@ static void populate_list_with_value(int *list, int nelements, const int value){
 }
 
 // get block filter weights using a distance metric
-void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_subblock_sad, int *use_16x16_subblocks, int *blk_fw){
+void get_blk_fw_using_dist(int const *me_32x32_subblock_sad, int const *me_16x16_subblock_sad, int *use_16x16_subblocks, int *blk_fw){
 
-    int blk_idx;
+    int blk_idx, idx_32x32;
 
-    int me_sum_subblock_sad = 0;
-    int max_me_sad = INT_MIN, min_me_sad = INT_MAX;
+    int me_sum_16x16_subblock_sad[4] = {0};
+    int max_me_sad[4] = {INT_MIN, INT_MIN, INT_MIN, INT_MIN}, min_me_sad[4] = {INT_MAX, INT_MAX, INT_MAX, INT_MAX};
+
+#if USE_ONLY_16X16
+
+    for(idx_32x32 = 0; idx_32x32 < 4; idx_32x32++) {
+
+            // split into 16x16 sub-blocks
+
+            use_16x16_subblocks[idx_32x32] = 1;
+
+            for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
+
+                if (subblocks_from32x32_to_16x16[blk_idx] == idx_32x32) {
+                    blk_fw[blk_idx] = me_16x16_subblock_sad[blk_idx] < THRES_LOW
+                                      ? 2
+                                      : me_16x16_subblock_sad[blk_idx] < THRES_HIGH ? 1 : 0;
+                }
+            }
+
+    }
+
+#else
+
+#if USE_ONLY_32X32
+
+    for(idx_32x32 = 0; idx_32x32 < 4; idx_32x32++) {
+
+            // split into 32x32 sub-blocks
+
+            use_16x16_subblocks[idx_32x32] = 0;
+
+            int weight = me_32x32_subblock_sad[idx_32x32] < (THRES_LOW << THR_SHIFT)
+                         ? 2
+                         : me_32x32_subblock_sad[idx_32x32] < (THRES_HIGH << THR_SHIFT) ? 1 : 0;
+
+            for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
+                if (subblocks_from32x32_to_16x16[blk_idx] == idx_32x32)
+                    blk_fw[blk_idx] = weight;
+            }
+
+    }
+
+#else
 
     for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
-        if (min_me_sad > me_16x16_subblock_sad[blk_idx])
-            min_me_sad = me_16x16_subblock_sad[blk_idx];
-        if (max_me_sad < me_16x16_subblock_sad[blk_idx])
-            max_me_sad = me_16x16_subblock_sad[blk_idx];
-        me_sum_subblock_sad += me_16x16_subblock_sad[blk_idx];
+
+        idx_32x32 = subblocks_from32x32_to_16x16[blk_idx];
+
+        if (min_me_sad[idx_32x32] > me_16x16_subblock_sad[blk_idx])
+            min_me_sad[idx_32x32] = me_16x16_subblock_sad[blk_idx];
+        if (max_me_sad[idx_32x32] < me_16x16_subblock_sad[blk_idx])
+            max_me_sad[idx_32x32] = me_16x16_subblock_sad[blk_idx];
+
+        me_sum_16x16_subblock_sad[idx_32x32] += me_16x16_subblock_sad[blk_idx];
     }
 
-    if (((*me_32x32_total_sad * 15 < (me_sum_subblock_sad << 4)) && max_me_sad - min_me_sad < THRES_DIFF_HIGH) ||
-        ((*me_32x32_total_sad * 14 < (me_sum_subblock_sad << 4)) && max_me_sad - min_me_sad < THRES_DIFF_LOW)) {
+    for(idx_32x32 = 0; idx_32x32 < 4; idx_32x32++) {
 
-        // do not consider MC and weighting at a sub-block level
+        if (((me_32x32_subblock_sad[idx_32x32] * 15 < (me_sum_16x16_subblock_sad[idx_32x32] << 4)) &&
+             max_me_sad - min_me_sad < THRES_DIFF_HIGH) ||
+            ((me_32x32_subblock_sad[idx_32x32] * 14 < (me_sum_16x16_subblock_sad[idx_32x32] << 4)) &&
+             max_me_sad - min_me_sad < THRES_DIFF_LOW)) {
 
-        *use_16x16_subblocks = 0;
+            // split into 32x32 sub-blocks
 
-        int weight = *me_32x32_total_sad < (THRES_LOW << THR_SHIFT)
-                    ? 2
-                    : *me_32x32_total_sad < (THRES_HIGH << THR_SHIFT) ? 1 : 0;
+            use_16x16_subblocks[idx_32x32] = 0;
 
-        populate_list_with_value(blk_fw, N_16X16_BLOCKS, weight);
+            int weight = me_32x32_subblock_sad[idx_32x32] < (THRES_LOW << THR_SHIFT)
+                         ? 2
+                         : me_32x32_subblock_sad[idx_32x32] < (THRES_HIGH << THR_SHIFT) ? 1 : 0;
 
-    } else {
+            for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
+                if (subblocks_from32x32_to_16x16[blk_idx] == idx_32x32)
+                    blk_fw[blk_idx] = weight;
+            }
 
-        // split into 16x16 sub-blocks
+        } else {
 
-        *use_16x16_subblocks = 1;
+            // split into 16x16 sub-blocks
 
-        for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++){
-            blk_fw[blk_idx] = me_16x16_subblock_sad[blk_idx] < THRES_LOW
-                              ? 2
-                              : me_16x16_subblock_sad[blk_idx] < THRES_HIGH ? 1 : 0;
+            use_16x16_subblocks[idx_32x32] = 1;
+
+            for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
+
+                if (subblocks_from32x32_to_16x16[blk_idx] == idx_32x32) {
+                    blk_fw[blk_idx] = me_16x16_subblock_sad[blk_idx] < THRES_LOW
+                                      ? 2
+                                      : me_16x16_subblock_sad[blk_idx] < THRES_HIGH ? 1 : 0;
+                }
+            }
 
         }
-
     }
+
+#endif
+
+#endif
+
 }
 
 // get distortion (SAD) from ME context
-void get_ME_distortion(MeContext *context_ptr, int* me_32x32_total_sad, int *me_16x16_subblock_sad){
+void get_ME_distortion(MeContext *context_ptr,
+                        int* me_32x32_subblock_sad,
+                        int *me_16x16_subblock_sad,
+                        uint8_t* pred_Y,
+                        int stride_pred_Y,
+                        uint8_t* src_Y,
+                        int stride_src_Y){
 
     uint32_t mv_index;
+    unsigned int sse;
+    unsigned int variance;
 
-    *me_32x32_total_sad = 0;
+    uint8_t * pred_Y_ptr;
+    uint8_t * src_Y_ptr;
+
+#if LIBAOM_VF
+
+    for(uint32_t index_32x32 = 0; index_32x32 < 4; index_32x32++) {
+
+        int row = subblock_xy_32x32[index_32x32][0];
+        int col = subblock_xy_32x32[index_32x32][1];
+
+        pred_Y_ptr = pred_Y + 32*row*stride_pred_Y + 32*col;
+        src_Y_ptr = src_Y + 32*row*stride_src_Y + 32*col;
+
+        const aom_variance_fn_ptr_t *fn_ptr = &mefn_ptr[BLOCK_32X32];
+
+        me_32x32_subblock_sad[index_32x32] = fn_ptr->vf(pred_Y_ptr, stride_pred_Y, src_Y_ptr, stride_src_Y, &sse );
+
+    }
+
+    for(uint32_t index_16x16 = 0; index_16x16 < 16; index_16x16++) {
+
+        int row = subblock_xy_16x16[index_16x16][0];
+        int col = subblock_xy_16x16[index_16x16][1];
+
+        pred_Y_ptr = pred_Y + 16*row*stride_pred_Y + 16*col;
+        src_Y_ptr = src_Y + 16*row*stride_src_Y + 16*col;
+
+        const aom_variance_fn_ptr_t *fn_ptr = &mefn_ptr[BLOCK_16X16];
+
+        me_16x16_subblock_sad[index_16x16] = fn_ptr->vf(pred_Y_ptr, stride_pred_Y, src_Y_ptr, stride_src_Y, &sse );
+
+    }
+
+#else
 
     // Block 32x32 distortion
     for(uint32_t pu_index = 1; pu_index <= 4; pu_index++){
@@ -263,7 +385,7 @@ void get_ME_distortion(MeContext *context_ptr, int* me_32x32_total_sad, int *me_
         mv_index = pu_index;
 
         // sad
-        *me_32x32_total_sad += context_ptr->p_best_sad32x32[mv_index-1];
+        me_32x32_subblock_sad[pu_index-1] = context_ptr->p_best_sad32x32[mv_index-1];
 
 #if 0
         printf("[SAD on 32x32 block = %d]\n", context_ptr->p_best_sad32x32[mv_index-1]);
@@ -282,6 +404,8 @@ void get_ME_distortion(MeContext *context_ptr, int* me_32x32_total_sad, int *me_
         printf("[SAD on 16x16 block = %d]\n", me_16x16_subblock_sad[pu_index-5]);
 #endif
     }
+
+#endif
 
 }
 
@@ -422,49 +546,45 @@ static INLINE int get_subblock_filter_weight(unsigned int y,
                                     unsigned int x,
                                     unsigned int block_height,
                                     unsigned int block_width,
-                                    const int *blk_fw,
-                                    int use_16x16_subblocks) {
+                                    const int *blk_fw) {
 
-    if (!use_16x16_subblocks)
-        // blk_fw[0] ~ blk_fw[3] are the same.
-        return blk_fw[0];
-
-    const double four_thirds = 1.333333;
+    const int block_width_div4 = block_width / 4;
+    const int block_height_div4 = block_height / 4;
 
     int filter_weight = 0;
-    if (y < block_height / 4) {
-        if (x < block_width / 4)
+    if (y < block_height_div4) {
+        if (x < block_width_div4)
             filter_weight = blk_fw[0];
-        else if(x < block_width / 2)
+        else if(x < block_width_div4*2)
             filter_weight = blk_fw[1];
-        else if(x < (double)block_width / four_thirds)
+        else if(x < block_width_div4*3)
             filter_weight = blk_fw[2];
         else
             filter_weight = blk_fw[3];
-    } else if(y < block_height / 2){
-        if (x < block_width / 4)
+    } else if(y < block_height_div4*2){
+        if (x < block_width_div4)
             filter_weight = blk_fw[4];
-        else if(x < block_width / 2)
+        else if(x < block_width_div4*2)
             filter_weight = blk_fw[5];
-        else if(x < (double)block_width / four_thirds)
+        else if(x < block_width_div4*3)
             filter_weight = blk_fw[6];
         else
             filter_weight = blk_fw[7];
-    } else if(y < (double)block_height / four_thirds){
-        if (x < block_width / 4)
+    } else if(y < block_height_div4*3){
+        if (x < block_width_div4)
             filter_weight = blk_fw[8];
-        else if(x < block_width / 2)
+        else if(x < block_width_div4*2)
             filter_weight = blk_fw[9];
-        else if(x < (double)block_width / four_thirds)
+        else if(x < block_width_div4*3)
             filter_weight = blk_fw[10];
         else
             filter_weight = blk_fw[11];
     } else {
-        if (x < block_width / 4)
+        if (x < block_width_div4)
             filter_weight = blk_fw[12];
-        else if(x < block_width / 2)
+        else if(x < block_width_div4*2)
             filter_weight = blk_fw[13];
-        else if(x < (double)block_width / four_thirds)
+        else if(x < block_width_div4*3)
             filter_weight = blk_fw[14];
         else
             filter_weight = blk_fw[15];
@@ -511,7 +631,7 @@ static INLINE void calculate_squared_errors(const uint8_t *s,
     for (i = 0; i < h; i++) {
         for (j = 0; j < w; j++) {
             const int16_t diff = s[i * s_stride + j] - p[i * p_stride + j];
-            diff_sse[idx] = (uint16_t) diff * diff;
+            diff_sse[idx] = diff * diff;
             idx++;
         }
     }
@@ -531,8 +651,7 @@ void apply_filtering(EbByte *src,
                     int ss_x, // chroma sub-sampling in x
                     int ss_y, // chroma sub-sampling in y
                     int strength,
-                    const int *blk_fw, // sub-block filter weights
-                    int use_16x16_subblocks) {
+                    const int *blk_fw){ // sub-block filter weights
 
     unsigned int i, j, k, m;
     int idx, idy;
@@ -566,7 +685,7 @@ void apply_filtering(EbByte *src,
 
             const int pixel_value = pred_y[i * stride_pred[0] + j];
 
-            int filter_weight = get_subblock_filter_weight(i, j, block_height, block_width, blk_fw, use_16x16_subblocks);
+            int filter_weight = get_subblock_filter_weight(i, j, block_height, block_width, blk_fw);
 
             // non-local mean approach
             int y_index = 0;
@@ -596,10 +715,6 @@ void apply_filtering(EbByte *src,
             y_index += 2;
 
             modifier = adjust_modifier(modifier, y_index, rounding, strength, filter_weight);
-
-            if(modifier==0){
-                modifier=0;
-            }
 
             count_y[k] += modifier;
             accum_y[k] += modifier * pixel_value;
@@ -832,18 +947,20 @@ void tf_inter_prediction(
 }
 #endif
 
-// Unidirectional motion compensation using open-loop ME results and MC
-void uni_motion_compensation(MeContext* context_ptr,
-                            EbPictureBufferDesc *pic_ptr_ref,
-                            EbByte *pred,
-                            uint32_t sb_origin_x,
-                            uint32_t sb_origin_y,
-                            uint8_t **pos_b_buffer_ch,
-                            uint8_t **pos_h_buffer_ch,
-                            uint8_t **pos_j_buffer_ch,
-                            uint8_t **one_d_intermediate_results_buf_ch,
-                            int use_16x16_subblocks,
-                            EbAsm asm_type){
+void compensate_block(MeContext* context_ptr,
+                        EbByte *pred,
+                        int use_16x16_subblocks,
+                        uint32_t subblock_h,
+                        uint32_t subblock_w,
+                        uint32_t pu_index,
+                        uint32_t interpolated_full_stride_ch,
+                        uint32_t interpolated_stride_ch,
+                        uint8_t ** integer_buffer_ptr_ch,
+                        uint8_t **pos_b_buffer_ch,
+                        uint8_t **pos_h_buffer_ch,
+                        uint8_t **pos_j_buffer_ch,
+                        uint8_t **one_d_intermediate_results_buf_ch,
+                        EbAsm asm_type){
 
     int16_t first_ref_pos_x;
     int16_t first_ref_pos_y;
@@ -859,30 +976,178 @@ void uni_motion_compensation(MeContext* context_ptr,
     int32_t first_search_region_index_pos_h;
     int32_t first_search_region_index_pos_j;
     EbByte  pred_ptr[COLOR_CHANNELS];
-    int     row, col;
+    uint32_t mv_index;
+    uint32_t pu_index_min;
+    int row, col;
+
+    // ----- compensate luma ------
+
+    if(use_16x16_subblocks) {
+        pu_index_min = 5;
+        row = subblock_xy_16x16[pu_index - pu_index_min][0];
+        col = subblock_xy_16x16[pu_index - pu_index_min][1];
+    }else{
+        pu_index_min = 1;
+        row = subblock_xy_32x32[pu_index - pu_index_min][0];
+        col = subblock_xy_32x32[pu_index - pu_index_min][1];
+    }
+
+    pred_ptr[0] = pred[0] + row*subblock_h*BW + col*subblock_w;
+    pred_ptr[1] = pred[1] + row*(subblock_h>>1)*(BW_CH) + col*(subblock_h>>1);
+    pred_ptr[2] = pred[2] + row*(subblock_h>>1)*(BW_CH) + col*(subblock_h>>1);
+
+    // get motion vectors
+    if (use_16x16_subblocks) {
+        mv_index = tab16x16[pu_index - pu_index_min];
+
+        first_ref_pos_x = _MVXT(context_ptr->p_best_mv16x16[mv_index]);
+        first_ref_pos_y = _MVYT(context_ptr->p_best_mv16x16[mv_index]);
+    }
+    else {
+        mv_index = pu_index - pu_index_min;
+
+        first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[mv_index]);
+        first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[mv_index]);
+    }
+
+    first_ref_integ_pos_x = (first_ref_pos_x >> 2);
+    first_ref_integ_pos_y = (first_ref_pos_y >> 2);
+    first_ref_frac_pos_x = (uint8_t)(first_ref_pos_x & 0x03);
+    first_ref_frac_pos_y = (uint8_t)(first_ref_pos_y & 0x03);
+
+    first_ref_frac_pos = (uint8_t)(first_ref_frac_pos_x + (first_ref_frac_pos_y << 2)); // TODO: check if this right shift in an unsigned variable is correct
+
+    x_first_search_index = (int32_t)first_ref_integ_pos_x - context_ptr->x_search_area_origin[0][0];
+    y_first_search_index = (int32_t)first_ref_integ_pos_y - context_ptr->y_search_area_origin[0][0];
+    first_search_region_index_pos_integ = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1)) + (int32_t)context_ptr->interpolated_full_stride[0][0] * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
+    first_search_region_index_pos_b = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
+    first_search_region_index_pos_h = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
+    first_search_region_index_pos_j = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
+
+    uint8_t *comp_block;
+    uint32_t comp_block_stride;
+    uni_pred_averaging(pu_index, // pu_index
+                       EB_FALSE,
+                       first_ref_frac_pos,
+                       subblock_w, // pu_width
+                       subblock_h, // pu_height
+                       &(context_ptr->integer_buffer_ptr[0][0][first_search_region_index_pos_integ]),
+                       &(context_ptr->pos_b_buffer[0][0][first_search_region_index_pos_b]),
+                       &(context_ptr->pos_h_buffer[0][0][first_search_region_index_pos_h]),
+                       &(context_ptr->pos_j_buffer[0][0][first_search_region_index_pos_j]),
+                       context_ptr->interpolated_stride,
+                       context_ptr->interpolated_full_stride[0][0],
+                       &(context_ptr->one_d_intermediate_results_buf0[0]),
+                       &comp_block,
+                       &comp_block_stride,
+                       asm_type);
+
+#if 0
+    save_Y_to_file("sub_block_Y_MC.yuv", comp_block,
+                   subblock_w, subblock_h,
+                       comp_block_stride, 0, 0);
+#endif
+    copy_pixels(pred_ptr[0], BW, comp_block, comp_block_stride, subblock_w, subblock_h);
+
+    // ----- compensate chroma ------
+
+#if MC_CHROMA
+
+    // get motion vectors
+    if (use_16x16_subblocks) {
+        first_ref_pos_x = (int16_t)(_MVXT(context_ptr->p_best_mv16x16[mv_index])/2);
+        first_ref_pos_y = (int16_t)(_MVYT(context_ptr->p_best_mv16x16[mv_index])/2);
+    }
+    else {
+        first_ref_pos_x = (int16_t)(_MVXT(context_ptr->p_best_mv32x32[mv_index])/2);
+        first_ref_pos_y = (int16_t)(_MVYT(context_ptr->p_best_mv32x32[mv_index])/2);
+    }
+
+    first_ref_integ_pos_x = (first_ref_pos_x >> 2);
+    first_ref_integ_pos_y = (first_ref_pos_y >> 2);
+    first_ref_frac_pos_x = (uint8_t)(first_ref_pos_x & 0x03);
+    first_ref_frac_pos_y = (uint8_t)(first_ref_pos_y & 0x03);
+
+    first_ref_frac_pos = (uint8_t)(first_ref_frac_pos_x + (first_ref_frac_pos_y << 2));
+
+    x_first_search_index = (int32_t)first_ref_integ_pos_x - ((context_ptr->x_search_area_origin[0][0])/2);
+    y_first_search_index = (int32_t)first_ref_integ_pos_y - ((context_ptr->y_search_area_origin[0][0])/2);
+    first_search_region_index_pos_integ = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1)) + interpolated_full_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
+    first_search_region_index_pos_b = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + interpolated_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
+    first_search_region_index_pos_h = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + interpolated_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
+    first_search_region_index_pos_j = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + interpolated_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
+
+    assert(first_search_region_index_pos_b>=0);
+    assert(first_search_region_index_pos_h>=0);
+    assert(first_search_region_index_pos_j>=0);
+
+    // compensate U
+    uni_pred_averaging(pu_index, // pu_index
+                       EB_TRUE,
+                       first_ref_frac_pos,
+                       subblock_w>>1, // pu_width
+                       subblock_h>>1, // pu_height
+                       &(integer_buffer_ptr_ch[0][first_search_region_index_pos_integ]),
+                       &(pos_b_buffer_ch[0][first_search_region_index_pos_b]),
+                       &(pos_h_buffer_ch[0][first_search_region_index_pos_h]),
+                       &(pos_j_buffer_ch[0][first_search_region_index_pos_j]),
+                       interpolated_stride_ch,
+                       interpolated_full_stride_ch,
+                       &(one_d_intermediate_results_buf_ch[0][0]),
+                       &comp_block,
+                       &comp_block_stride,
+                       asm_type);
+
+    copy_pixels(pred_ptr[1], BW_CH, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
+
+#if 0
+    save_Y_to_file("sub_block_U_MC.yuv", comp_block,
+                       subblock_w>>1, subblock_h>>1,
+                       comp_block_stride, 0, 0);
+#endif
+    // compensate V
+    uni_pred_averaging(pu_index, // pu_index
+                       EB_TRUE,
+                       first_ref_frac_pos,
+                       subblock_w>>1, // pu_width
+                       subblock_h>>1, // pu_height
+                       &(integer_buffer_ptr_ch[1][first_search_region_index_pos_integ]),
+                       &(pos_b_buffer_ch[1][first_search_region_index_pos_b]),
+                       &(pos_h_buffer_ch[1][first_search_region_index_pos_h]),
+                       &(pos_j_buffer_ch[1][first_search_region_index_pos_j]),
+                       interpolated_stride_ch,
+                       interpolated_full_stride_ch,
+                       &(one_d_intermediate_results_buf_ch[1][0]),
+                       &comp_block,
+                       &comp_block_stride,
+                       asm_type);
+
+    copy_pixels(pred_ptr[2], BW_CH, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
+#endif
+
+}
+
+// Unidirectional motion compensation using open-loop ME results and MC
+void uni_motion_compensation(MeContext* context_ptr,
+                            EbPictureBufferDesc *pic_ptr_ref,
+                            EbByte *pred,
+                            uint32_t sb_origin_x,
+                            uint32_t sb_origin_y,
+                            uint8_t **pos_b_buffer_ch,
+                            uint8_t **pos_h_buffer_ch,
+                            uint8_t **pos_j_buffer_ch,
+                            uint8_t **one_d_intermediate_results_buf_ch,
+                            int *use_16x16_subblocks,
+                            EbAsm asm_type){
+
+    uint32_t pu_index;
 
     uint8_t *input_padded_ch[2];
     uint8_t *integer_buffer_ptr_ch[2];
     uint32_t interpolated_stride_ch = MAX_SEARCH_AREA_WIDTH_CH;
     uint32_t interpolated_full_stride_ch = pic_ptr_ref->stride_cb;
 
-    uint32_t mv_index;
-    uint32_t pu_index_min, pu_index_max;
     uint16_t subblock_w, subblock_h;
-
-    if(use_16x16_subblocks){
-        // use 16x16 sub-blocks
-        pu_index_min = 5;
-        pu_index_max = 20;
-        subblock_w = 16;
-        subblock_h = 16;
-    }else{
-        // use 32x32 blocks
-        pu_index_min = 1;
-        pu_index_max = 4;
-        subblock_w = 32;
-        subblock_h = 32;
-    }
 
     // ----- Interpolate chroma search area ------
 #if 1//CHKN
@@ -959,150 +1224,58 @@ void uni_motion_compensation(MeContext* context_ptr,
 #endif
     // ----- Loop over all sub-blocks -----
 
-    for(uint32_t pu_index = pu_index_min; pu_index <= pu_index_max; pu_index++){
+    for(uint32_t idx_32x32 = 0; idx_32x32 < 4; idx_32x32++){
+    //for(uint32_t pu_index = pu_index_min; pu_index <= pu_index_max; pu_index++){
 
-        // ----- compensate luma ------
+        if(use_16x16_subblocks[idx_32x32] == 0){
 
-        if(use_16x16_subblocks) {
-            row = subblock_xy_16x16[pu_index - pu_index_min][0];
-            col = subblock_xy_16x16[pu_index - pu_index_min][1];
+            pu_index = idx_32x32 + 1;
+            subblock_h = 32;
+            subblock_w = 32;
+
+            compensate_block(context_ptr,
+                             pred,
+                             use_16x16_subblocks[idx_32x32],
+                             subblock_h,
+                             subblock_w,
+                             pu_index,
+                             interpolated_full_stride_ch,
+                             interpolated_stride_ch,
+                             integer_buffer_ptr_ch,
+                             pos_b_buffer_ch,
+                             pos_h_buffer_ch,
+                             pos_j_buffer_ch,
+                             one_d_intermediate_results_buf_ch,
+                             asm_type);
+
+
         }else{
-            row = subblock_xy_32x32[pu_index - pu_index_min][0];
-            col = subblock_xy_32x32[pu_index - pu_index_min][1];
+
+            for(uint32_t idx_16x16 = 0; idx_16x16 < 4; idx_16x16++){
+
+                uint32_t idx = index_16x16_from_subindexes[idx_32x32][idx_16x16];
+                pu_index = idx + 5;
+                subblock_h = 16;
+                subblock_w = 16;
+
+                compensate_block(context_ptr,
+                                 pred,
+                                 use_16x16_subblocks[idx_32x32],
+                                 subblock_h,
+                                 subblock_w,
+                                 pu_index,
+                                 interpolated_full_stride_ch,
+                                 interpolated_stride_ch,
+                                 integer_buffer_ptr_ch,
+                                 pos_b_buffer_ch,
+                                 pos_h_buffer_ch,
+                                 pos_j_buffer_ch,
+                                 one_d_intermediate_results_buf_ch,
+                                 asm_type);
+
+            }
+
         }
-
-        pred_ptr[0] = pred[0] + row*subblock_h*BW + col*subblock_w;
-        pred_ptr[1] = pred[1] + row*(subblock_h>>1)*(BW_CH) + col*(subblock_h>>1);
-        pred_ptr[2] = pred[2] + row*(subblock_h>>1)*(BW_CH) + col*(subblock_h>>1);
-
-        // get motion vectors
-        if (use_16x16_subblocks) {
-            mv_index = tab16x16[pu_index - pu_index_min];
-
-            first_ref_pos_x = _MVXT(context_ptr->p_best_mv16x16[mv_index]);
-            first_ref_pos_y = _MVYT(context_ptr->p_best_mv16x16[mv_index]);
-        }
-        else {
-            mv_index = pu_index - pu_index_min;
-
-            first_ref_pos_x = _MVXT(context_ptr->p_best_mv32x32[mv_index]);
-            first_ref_pos_y = _MVYT(context_ptr->p_best_mv32x32[mv_index]);
-        }
-
-        first_ref_integ_pos_x = (first_ref_pos_x >> 2); // TODO: check if this left shift in an unsigned mv is correct
-        first_ref_integ_pos_y = (first_ref_pos_y >> 2);
-        first_ref_frac_pos_x = (uint8_t)(first_ref_pos_x & 0x03);
-        first_ref_frac_pos_y = (uint8_t)(first_ref_pos_y & 0x03);
-
-        first_ref_frac_pos = (uint8_t)(first_ref_frac_pos_x + (first_ref_frac_pos_y << 2)); // TODO: check if this right shift in an unsigned variable is correct
-
-        x_first_search_index = (int32_t)first_ref_integ_pos_x - context_ptr->x_search_area_origin[0][0];
-        y_first_search_index = (int32_t)first_ref_integ_pos_y - context_ptr->y_search_area_origin[0][0];
-        first_search_region_index_pos_integ = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1)) + (int32_t)context_ptr->interpolated_full_stride[0][0] * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
-        first_search_region_index_pos_b = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
-        first_search_region_index_pos_h = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
-        first_search_region_index_pos_j = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + (int32_t)context_ptr->interpolated_stride * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
-
-        uint8_t *comp_block;
-        uint32_t comp_block_stride;
-        uni_pred_averaging(pu_index, // pu_index
-                           EB_FALSE,
-                           first_ref_frac_pos,
-                           subblock_w, // pu_width
-                           subblock_h, // pu_height
-                           &(context_ptr->integer_buffer_ptr[0][0][first_search_region_index_pos_integ]),
-                           &(context_ptr->pos_b_buffer[0][0][first_search_region_index_pos_b]),
-                           &(context_ptr->pos_h_buffer[0][0][first_search_region_index_pos_h]),
-                           &(context_ptr->pos_j_buffer[0][0][first_search_region_index_pos_j]),
-                           context_ptr->interpolated_stride,
-                           context_ptr->interpolated_full_stride[0][0],
-                           &(context_ptr->one_d_intermediate_results_buf0[0]),
-                           &comp_block,
-                           &comp_block_stride,
-                           asm_type);
-
-#if 0
-        save_Y_to_file("sub_block_Y_MC.yuv", comp_block,
-                   subblock_w, subblock_h,
-                       comp_block_stride, 0, 0);
-#endif
-        copy_pixels(pred_ptr[0], BW, comp_block, comp_block_stride, subblock_w, subblock_h);
-
-        // ----- compensate chroma ------
-
-#if MC_CHROMA
-
-        // get motion vectors
-        if (use_16x16_subblocks) {
-            first_ref_pos_x = (int16_t)(_MVXT(context_ptr->p_best_mv16x16[mv_index])/2);
-            first_ref_pos_y = (int16_t)(_MVYT(context_ptr->p_best_mv16x16[mv_index])/2);
-        }
-        else {
-            first_ref_pos_x = (int16_t)(_MVXT(context_ptr->p_best_mv32x32[mv_index])/2);
-            first_ref_pos_y = (int16_t)(_MVYT(context_ptr->p_best_mv32x32[mv_index])/2);
-        }
-
-        first_ref_integ_pos_x = (first_ref_pos_x >> 2);
-        first_ref_integ_pos_y = (first_ref_pos_y >> 2);
-        first_ref_frac_pos_x = (uint8_t)(first_ref_pos_x & 0x03);
-        first_ref_frac_pos_y = (uint8_t)(first_ref_pos_y & 0x03);
-
-        first_ref_frac_pos = (uint8_t)(first_ref_frac_pos_x + (first_ref_frac_pos_y << 2));
-
-        x_first_search_index = (int32_t)first_ref_integ_pos_x - ((context_ptr->x_search_area_origin[0][0])/2);
-        y_first_search_index = (int32_t)first_ref_integ_pos_y - ((context_ptr->y_search_area_origin[0][0])/2);
-        first_search_region_index_pos_integ = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1)) + interpolated_full_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
-        first_search_region_index_pos_b = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + interpolated_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1));
-        first_search_region_index_pos_h = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + interpolated_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
-        first_search_region_index_pos_j = (int32_t)(x_first_search_index + (ME_FILTER_TAP >> 1) - 1) + interpolated_stride_ch * (int32_t)(y_first_search_index + (ME_FILTER_TAP >> 1) - 1);
-
-        assert(first_search_region_index_pos_b>=0);
-        assert(first_search_region_index_pos_h>=0);
-        assert(first_search_region_index_pos_j>=0);
-
-        // compensate U
-        uni_pred_averaging(pu_index, // pu_index
-                           EB_TRUE,
-                           first_ref_frac_pos,
-                           subblock_w>>1, // pu_width
-                           subblock_h>>1, // pu_height
-                           &(integer_buffer_ptr_ch[0][first_search_region_index_pos_integ]),
-                           &(pos_b_buffer_ch[0][first_search_region_index_pos_b]),
-                           &(pos_h_buffer_ch[0][first_search_region_index_pos_h]),
-                           &(pos_j_buffer_ch[0][first_search_region_index_pos_j]),
-                           interpolated_stride_ch,
-                           interpolated_full_stride_ch,
-                           &(one_d_intermediate_results_buf_ch[0][0]),
-                           &comp_block,
-                           &comp_block_stride,
-                           asm_type);
-
-        copy_pixels(pred_ptr[1], BW_CH, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
-
-#if 0
-        save_Y_to_file("sub_block_U_MC.yuv", comp_block,
-                       subblock_w>>1, subblock_h>>1,
-                       comp_block_stride, 0, 0);
-#endif
-        // compensate V
-        uni_pred_averaging(pu_index, // pu_index
-                           EB_TRUE,
-                           first_ref_frac_pos,
-                           subblock_w>>1, // pu_width
-                           subblock_h>>1, // pu_height
-                           &(integer_buffer_ptr_ch[1][first_search_region_index_pos_integ]),
-                           &(pos_b_buffer_ch[1][first_search_region_index_pos_b]),
-                           &(pos_h_buffer_ch[1][first_search_region_index_pos_h]),
-                           &(pos_j_buffer_ch[1][first_search_region_index_pos_j]),
-                           interpolated_stride_ch,
-                           interpolated_full_stride_ch,
-                           &(one_d_intermediate_results_buf_ch[1][0]),
-                           &comp_block,
-                           &comp_block_stride,
-                           asm_type);
-
-        copy_pixels(pred_ptr[2], BW_CH, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
-#endif
 
     }
 
@@ -1138,6 +1311,9 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     EbByte src_frame_index[COLOR_CHANNELS], src_altref_index[COLOR_CHANNELS];
     int i, j, k;
 
+    int blk_fw_hist[16] = {0};
+    int use_16x16_hist[2] = {0};
+
     PictureParentControlSet *picture_control_set_ptr_central;
     EbPictureBufferDesc *input_picture_ptr_central;
 
@@ -1154,7 +1330,15 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
     int stride[COLOR_CHANNELS] = { input_picture_ptr_central->stride_y, input_picture_ptr_central->stride_cb, input_picture_ptr_central->stride_cr };
 
-#if !VANILA_ME
+#if DEBUG_MC
+    uint8_t* motion_compensated_pic[ALTREF_MAX_NFRAMES][COLOR_CHANNELS];
+    for(int iframe=0; iframe<altref_nframes; iframe++){
+    motion_compensated_pic[iframe][C_Y] = (uint8_t *)malloc(sizeof(uint8_t) * input_picture_ptr_central->luma_size);
+    motion_compensated_pic[iframe][C_U] = (uint8_t *)malloc(sizeof(uint8_t) * input_picture_ptr_central->chroma_size);
+    motion_compensated_pic[iframe][C_V] = (uint8_t *)malloc(sizeof(uint8_t) * input_picture_ptr_central->chroma_size);
+    }
+#endif
+
     // initialize chroma interpolated buffers and auxiliary buffers
     uint8_t *pos_b_buffer_ch[2];
     uint8_t *pos_h_buffer_ch[2];
@@ -1170,12 +1354,10 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
     one_d_intermediate_results_buf_ch[0] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
     one_d_intermediate_results_buf_ch[1] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
-#endif
 
 #if ME_CLEAN
 	MeContext *context_ptr = me_context_ptr->me_context_ptr;
 #else
-#if !VANILA_ME
     MotionEstimationContext_t *me_context_ptr;
     // Call ME context initializer
     me_context_ptr = (MotionEstimationContext_t*)malloc(sizeof(MotionEstimationContext_t));
@@ -1193,21 +1375,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 #endif
 
     MeContext *context_ptr = me_context_ptr->me_context_ptr;
-#endif
-#endif
-
-#if DEBUG_TEMPORAL_FILTER
-    save_YUV_to_file("central_frame.yuv", input_picture_ptr_central->buffer_y, input_picture_ptr_central->buffer_cb, input_picture_ptr_central->buffer_cr,
-                     input_picture_ptr_central->width, input_picture_ptr_central->height,
-                     input_picture_ptr_central->stride_y, input_picture_ptr_central->stride_cb, input_picture_ptr_central->stride_cr,
-                     input_picture_ptr_central->origin_y, input_picture_ptr_central->origin_x);
-#endif
-
-#if 0
-    // pad chroma samples to be used by the motion compensation
-    for (frame_index = 0; frame_index < altref_nframes; frame_index++) {
-        pad_chroma_samples(list_input_picture_ptr[frame_index]);
-    }
 #endif
 
 #if  MOVE_TF	
@@ -1246,9 +1413,9 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
             memset(counter, 0, BLK_PELS * COLOR_CHANNELS * sizeof(counter[0]));
 
             int blk_fw[N_16X16_BLOCKS];
-            int use_16x16_subblocks = 0;
+            int use_16x16_subblocks[N_32X32_BLOCKS] = {0};
             int me_16x16_subblock_sad[N_16X16_BLOCKS];
-            int me_32x32_total_sad = 0;
+            int me_32x32_subblock_sad[N_32X32_BLOCKS];
 
             populate_list_with_value(blk_fw, 16, INIT_WEIGHT);
 
@@ -1286,7 +1453,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                 src_altref_index[C_V] = src_altref_index[C_V] + blk_ch_src_offset;
 
                 // ------------
-                // Step 1: motion compensation
+                // Step 1: motion estimation + compensation
                 // ------------
 
                 // if frame to process is the center frame
@@ -1295,55 +1462,13 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                     // skip MC (central frame)
 
                     populate_list_with_value(blk_fw, N_16X16_BLOCKS, 2);
-                    use_16x16_subblocks = 0;
+                    populate_list_with_value(use_16x16_subblocks, N_32X32_BLOCKS, 0);
 
                     copy_pixels(pred[C_Y], BW, src_frame_index[C_Y] + blk_y_src_offset, stride[C_Y], BW, BH);
                     copy_pixels(pred[C_U], BW_CH, src_frame_index[C_U] + blk_ch_src_offset, stride[C_U], BW_CH, BH_CH);
                     copy_pixels(pred[C_V], BW_CH, src_frame_index[C_V] + blk_ch_src_offset, stride[C_V], BW_CH, BH_CH);
 
                 }else{
-
-#if VANILA_ME
-                    int16_t  x_Level2_search_center;           // output parameter, Level2 xMV at (searchRegionNumberInWidth, searchRegionNumberInHeight)
-                    int16_t  y_Level2_search_center;
-                    x_Level2_search_center = 4;
-                    y_Level2_search_center = 4;
-                    int x_top_left_search_region = -4;
-                    int y_top_left_search_region = -4;
-                    int search_region_index_y = blk_y_src_offset + x_top_left_search_region + y_top_left_search_region * stride[C_Y];
-                    int search_region_index_ch = blk_ch_src_offset + (x_top_left_search_region>>1) + (y_top_left_search_region>>1) * stride[C_U];
-                    uint64_t level2_best_sad;                  // output parameter, Level2 SAD at (searchRegionNumberInWidth, searchRegionNumberInHeight)
-
-                    // Move to the top left of the search region and search within a 8x8 region
-                    sad_loop_kernel(
-                            src_altref_index[C_Y],
-                            (uint32_t)stride[C_Y],
-                            src_frame_index[C_Y] + search_region_index_y,
-                            (uint32_t)stride[C_Y],
-                            BW, BH,
-                            /* results */
-                            &level2_best_sad,
-                            &x_Level2_search_center,
-                            &y_Level2_search_center,
-                            /* range */
-                            (uint32_t)stride[C_Y],
-                            8, // search area set to 8x8 just for testing
-                            8
-                    );
-
-                    printf("block #%d, best SAD = %d, x search center = %d, y search center = %d\n", blk_row*blk_cols + blk_col, (int)level2_best_sad, x_Level2_search_center, y_Level2_search_center);
-
-                    int shift_y = search_region_index_y + y_Level2_search_center*stride[C_Y] + x_Level2_search_center;
-                    int shift_ch = search_region_index_ch + (y_Level2_search_center>>1)*stride[C_U] + (x_Level2_search_center>>1);
-
-                    // get predicted block
-                    copy_pixels_and_remove_stride(pred[C_Y], src_frame_index[C_Y] + shift_y, BW, BH, stride[C_Y]);
-                    copy_pixels_and_remove_stride(pred[C_U], src_frame_index[C_U] + shift_ch, BW_CH, BH_CH, stride[C_U]);
-                    copy_pixels_and_remove_stride(pred[C_V], src_frame_index[C_V] + shift_ch, BW_CH, BH_CH, stride[C_V]);
-
-#else
-
-                    // Block-based MC using open-loop HME + refinement
 
                     // Initialize ME context
                     create_ME_context_and_picture_control(me_context_ptr,
@@ -1354,6 +1479,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                                           blk_col);
 
                     // Perform ME - context_ptr will store the outputs (MVs, buffers, etc)
+                    // Block-based MC using open-loop HME + refinement
                     motion_estimate_lcu( picture_control_set_ptr_central, // source picture control set -> references come from here
                                         (uint32_t)blk_row*blk_cols + blk_col,
                                         (uint32_t)blk_col*BW, // x block
@@ -1361,11 +1487,9 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                         context_ptr,
                                         list_input_picture_ptr[index_center]); // source picture
 
-                    // Retrieve distortion (SAD) on 32x32 and 16x16 sub-blocks
-                    get_ME_distortion(context_ptr, &me_32x32_total_sad, me_16x16_subblock_sad);
-
-                    // Get sub-block filter weights depending on the SAD
-                    get_blk_fw_using_dist(&me_32x32_total_sad, me_16x16_subblock_sad, &use_16x16_subblocks, blk_fw);
+#if USE_ONLY_16X16
+                    populate_list_with_value(use_16x16_subblocks,N_32X32_BLOCKS,1);
+#endif
 
                     // Perform MC using the information acquired using the ME step
                     uni_motion_compensation(context_ptr,
@@ -1385,7 +1509,25 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                     copy_pixels(pred[C_V], BW_CH, src_frame_index[C_V] + blk_ch_src_offset, stride[C_V], BW_CH, BH_CH);
 #endif
 
-#endif
+                    // Retrieve distortion (SAD) on 32x32 and 16x16 sub-blocks
+                    get_ME_distortion(context_ptr,
+                            me_32x32_subblock_sad,
+                            me_16x16_subblock_sad,
+                            pred[C_Y],
+                            stride_pred[C_Y],
+                            src_altref_index[C_Y],
+                            stride[C_Y]);
+
+                    // Get sub-block filter weights depending on the SAD
+                    get_blk_fw_using_dist(me_32x32_subblock_sad, me_16x16_subblock_sad, use_16x16_subblocks, blk_fw);
+
+                    for (int ki = 0; ki < 16; ki++){
+                        blk_fw_hist[blk_fw[ki]] += 1;
+                    }
+
+                    for (int ki = 0; ki < 3; ki++){
+                        use_16x16_hist[use_16x16_subblocks[ki]] += 1;
+                    }
 
                 }
 
@@ -1435,6 +1577,30 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 #endif
 #endif
 
+#if DEBUG_MC
+    // Process luma
+    int byte = blk_y_offset;
+    for (i = 0, k = 0; i < BH; i++) {
+        for (j = 0; j < BW; j++, k++) {
+                motion_compensated_pic[frame_index][C_Y][byte] = pred[C_Y][k];
+                byte++;
+            }
+        byte += stride[C_Y] - BW;
+    }
+    // Process chroma
+    byte = blk_ch_offset;
+    for (i = 0, k = 0; i < blk_height_ch; i++) {
+        for (j = 0; j < blk_width_ch; j++, k++) {
+            // U
+            motion_compensated_pic[frame_index][C_U][byte] = pred[C_U][k];
+            // V
+            motion_compensated_pic[frame_index][C_V][byte] = pred[C_V][k];
+            byte++;
+        }
+        byte += stride[C_U] - (BW_CH);
+    }
+#endif
+
                 // ------------
                 // Step 2: temporal filtering using the motion compensated blocks
                 // ------------
@@ -1462,8 +1628,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                     1,
                                     1,
                                     altref_strength,
-                                    blk_fw, // depends on the error of the MC step
-                                    use_16x16_subblocks); // depends on the error of the MC step
+                                    blk_fw ); // depends on the error of the MC step
 
                 }
             }
@@ -1531,19 +1696,42 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 #endif
     }
 
-#if 1
-    {
-        char filename[30] = "filtered_frame_svtav1_";
-        char frame_index_str[4];
-        snprintf(frame_index_str, 4, "%d", (int)picture_control_set_ptr_central->picture_number);
-        strcat(filename, frame_index_str);
-        strcat(filename, ".yuv");
-        save_YUV_to_file(filename, alt_ref_buffer[C_Y], alt_ref_buffer[C_U], alt_ref_buffer[C_V],
-                         input_picture_ptr_central->width, input_picture_ptr_central->height,
-                         input_picture_ptr_central->stride_y, input_picture_ptr_central->stride_cb, input_picture_ptr_central->stride_cr,
-                         0, 0);
+#if DEBUG_MC
+{
+     for(int iframe=0; iframe<altref_nframes; iframe++){
+            char filename[70] = "motion_compensated_frame_svtav1_";
+            char frame_index_str[10];
+            snprintf(frame_index_str, 10, "%d", (int)iframe);
+            strcat(filename, frame_index_str);
+            strcat(filename, "_");
+            snprintf(frame_index_str, 10, "%d", (int)input_picture_ptr_central->width);
+            strcat(filename, frame_index_str);
+            strcat(filename, "x");
+            snprintf(frame_index_str, 10, "%d", (int)input_picture_ptr_central->height);
+            strcat(filename, frame_index_str);
+            strcat(filename, ".yuv");
+            save_YUV_to_file(filename, motion_compensated_pic[iframe][C_Y], motion_compensated_pic[iframe][C_U], motion_compensated_pic[iframe][C_V],
+                                                           input_picture_ptr_central->width, input_picture_ptr_central->height,
+                                                           input_picture_ptr_central->stride_y, input_picture_ptr_central->stride_cb, input_picture_ptr_central->stride_cr,
+                                                           0, 0);
+     }
+}
+
+    for(int iframe=0; iframe<altref_nframes; iframe++){
+        free(motion_compensated_pic[iframe][C_Y]);
+        free(motion_compensated_pic[iframe][C_U]);
+        free(motion_compensated_pic[iframe][C_V]);
     }
+
 #endif
+
+    for (int ki = 0; ki < 3; ki++){
+        printf("blk_fw_hist[%d] = %d\n", ki, blk_fw_hist[ki]);
+    }
+
+    for (int ki = 0; ki < 2; ki++){
+        printf("use_16x16_hist[%d] = %d\n", ki, use_16x16_hist[ki]);
+    }
 
 #if !VANILA_ME
 #if  ! ME_CLEAN
@@ -1555,7 +1743,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     
 	free(pos_b_buffer_ch[1]);
     free(pos_h_buffer_ch[1]);
-  //free(pos_j_buffer_ch[1]);//TODO: to fix this
+    free(pos_j_buffer_ch[1]); //TODO: to fix this
     
 	free(one_d_intermediate_results_buf_ch[0]);
     free(one_d_intermediate_results_buf_ch[1]);
@@ -1908,7 +2096,7 @@ int read_YUV_frame_from_file(uint8_t **alt_ref_buffer, int picture_number, int w
 #if MOVE_TF
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
 #if ME_CLEAN
-	 struct MotionEstimationContext_s *me_context_ptr,
+    MotionEstimationContext_t *me_context_ptr,
 #endif
 	int32_t segment_index) {
 #else
@@ -2017,7 +2205,6 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
                             list_input_picture_ptr[index_center]->stride_y);
 #endif
 
-	
 #if MOVE_TF
 	eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
 	picture_control_set_ptr_central->temp_filt_seg_acc++;
@@ -2027,8 +2214,26 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
 
     // TODO: for test purposes only - replacing the src buffers with the filtered frame (milestone 0)
     replace_src_pic_buffers(picture_control_set_ptr_central, alt_ref_buffer);
-	
-	
+
+#if 1
+    {
+        char filename[50] = "filtered_frame_svtav1_";
+        char frame_index_str[10];
+        snprintf(frame_index_str, 10, "%d", (int)picture_control_set_ptr_central->picture_number);
+        strcat(filename, frame_index_str);
+        strcat(filename, "_");
+        snprintf(frame_index_str, 10, "%d", (int)input_picture_ptr->width);
+        strcat(filename, frame_index_str);
+        strcat(filename, "x");
+        snprintf(frame_index_str, 10, "%d", (int)input_picture_ptr->height);
+        strcat(filename, frame_index_str);
+        strcat(filename, ".yuv");
+        save_YUV_to_file(filename, alt_ref_buffer[C_Y], alt_ref_buffer[C_U], alt_ref_buffer[C_V],
+                         input_picture_ptr->width, input_picture_ptr->height,
+                         input_picture_ptr->stride_y, input_picture_ptr->stride_cb, input_picture_ptr->stride_cr,
+                         0, 0);
+    }
+#endif
 
 #if MOVE_TF
 	    // signal that temp filt is done
