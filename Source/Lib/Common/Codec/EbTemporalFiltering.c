@@ -62,7 +62,8 @@
 #define VANILA_ME 0
 #define LIBAOM_FILTERING 0
 #define MC_CHROMA 1
-#define USE_16X16 1
+#define USE_16X16 0
+#define USE_32X32 1
 
 #define _MM_HINT_T2  1
 #define OD_DIVU_DMAX (1024)
@@ -212,7 +213,32 @@ void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_su
 
     int blk_idx;
 
-#if USE_16X16 == 0
+#if USE_16X16
+
+    *use_16x16_subblocks = 1;
+
+    for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++){
+        blk_fw[blk_idx] = me_16x16_subblock_sad[blk_idx] < THRES_LOW
+                          ? 2
+                          : me_16x16_subblock_sad[blk_idx] < THRES_HIGH ? 1 : 0;
+
+    }
+
+#else
+
+#if USE_32X32
+
+    // do not consider MC and weighting at a sub-block level
+
+    *use_16x16_subblocks = 0;
+
+    int weight = *me_32x32_total_sad < (THRES_LOW << THR_SHIFT)
+                 ? 2
+                 : *me_32x32_total_sad < (THRES_HIGH << THR_SHIFT) ? 1 : 0;
+
+    populate_list_with_value(blk_fw, N_16X16_BLOCKS, weight);
+
+#else
 
     int me_sum_subblock_sad = 0;
     int max_me_sad = INT_MIN, min_me_sad = INT_MAX;
@@ -253,16 +279,7 @@ void get_blk_fw_using_dist(int const *me_32x32_total_sad, int const *me_16x16_su
 
     }
 
-#else
-
-    *use_16x16_subblocks = 1;
-
-    for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++){
-        blk_fw[blk_idx] = me_16x16_subblock_sad[blk_idx] < THRES_LOW
-                          ? 2
-                          : me_16x16_subblock_sad[blk_idx] < THRES_HIGH ? 1 : 0;
-
-    }
+#endif
 
 #endif
 
