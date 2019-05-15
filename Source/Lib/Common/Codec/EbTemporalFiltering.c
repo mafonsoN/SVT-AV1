@@ -734,6 +734,103 @@ void pad_chroma_samples(EbPictureBufferDesc *pic){
 #endif
 
 }
+#if TF_MCP
+EbErrorType av1_inter_prediction(
+    PictureControlSet                    *picture_control_set_ptr,
+	uint32_t                                interp_filters,
+	CodingUnit                           *cu_ptr,
+	uint8_t                                 ref_frame_type,
+	MvUnit                               *mv_unit,
+	uint8_t                                  use_intrabc,
+	uint16_t                                pu_origin_x,
+	uint16_t                                pu_origin_y,
+	uint8_t                                 bwidth,
+	uint8_t                                 bheight,
+	EbPictureBufferDesc                  *ref_pic_list0,
+	EbPictureBufferDesc                  *ref_pic_list1,
+	EbPictureBufferDesc                  *prediction_ptr,
+	uint16_t                                dst_origin_x,
+	uint16_t                                dst_origin_y,
+	EbBool                                  perform_chroma,
+	EbAsm                                   asm_type);
+
+void tf_inter_prediction(
+	PictureParentControlSet   *picture_control_set_ptr,
+	MeContext* context_ptr,
+	EbPictureBufferDesc *pic_ptr_ref,
+	EbByte *pred,
+	uint32_t sb_origin_x,
+	uint32_t sb_origin_y,
+	int use_16x16_subblocks,
+	EbAsm asm_type) 
+{
+	const InterpFilters interp_filters =
+		av1_make_interp_filters(MULTITAP_SHARP, MULTITAP_SHARP);
+
+	CodingUnit       cu;
+	MacroBlockD      av1xd;
+	CodingUnit *cu_ptr = &cu;
+	cu_ptr->av1xd = &av1xd;
+    MvUnit   mv_unit;
+
+	uint32_t	bwidth = 16;
+	uint32_t	bheight = 16;
+
+	EbPictureBufferDesc      prediction_ptr;
+
+
+	//32x32
+	for (uint32_t pu_index = 0; pu_index < 4; pu_index++) {
+		
+		uint32_t pu_row = subblock_xy_32x32[pu_index ][0];
+		uint32_t pu_col = subblock_xy_32x32[pu_index ][1];
+
+
+		cu_ptr->mds_idx = 0; //to add  lut[pu_index]		
+		uint32_t mirow = 0;
+		uint32_t micol = 0;
+		uint16_t    pu_origin_x = 0;
+		uint16_t    pu_origin_y = 0;
+
+		cu_ptr->av1xd->mb_to_top_edge = -((mirow * MI_SIZE) * 8);
+		cu_ptr->av1xd->mb_to_bottom_edge = ((picture_control_set_ptr->av1_cm->mi_rows - bheight - mirow) * MI_SIZE) * 8;
+		cu_ptr->av1xd->mb_to_left_edge = -((micol * MI_SIZE) * 8);
+		cu_ptr->av1xd->mb_to_right_edge = ((picture_control_set_ptr->av1_cm->mi_cols - bwidth - micol) * MI_SIZE) * 8;
+
+		mv_unit.mv->x = _MVXT(context_ptr->p_best_mv32x32[1 + pu_index]);
+		mv_unit.mv->y = _MVYT(context_ptr->p_best_mv32x32[1 + pu_index]);
+
+		prediction_ptr.buffer_y = pred;
+		prediction_ptr.stride_y = 0;
+		uint16_t   dst_origin_x = 0;
+		uint16_t    dst_origin_y = 0;
+
+	   av1_inter_prediction(
+			NULL,  // PictureControlSet                    *picture_control_set_ptr,
+			(uint32_t)interp_filters,
+			cu_ptr,
+			0,//ref_frame_type,
+			&mv_unit,
+			0,//use_intrabc,
+			pu_origin_x,
+			pu_origin_y,
+			bwidth,
+			bheight,
+		    pic_ptr_ref,
+			NULL,//ref_pic_list1,
+			&prediction_ptr,
+			dst_origin_x,
+			dst_origin_y,
+			1,//perform_chroma,
+			asm_type);
+
+
+
+	}
+
+
+}
+#endif
 
 // Unidirectional motion compensation using open-loop ME results and MC
 void uni_motion_compensation(MeContext* context_ptr,
@@ -1376,8 +1473,11 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
             int byte = blk_y_offset;
             for (i = 0, k = 0; i < BH; i++) {
                 for (j = 0; j < BW; j++, k++) {
-                    //alt_ref_buffer_y[byte] = (uint8_t)OD_DIVU(accum[C_Y][k] + (count[C_Y][k] >> 1), count[C_Y][k]);
+#if DIV_FIX
+                    alt_ref_buffer[C_Y][byte] = (uint8_t)OD_DIVU(accum[C_Y][k] + (count[C_Y][k] >> 1), count[C_Y][k]);
+#else
                     alt_ref_buffer[C_Y][byte] = (uint8_t)((accum[C_Y][k] + (count[C_Y][k] >> 1))/count[C_Y][k]);
+#endif
                     // move to next pixel
                     byte++;
                 }
@@ -1388,9 +1488,14 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
             for (i = 0, k = 0; i < blk_height_ch; i++) {
                 for (j = 0; j < blk_width_ch; j++, k++) {
                     // U
+#if DIV_FIX
+					alt_ref_buffer[C_U][byte] = (uint8_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]);
+					alt_ref_buffer[C_V][byte] = (uint8_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]);
+#else
                     alt_ref_buffer[C_U][byte] = (uint8_t)((accum[C_U][k] + (count[C_U][k] >> 1))/count[C_U][k]);
                     // V
                     alt_ref_buffer[C_V][byte] = (uint8_t)((accum[C_V][k] + (count[C_V][k] >> 1))/count[C_V][k]);
+#endif
                     // move to next pixel
                     byte++;
                 }

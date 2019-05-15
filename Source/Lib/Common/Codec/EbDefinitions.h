@@ -47,10 +47,12 @@ extern "C" {
 #define	ME_CLEAN                          1 // Clean up all ME signals to be used correctly in TF
 #define	FIX_ME_CFG                        1 // fix ME config in TF
 #define	MOVE_CHROMA_PAD                   1 // move chroma padding to the prep phase
-#define PCS_ME_FIX                        1 // pcs flags shall not be set in seg based process
+
+#define TF_MCP                            0 // use aom mcp for temporal filtering compensation.
+#define DIV_FIX                           1 // fix div in TF
 #endif
 
-
+#define PCS_ME_FIX                        1 // pcs flags shall not be set in seg based process
 
 
 
