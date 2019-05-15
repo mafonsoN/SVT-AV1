@@ -36,6 +36,7 @@ extern "C" {
 #endif
 
 #define ALTREF_FILTERING_SUPPORT 1
+#define ALTREF_DISABLE_SUBPEL 0
 
 #define MRP_SUPPORT            1// MRP Main Flag
 #define ALT_REF_SUPPORT                   1 // ALT_REF main flag
