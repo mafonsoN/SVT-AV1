@@ -851,7 +851,7 @@ void pad_chroma_samples(EbPictureBufferDesc *pic){
 }
 #if TF_MCP
 EbErrorType av1_inter_prediction(
-    PictureControlSet                    *picture_control_set_ptr,
+	PictureControlSet                    *picture_control_set_ptr,
 	uint32_t                                interp_filters,
 	CodingUnit                           *cu_ptr,
 	uint8_t                                 ref_frame_type,
@@ -868,6 +868,7 @@ EbErrorType av1_inter_prediction(
 	uint16_t                                dst_origin_y,
 	EbBool                                  perform_chroma,
 	EbAsm                                   asm_type);
+uint32_t get_mds_idx(uint32_t  orgx, uint32_t  orgy, uint32_t  size, uint32_t use_128x128);
 
 void tf_inter_prediction(
 	PictureParentControlSet   *picture_control_set_ptr,
@@ -876,70 +877,87 @@ void tf_inter_prediction(
 	EbByte *pred,
 	uint32_t sb_origin_x,
 	uint32_t sb_origin_y,
-	int use_16x16_subblocks,
-	EbAsm asm_type) 
+	int* use_16x16_subblocks,
+	EbAsm asm_type)
 {
 	const InterpFilters interp_filters =
 		av1_make_interp_filters(MULTITAP_SHARP, MULTITAP_SHARP);
 
-	CodingUnit       cu;
+	CodingUnit       cu_ptr;
 	MacroBlockD      av1xd;
-	CodingUnit *cu_ptr = &cu;
-	cu_ptr->av1xd = &av1xd;
-    MvUnit   mv_unit;
-
-	uint32_t	bwidth = 16;
-	uint32_t	bheight = 16;
+	cu_ptr.av1xd = &av1xd;
+	MvUnit   mv_unit;
+	mv_unit.pred_direction = UNI_PRED_LIST_0;
 
 	EbPictureBufferDesc      prediction_ptr;
+	prediction_ptr.origin_x = 0;
+	prediction_ptr.origin_y = 0;
+	prediction_ptr.buffer_y = pred[0];
+	prediction_ptr.stride_y = BW;
+	prediction_ptr.buffer_cb = pred[1];
+	prediction_ptr.stride_cb = BW_CH;
+	prediction_ptr.buffer_cr = pred[2];
+	prediction_ptr.stride_cr = BW_CH;	
 
+	for (uint32_t idx_32x32 = 0; idx_32x32 < 4; idx_32x32++) {		
 
-	//32x32
-	for (uint32_t pu_index = 0; pu_index < 4; pu_index++) {
+		if (use_16x16_subblocks[idx_32x32] == 0) {
 		
-		uint32_t pu_row = subblock_xy_32x32[pu_index ][0];
-		uint32_t pu_col = subblock_xy_32x32[pu_index ][1];
+		}
+		else {
+			
+	        uint32_t	bsize = 16;
 
+			for (uint32_t idx_16x16 = 0; idx_16x16 < 4; idx_16x16++) {
 
-		cu_ptr->mds_idx = 0; //to add  lut[pu_index]		
-		uint32_t mirow = 0;
-		uint32_t micol = 0;
-		uint16_t    pu_origin_x = 0;
-		uint16_t    pu_origin_y = 0;
+				uint32_t pu_index = index_16x16_from_subindexes[idx_32x32][idx_16x16];			
 
-		cu_ptr->av1xd->mb_to_top_edge = -((mirow * MI_SIZE) * 8);
-		cu_ptr->av1xd->mb_to_bottom_edge = ((picture_control_set_ptr->av1_cm->mi_rows - bheight - mirow) * MI_SIZE) * 8;
-		cu_ptr->av1xd->mb_to_left_edge = -((micol * MI_SIZE) * 8);
-		cu_ptr->av1xd->mb_to_right_edge = ((picture_control_set_ptr->av1_cm->mi_cols - bwidth - micol) * MI_SIZE) * 8;
+				uint32_t idx_y = subblock_xy_16x16[pu_index][0];
+				uint32_t idx_x = subblock_xy_16x16[pu_index][1];
+				uint16_t local_origin_x = idx_x * bsize;
+				uint16_t local_origin_y = idx_y * bsize;
+				uint16_t pu_origin_x = sb_origin_x + local_origin_x;
+				uint16_t pu_origin_y = sb_origin_y + local_origin_y;
+				uint32_t mirow = pu_origin_y >> MI_SIZE_LOG2;
+				uint32_t micol = pu_origin_x >> MI_SIZE_LOG2;
+				cu_ptr.mds_idx = get_mds_idx(local_origin_x, local_origin_y, bsize, picture_control_set_ptr->sequence_control_set_ptr->sb_size == BLOCK_128X128);
 
-		mv_unit.mv->x = _MVXT(context_ptr->p_best_mv32x32[1 + pu_index]);
-		mv_unit.mv->y = _MVYT(context_ptr->p_best_mv32x32[1 + pu_index]);
+				const int32_t bw = mi_size_wide[BLOCK_16X16];
+				const int32_t bh = mi_size_high[BLOCK_16X16];
+				cu_ptr.av1xd->mb_to_top_edge = -((mirow * MI_SIZE) * 8);
+				cu_ptr.av1xd->mb_to_bottom_edge = ((picture_control_set_ptr->av1_cm->mi_rows - bw - mirow) * MI_SIZE) * 8;
+				cu_ptr.av1xd->mb_to_left_edge = -((micol * MI_SIZE) * 8);
+				cu_ptr.av1xd->mb_to_right_edge = ((picture_control_set_ptr->av1_cm->mi_cols - bh - micol) * MI_SIZE) * 8;
 
-		prediction_ptr.buffer_y = pred;
-		prediction_ptr.stride_y = 0;
-		uint16_t   dst_origin_x = 0;
-		uint16_t    dst_origin_y = 0;
+				uint32_t mv_index = tab16x16[pu_index];
+				mv_unit.mv->x = _MVXT(context_ptr->p_best_mv16x16[mv_index]);
+				mv_unit.mv->y = _MVYT(context_ptr->p_best_mv16x16[mv_index]);
+				//AV1 MVs are always in 1/8th pel precision. 
+				mv_unit.mv->x = mv_unit.mv->x << 1;
+				mv_unit.mv->y = mv_unit.mv->y << 1;
 
-	   av1_inter_prediction(
-			NULL,  // PictureControlSet                    *picture_control_set_ptr,
-			(uint32_t)interp_filters,
-			cu_ptr,
-			0,//ref_frame_type,
-			&mv_unit,
-			0,//use_intrabc,
-			pu_origin_x,
-			pu_origin_y,
-			bwidth,
-			bheight,
-		    pic_ptr_ref,
-			NULL,//ref_pic_list1,
-			&prediction_ptr,
-			dst_origin_x,
-			dst_origin_y,
-			1,//perform_chroma,
-			asm_type);
+				av1_inter_prediction(
+					NULL,  //picture_control_set_ptr,
+					(uint32_t)interp_filters,
+					&cu_ptr,
+					0,//ref_frame_type,
+					&mv_unit,
+					0,//use_intrabc,
+					pu_origin_x,
+					pu_origin_y,
+					bsize,
+					bsize,
+					pic_ptr_ref,
+					NULL,//ref_pic_list1,
+					&prediction_ptr,
+					local_origin_x,
+					local_origin_y,
+					1,//perform_chroma,
+					asm_type);
 
+			}
 
+		}
 
 	}
 
@@ -1491,6 +1509,19 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                     populate_list_with_value(use_16x16_subblocks,N_32X32_BLOCKS,1);
 #endif
 
+
+
+#if TF_MCP
+					tf_inter_prediction(						
+						picture_control_set_ptr_central,
+						context_ptr,
+						list_input_picture_ptr[frame_index],
+						pred,
+						(uint32_t)blk_col*BW,
+						(uint32_t)blk_row*BH,
+						use_16x16_subblocks,
+						asm_type);
+#else
                     // Perform MC using the information acquired using the ME step
                     uni_motion_compensation(context_ptr,
                                         list_input_picture_ptr[frame_index],
@@ -1503,6 +1534,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                         one_d_intermediate_results_buf_ch,
                                         use_16x16_subblocks,
                                         asm_type);
+#endif
 
 #if MC_CHROMA==0
                     copy_pixels(pred[C_U], BW_CH, src_frame_index[C_U] + blk_ch_src_offset, stride[C_U], BW_CH, BH_CH);

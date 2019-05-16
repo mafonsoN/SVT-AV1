@@ -49,7 +49,7 @@ extern "C" {
 #define	FIX_ME_CFG                        1 // fix ME config in TF
 #define	MOVE_CHROMA_PAD                   1 // move chroma padding to the prep phase
 
-#define TF_MCP                            0 // use aom mcp for temporal filtering compensation.
+#define TF_MCP                            1 // use aom mcp for temporal filtering compensation.
 #define DIV_FIX                           1 // fix div in TF
 #endif
 
