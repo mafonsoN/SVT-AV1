@@ -598,8 +598,8 @@ EbErrorType load_default_buffer_configuration_settings(
     sequence_control_set_ptr->rest_segment_row_count    = MIN(rest_seg_h,4);
 
 #if MOVE_TF
-	sequence_control_set_ptr->tf_segment_column_count = 1;//meSegW;//1;//
-	sequence_control_set_ptr->tf_segment_row_count =  1;//meSegH;//1;//
+	sequence_control_set_ptr->tf_segment_column_count = meSegW;//1;//
+	sequence_control_set_ptr->tf_segment_row_count =  meSegH;//1;//
 #endif
     //#====================== Data Structures and Picture Buffers ======================
 #if BUG_FIX_LOOKAHEAD

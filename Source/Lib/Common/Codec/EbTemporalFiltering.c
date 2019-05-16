@@ -1357,6 +1357,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     }
 #endif
 
+#if !TF_MCP
     // initialize chroma interpolated buffers and auxiliary buffers
     uint8_t *pos_b_buffer_ch[2];
     uint8_t *pos_h_buffer_ch[2];
@@ -1372,6 +1373,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
     one_d_intermediate_results_buf_ch[0] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
     one_d_intermediate_results_buf_ch[1] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
+#endif
 
 #if ME_CLEAN
 	MeContext *context_ptr = me_context_ptr->me_context_ptr;
@@ -1769,6 +1771,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 #if  ! ME_CLEAN
     free(me_context_ptr);
 #endif
+#if !TF_MCP
     free(pos_b_buffer_ch[0]);
     free(pos_h_buffer_ch[0]);
     free(pos_j_buffer_ch[0]);
@@ -1779,6 +1782,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     
 	free(one_d_intermediate_results_buf_ch[0]);
     free(one_d_intermediate_results_buf_ch[1]);
+#endif
 
 #endif
 
