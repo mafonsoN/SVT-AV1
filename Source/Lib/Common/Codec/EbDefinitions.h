@@ -35,28 +35,32 @@
 extern "C" {
 #endif
 
-#define ALTREF_FILTERING_SUPPORT 1
-#define ALTREF_DISABLE_SUBPEL 0
 
-#define MRP_SUPPORT            1// MRP Main Flag
+
 #define ALT_REF_SUPPORT                   1 // ALT_REF main flag
 
 #if ALT_REF_SUPPORT
-#define ALT_REF_OVERLAY                   0 // support for ALT_REF overlay frames
-#define ALT_REF_PRINTS                    0
+#define ALTREF_FILTERING_SUPPORT          1 //Temporal filter
+#define ALTREF_DISABLE_SUBPEL             0 //Temporal filter : disable subpel
 #define MOVE_TF                           1 // Move Temp Filter to ME
 #define	ME_CLEAN                          1 // Clean up all ME signals to be used correctly in TF
 #define	FIX_ME_CFG                        1 // fix ME config in TF
 #define	MOVE_CHROMA_PAD                   1 // move chroma padding to the prep phase
-
 #define TF_MCP                            1 // use aom mcp for temporal filtering compensation.
 #define DIV_FIX                           1 // fix div in TF
 #define	FIX_SHORT                         1 // fix crash when filtering window is short
+
+#define ALT_REF_OVERLAY                   0 // support for ALT_REF overlay frames
+#define ALT_REF_PRINTS                    0
 #endif
 
 #define PCS_ME_FIX                        1 // pcs flags shall not be set in seg based process
 
 
+
+
+
+#define MRP_SUPPORT            1// MRP Main Flag
 
 // New  presets
 #define NEW_PRESETS                       1

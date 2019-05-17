@@ -4338,9 +4338,9 @@ void* picture_decision_kernel(void *input_ptr)
 
                                 EB_MEMSET(picture_control_set_ptr->ref_pa_pic_ptr_array, 0, 2 * sizeof(uint32_t));
 #endif
-#if ALT_REF_OVERLAY
-                            }
-#endif
+//#if ALT_REF_OVERLAY
+//                            }
+//#endif
 
 
 #if MOVE_TF
@@ -4458,6 +4458,10 @@ void* picture_decision_kernel(void *input_ptr)
 
 								printf("Producing the alt-ref frame at POC %d took %f seconds.\n", picture_control_set_ptr->picture_number, time_taken);
 
+							}
+#endif
+
+#if ALT_REF_OVERLAY
 							}
 #endif
 
