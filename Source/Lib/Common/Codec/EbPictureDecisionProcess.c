@@ -4409,6 +4409,9 @@ void* picture_decision_kernel(void *input_ptr)
 								{
 									//printf("%i   ", picture_control_set_ptr->temp_filt_pcs_list[tt]->picture_number);
 								}
+#if FIX_SHORT
+								picture_control_set_ptr->altref_nframes = altref_nframes;
+#endif
 
 								clock_t start_time;
 								start_time = clock();								

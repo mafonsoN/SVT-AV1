@@ -1336,7 +1336,11 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     EbPictureBufferDesc *input_picture_ptr_central;
 
     // index of the center frame
+#if FIX_SHORT
+	index_center = (uint8_t)(list_picture_control_set_ptr[0]->sequence_control_set_ptr->static_config.altref_nframes / 2);
+#else
     index_center = altref_nframes/2;
+#endif
 
     picture_control_set_ptr_central = list_picture_control_set_ptr[index_center];
     input_picture_ptr_central = list_input_picture_ptr[index_center];
@@ -1760,11 +1764,11 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 #endif
 
     for (int ki = 0; ki < 3; ki++){
-        printf("blk_fw_hist[%d] = %d\n", ki, blk_fw_hist[ki]);
+       // printf("blk_fw_hist[%d] = %d\n", ki, blk_fw_hist[ki]);
     }
 
     for (int ki = 0; ki < 2; ki++){
-        printf("use_16x16_hist[%d] = %d\n", ki, use_16x16_hist[ki]);
+       // printf("use_16x16_hist[%d] = %d\n", ki, use_16x16_hist[ki]);
     }
 
 #if !VANILA_ME
@@ -2131,6 +2135,9 @@ int read_YUV_frame_from_file(uint8_t **alt_ref_buffer, int picture_number, int w
 
 #if MOVE_TF
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
+#if FIX_SHORT
+	PictureParentControlSet *picture_control_set_ptr_central,
+#endif
 #if ME_CLEAN
     MotionEstimationContext_t *me_context_ptr,
 #endif
@@ -2141,19 +2148,27 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
 
     uint8_t altref_strength, altref_nframes, index_center;
     EbPictureBufferDesc *input_picture_ptr;
+#if !FIX_SHORT
     PictureParentControlSet *picture_control_set_ptr_central = list_picture_control_set_ptr[0]; // picture control set of the first frame
+#endif
     uint8_t *alt_ref_buffer[COLOR_CHANNELS];
 
     // user-defined encoder parameters related to alt-refs
 #if !MOVE_TF	
     altref_strength = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_strength;
 #endif
+	
+#if FIX_SHORT
+	altref_nframes = picture_control_set_ptr_central->altref_nframes;
+	// index of the central source frame
+	index_center = (uint8_t)(picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_nframes / 2);
+#else
     altref_nframes = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_nframes;
 
     // index of the central source frame
     index_center = (uint8_t)(altref_nframes/2);
     picture_control_set_ptr_central = list_picture_control_set_ptr[index_center];
-
+#endif
     // source central frame picture buffer
     input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
 
@@ -2251,7 +2266,7 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
     // TODO: for test purposes only - replacing the src buffers with the filtered frame (milestone 0)
     replace_src_pic_buffers(picture_control_set_ptr_central, alt_ref_buffer);
 
-#if 1
+#if 0
     {
         char filename[50] = "filtered_frame_svtav1_";
         char frame_index_str[10];

@@ -51,6 +51,7 @@ extern "C" {
 
 #define TF_MCP                            1 // use aom mcp for temporal filtering compensation.
 #define DIV_FIX                           1 // fix div in TF
+#define	FIX_SHORT                         1 // fix crash when filtering window is short
 #endif
 
 #define PCS_ME_FIX                        1 // pcs flags shall not be set in seg based process

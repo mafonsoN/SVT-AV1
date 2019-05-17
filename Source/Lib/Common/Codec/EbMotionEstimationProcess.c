@@ -968,8 +968,11 @@ void* motion_estimation_kernel(void *input_ptr)
 		    // temporal filtering start
 #if ME_CLEAN 
 		context_ptr->me_context_ptr->me_alt_ref = EB_TRUE;
-		
+#if FIX_SHORT
+		EbErrorType ret = init_temporal_filtering(picture_control_set_ptr->temp_filt_pcs_list, picture_control_set_ptr, context_ptr, inputResultsPtr->segment_index);
+#else
 		EbErrorType ret = init_temporal_filtering(picture_control_set_ptr->temp_filt_pcs_list, context_ptr, inputResultsPtr->segment_index);
+#endif
 #else
 		    EbErrorType ret = init_temporal_filtering(picture_control_set_ptr->temp_filt_pcs_list, inputResultsPtr->segment_index);
 #endif	
