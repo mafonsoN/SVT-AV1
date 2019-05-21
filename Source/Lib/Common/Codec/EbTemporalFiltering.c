@@ -494,7 +494,7 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
 // Get sub-block filter weights
 // blk_fw - block filter weight
 // TODO: ugly code, clean up
-static INLINE int get_subblock_filter_weight(unsigned int y,
+static INLINE int get_subblock_filter_weight_16subblocks(unsigned int y,
                                     unsigned int x,
                                     unsigned int block_height,
                                     unsigned int block_width,
@@ -545,6 +545,29 @@ static INLINE int get_subblock_filter_weight(unsigned int y,
     return filter_weight;
 
 }
+
+
+static INLINE int get_subblock_filter_weight_4subblocks(unsigned int y,
+                                               unsigned int x,
+                                               unsigned int block_height,
+                                               unsigned int block_width,
+                                               const int *blk_fw) {
+
+    int filter_weight = 0;
+    if (y < block_height / 2) {
+        if (x < block_width / 2)
+            filter_weight = blk_fw[0];
+        else
+            filter_weight = blk_fw[1];
+    } else {
+        if (x < block_width / 2)
+            filter_weight = blk_fw[2];
+        else
+            filter_weight = blk_fw[3];
+    }
+    return filter_weight;
+}
+
 
 // Adjust value of the modified (weight of filtering) based on the distortion and strength parameter
 static INLINE int adjust_modifier(int sum_dist,
@@ -632,12 +655,18 @@ void apply_filtering(EbByte *src,
     calculate_squared_errors(src_v, stride_src[2], pred_v, stride_pred[2],
                              v_diff_sse, uv_block_width, uv_block_height);
 
-    for (i = 0, k = 0, m = 0; i < block_height; i++) {
+    for (i = 0; i < block_height; i++) {
         for (j = 0; j < block_width; j++) {
 
-            const int pixel_value = pred_y[i * stride_pred[0] + j];
+            const int pixel_value = pred_y[i * stride_pred[C_Y] + j];
 
-            int filter_weight = get_subblock_filter_weight(i, j, block_height, block_width, blk_fw);
+            int filter_weight;
+
+            if(block_width == 32){
+                filter_weight = get_subblock_filter_weight_4subblocks(i, j, block_height, block_width, blk_fw);
+            }else{
+                filter_weight = get_subblock_filter_weight_16subblocks(i, j, block_height, block_width, blk_fw);
+            }
 
             // non-local mean approach
             int y_index = 0;
@@ -668,15 +697,15 @@ void apply_filtering(EbByte *src,
 
             modifier = adjust_modifier(modifier, y_index, rounding, strength, filter_weight);
 
+            k = i * stride_pred[0] + j;
+
             count_y[k] += modifier;
             accum_y[k] += modifier * pixel_value;
 
-            ++k;
-
             // Process chroma component
             if (!(i & ss_y) && !(j & ss_x)) {
-                const int u_pixel_value = pred_u[uv_r * stride_pred[1] + uv_c];
-                const int v_pixel_value = pred_v[uv_r * stride_pred[2] + uv_c];
+                const int u_pixel_value = pred_u[uv_r * stride_pred[C_U] + uv_c];
+                const int v_pixel_value = pred_v[uv_r * stride_pred[C_V] + uv_c];
 
                 // non-local mean approach
                 int cr_index = 0;
@@ -714,15 +743,117 @@ void apply_filtering(EbByte *src,
                 u_mod = adjust_modifier(u_mod, cr_index, rounding, strength, filter_weight);
                 v_mod = adjust_modifier(v_mod, cr_index, rounding, strength, filter_weight);
 
+                m = (i>>ss_y) * stride_pred[C_U] + (j>>ss_x);
+
                 count_u[m] += u_mod;
                 accum_u[m] += u_mod * u_pixel_value;
+
+                m = (i>>ss_y) * stride_pred[C_V] + (j>>ss_x);
+
                 count_v[m] += v_mod;
                 accum_v[m] += v_mod * v_pixel_value;
 
-                ++m;
             }
         }
     }
+}
+
+void apply_filtering_block(int block_row,
+                           int block_col,
+                           EbByte *src,
+                           EbByte *pred,
+                           uint32_t **accum,
+                           uint16_t **count,
+                           int *stride,
+                           int *stride_pred,
+                           unsigned int block_width,
+                           unsigned int block_height,
+                           int ss_x, // chroma sub-sampling in x
+                           int ss_y, // chroma sub-sampling in y
+                           int altref_strength,
+                           const int *blk_fw) {
+
+    int offset_src_buffer_Y = block_row * (BH>>1) * stride[C_Y] + block_col * (BW>>1);
+    int offset_src_buffer_U = block_row * (BH>>2) * stride[C_U] + block_col * (BW>>2);
+    int offset_src_buffer_V = block_row * (BH>>2) * stride[C_V] + block_col * (BW>>2);
+
+    int offset_block_buffer_Y = block_row * 32 * stride_pred[C_Y] + block_col * 32;
+    int offset_block_buffer_U = block_row * 16 * stride_pred[C_U] + block_col * 16;
+    int offset_block_buffer_V = block_row * 16 * stride_pred[C_V] + block_col * 16;
+
+    int blk_fw_32x32[4];
+
+    int idx_32x32 = block_row * 2 + block_col;
+
+    uint8_t *src_ptr[COLOR_CHANNELS];
+    uint8_t *pred_ptr[COLOR_CHANNELS];
+    uint32_t *accum_ptr[COLOR_CHANNELS];
+    uint16_t *count_ptr[COLOR_CHANNELS];
+
+    for (int ifw = 0; ifw < 4; ifw++) {
+
+        int ifw_index = index_16x16_from_subindexes[idx_32x32][ifw];
+
+        blk_fw_32x32[ifw] = blk_fw[ifw_index];
+
+    }
+
+    src_ptr[C_Y] = src[C_Y] + offset_src_buffer_Y;
+    src_ptr[C_U] = src[C_U] + offset_src_buffer_U;
+    src_ptr[C_V] = src[C_V] + offset_src_buffer_V;
+
+    pred_ptr[C_Y] = pred[C_Y] + offset_block_buffer_Y;
+    pred_ptr[C_U] = pred[C_U] + offset_block_buffer_U;
+    pred_ptr[C_V] = pred[C_V] + offset_block_buffer_V;
+
+    accum_ptr[C_Y] = accum[C_Y] + offset_block_buffer_Y;
+    accum_ptr[C_U] = accum[C_U] + offset_block_buffer_U;
+    accum_ptr[C_V] = accum[C_V] + offset_block_buffer_V;
+
+    count_ptr[C_Y] = count[C_Y] + offset_block_buffer_Y;
+    count_ptr[C_U] = count[C_U] + offset_block_buffer_U;
+    count_ptr[C_V] = count[C_V] + offset_block_buffer_V;
+
+    // Apply the temporal filtering strategy
+#if !USE_SSE4_FW_32X32
+    apply_filtering(src_ptr,
+                    pred_ptr,
+                    accum_ptr,
+                    count_ptr,
+                    stride,
+                    stride_pred,
+                    block_width,
+                    block_height,
+                    ss_x,
+                    ss_y,
+                    altref_strength,
+                    blk_fw_32x32); // depends on the error of the MC step
+#else
+    av1_apply_temporal_filter_sse4_1(src_ptr[C_Y],
+                                     stride[C_Y],
+                                     pred_ptr[C_Y],
+                                     stride_pred[C_Y],
+                                     src_ptr[C_U],
+                                     src_ptr[C_V],
+                                     stride[C_U],
+                                     pred_ptr[C_U],
+                                     pred_ptr[C_V],
+                                     stride_pred[C_U],
+                                     BW>>1,
+                                     BH>>1,
+                                     ss_x,
+                                     ss_y,
+                                     altref_strength,
+                                     blk_fw_32x32,
+                                     0, // use_32x32
+                                     accum_ptr[C_Y],
+                                     count_ptr[C_Y],
+                                     accum_ptr[C_U],
+                                     count_ptr[C_U],
+                                     accum_ptr[C_V],
+                                     count_ptr[C_V]);
+#endif
+
 }
 
 // Apply filtering to the central picture
@@ -1606,52 +1737,28 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
                 }else{
 
-#if USE_SSE4_32X32
+#if USE_SSE4_FW_32X32 || USE_C_FW_32x32
+
+                    // split filtering function into 32x32 blocks
+                    // TODO: implement a 64x64 SIMD version
                     for(int block_row = 0; block_row<2; block_row++){
                         for(int block_col = 0; block_col<2; block_col++) {
 
-                            int offset_src_buffer_Y = block_row*32*stride[C_Y] + block_col*32;
-                            int offset_src_buffer_U = block_row*16*stride[C_U] + block_col*16;
-                            int offset_src_buffer_V = block_row*16*stride[C_V] + block_col*16;
+                            apply_filtering_block(block_row,
+                                                  block_col,
+                                                  src_altref_index,
+                                                  pred,
+                                                  accum,
+                                                  count,
+                                                  stride,
+                                                  stride_pred,
+                                                  BW>>1,
+                                                  BH>>1,
+                                                  1, // chroma sub-sampling in x
+                                                  1, // chroma sub-sampling in y
+                                                  altref_strength,
+                                                  blk_fw);
 
-                            int offset_block_buffer_Y = block_row*32*stride_pred[C_Y] + block_col*32;
-                            int offset_block_buffer_U = block_row*16*stride_pred[C_U] + block_col*16;
-                            int offset_block_buffer_V = block_row*16*stride_pred[C_V] + block_col*16;
-
-                            int blk_fw_32x32[4];
-
-                            int idx_32x32 = block_row*2 + block_col;
-                            for(int ifw=0; ifw<4; ifw++){
-
-                                int ifw_index = index_16x16_from_subindexes[idx_32x32][ifw];
-
-                                blk_fw_32x32[ifw] = blk_fw[ifw_index];
-
-                            }
-
-                            av1_apply_temporal_filter_sse4_1(src_altref_index[C_Y] + offset_src_buffer_Y,
-                                                             stride[C_Y],
-                                                             pred[C_Y] + offset_block_buffer_Y,
-                                                             stride_pred[C_Y],
-                                                             src_altref_index[C_U] + offset_src_buffer_U,
-                                                             src_altref_index[C_V] + offset_src_buffer_V,
-                                                             stride[C_U],
-                                                             pred[C_U] + offset_block_buffer_U,
-                                                             pred[C_V] + offset_block_buffer_V,
-                                                             stride_pred[C_U],
-                                                             BW>>1,
-                                                             BH>>1,
-                                                             1,
-                                                             1,
-                                                             altref_strength,
-                                                             blk_fw_32x32,
-                                                             0, // use_32x32
-                                                             accum[C_Y] + offset_block_buffer_Y,
-                                                             count[C_Y] + offset_block_buffer_Y,
-                                                             accum[C_U] + offset_block_buffer_U,
-                                                             count[C_U] + offset_block_buffer_U,
-                                                             accum[C_V] + offset_block_buffer_V,
-                                                             count[C_V] + offset_block_buffer_V);
                         }
                     }
 

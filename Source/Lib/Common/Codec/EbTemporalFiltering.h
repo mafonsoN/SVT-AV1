@@ -58,7 +58,8 @@
 #define USE_ONLY_16X16 1
 #define USE_ONLY_32X32 0
 #define LIBAOM_VF 1
-#define USE_SSE4_32X32 1
+#define USE_SSE4_FW_32X32 1
+#define USE_C_FW_32x32 0
 
 #if LIBAOM_VF
 #define THRES_LOW 10000
