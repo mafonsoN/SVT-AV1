@@ -27,6 +27,7 @@
 #include "EbPictureAnalysisProcess.h"
 #include "EbMcp.h"
 #include "av1me.h"
+#include "EbTemporalFiltering_sse4.h"
 
 #if ALTREF_FILTERING_SUPPORT
 
@@ -1605,6 +1606,56 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
                 }else{
 
+#if USE_SSE4_32X32
+                    for(int block_row = 0; block_row<2; block_row++){
+                        for(int block_col = 0; block_col<2; block_col++) {
+
+                            int offset_src_buffer_Y = block_row*32*stride[C_Y] + block_col*32;
+                            int offset_src_buffer_U = block_row*16*stride[C_U] + block_col*16;
+                            int offset_src_buffer_V = block_row*16*stride[C_V] + block_col*16;
+
+                            int offset_block_buffer_Y = block_row*32*stride_pred[C_Y] + block_col*32;
+                            int offset_block_buffer_U = block_row*16*stride_pred[C_U] + block_col*16;
+                            int offset_block_buffer_V = block_row*16*stride_pred[C_V] + block_col*16;
+
+                            int blk_fw_32x32[4];
+
+                            int idx_32x32 = block_row*2 + block_col;
+                            for(int ifw=0; ifw<4; ifw++){
+
+                                int ifw_index = index_16x16_from_subindexes[idx_32x32][ifw];
+
+                                blk_fw_32x32[ifw] = blk_fw[ifw_index];
+
+                            }
+
+                            av1_apply_temporal_filter_sse4_1(src_altref_index[C_Y] + offset_src_buffer_Y,
+                                                             stride[C_Y],
+                                                             pred[C_Y] + offset_block_buffer_Y,
+                                                             stride_pred[C_Y],
+                                                             src_altref_index[C_U] + offset_src_buffer_U,
+                                                             src_altref_index[C_V] + offset_src_buffer_V,
+                                                             stride[C_U],
+                                                             pred[C_U] + offset_block_buffer_U,
+                                                             pred[C_V] + offset_block_buffer_V,
+                                                             stride_pred[C_U],
+                                                             BW>>1,
+                                                             BH>>1,
+                                                             1,
+                                                             1,
+                                                             altref_strength,
+                                                             blk_fw_32x32,
+                                                             0, // use_32x32
+                                                             accum[C_Y] + offset_block_buffer_Y,
+                                                             count[C_Y] + offset_block_buffer_Y,
+                                                             accum[C_U] + offset_block_buffer_U,
+                                                             count[C_U] + offset_block_buffer_U,
+                                                             accum[C_V] + offset_block_buffer_V,
+                                                             count[C_V] + offset_block_buffer_V);
+                        }
+                    }
+
+#else
                     // Apply the temporal filtering strategy
                     apply_filtering(src_altref_index,
                                     pred,
@@ -1618,6 +1669,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                     1,
                                     altref_strength,
                                     blk_fw ); // depends on the error of the MC step
+#endif
 
                 }
             }
@@ -2234,7 +2286,7 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
     // TODO: for test purposes only - replacing the src buffers with the filtered frame (milestone 0)
     replace_src_pic_buffers(picture_control_set_ptr_central, alt_ref_buffer);
 
-#if 0
+#if 1
     {
         char filename[50] = "filtered_frame_svtav1_";
         char frame_index_str[10];
