@@ -22,7 +22,6 @@
 #include "EbSequenceControlSet.h"
 #include "EbDefinitions.h"
 #include "EbBitstreamUnit.h"
-#include "EbTemporalFiltering_sse4.c"
 
 #define ALTREF_MAX_NFRAMES 10
 
@@ -49,16 +48,6 @@
 
 #define INIT_WEIGHT 2
 #define WEIGHT_MULTIPLIER 16
-
-// ALT-REF debug-specific defines
-#define DEBUG_TEMPORAL_FILTER 0
-#define DEBUG_MC 0
-#define VANILA_ME 0
-#define LIBAOM_FILTERING 0
-#define MC_CHROMA 1
-#define USE_ONLY_16X16 1
-#define USE_ONLY_32X32 0
-#define LIBAOM_VF 1
 
 #if LIBAOM_VF
 #define THRES_LOW 10000

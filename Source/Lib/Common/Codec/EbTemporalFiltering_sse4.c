@@ -12,6 +12,7 @@
 #include <assert.h>
 #include <smmintrin.h>
 
+#include "EbTemporalFiltering_sse4.h"
 #include "EbDefinitions.h"
 #include "EbTemporalFiltering_constants.h"
 

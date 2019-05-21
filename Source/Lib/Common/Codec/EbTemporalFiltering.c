@@ -27,8 +27,19 @@
 #include "EbPictureAnalysisProcess.h"
 #include "EbMcp.h"
 #include "av1me.h"
+#include "EbTemporalFiltering_sse4.h"
 
 #if ALTREF_FILTERING_SUPPORT
+
+// ALT-REF debug-specific defines
+#define DEBUG_TEMPORAL_FILTER 0
+#define DEBUG_MC 0
+#define VANILA_ME 0
+#define LIBAOM_FILTERING 0
+#define MC_CHROMA 1
+#define USE_ONLY_16X16 1
+#define USE_ONLY_32X32 0
+#define LIBAOM_VF 1
 
 /*#define OD_DIVU_SMALL(_x, _d)                                     \
   ((uint32_t)((OD_DIVU_SMALL_CONSTS[(_d)-1][0] * (uint64_t)(_x) + \
@@ -1606,6 +1617,31 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                 }else{
 
                     // Apply the temporal filtering strategy
+
+//                    av1_apply_temporal_filter_sse4_1(src_altref_index[C_Y],
+//                                                     stride[C_Y],
+//                                                     pred[C_Y],
+//                                                     stride_pred[C_Y],
+//                                                     src_altref_index[C_U],
+//                                                     src_altref_index[C_V],
+//                                                     stride[C_U],
+//                                                     pred[C_U],
+//                                                     pred[C_V],
+//                                                     stride_pred[C_U],
+//                                                     BW,
+//                                                     BH,
+//                                                     1,
+//                                                     1,
+//                                                     altref_strength,
+//                                                     blk_fw,
+//                                                     0, // use_32x32
+//                                                     accum[C_Y],
+//                                                     count[C_Y],
+//                                                     accum[C_U],
+//                                                     count[C_U],
+//                                                     accum[C_V],
+//                                                     count[C_V]);
+
                     apply_filtering(src_altref_index,
                                     pred,
                                     accum,
@@ -2217,7 +2253,7 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
     // TODO: for test purposes only - replacing the src buffers with the filtered frame (milestone 0)
     replace_src_pic_buffers(picture_control_set_ptr_central, alt_ref_buffer);
 
-#if 0
+#if 1
     {
         char filename[50] = "filtered_frame_svtav1_";
         char frame_index_str[10];
