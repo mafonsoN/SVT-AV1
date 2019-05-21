@@ -48,7 +48,11 @@ typedef struct EncodeContext
     EbBool                                           statistics_port_active;
     EbHandle                                         total_number_of_recon_frame_mutex;
     uint64_t                                         total_number_of_recon_frames;
-
+    
+#if ALT_REF_OVERLAY
+    // Overlay input picture fifo
+    EbFifo                                          *overlay_input_picture_pool_fifo_ptr;
+#endif
     // Output Buffer Fifos
     EbFifo                                        *stream_output_fifo_ptr;
     EbFifo                                        *recon_output_fifo_ptr;

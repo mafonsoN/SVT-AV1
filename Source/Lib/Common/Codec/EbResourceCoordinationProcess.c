@@ -409,6 +409,187 @@ void ResetPcsAv1(
     //  int32_t all_one_sided_refs;
 
 }
+#if ALT_REF_OVERLAY
+/***********************************************
+**** Copy the input buffer from the
+**** sample application to the library buffers
+************************************************/
+static EbErrorType copy_frame_buffer(
+    SequenceControlSet            *sequence_control_set_ptr,
+    uint8_t                          *dst,
+    uint8_t                          *src)
+{
+    EbSvtAv1EncConfiguration        *config = &sequence_control_set_ptr->static_config;
+    EbErrorType                      return_error = EB_ErrorNone;
+
+    EbPictureBufferDesc             *dst_picture_ptr = (EbPictureBufferDesc*)dst;
+    EbPictureBufferDesc             *src_picture_ptr = (EbPictureBufferDesc*)src;
+    uint16_t                         inputRowIndex;
+    EbBool                           is16BitInput = (EbBool)(config->encoder_bit_depth > EB_8BIT);
+
+    // Need to include for Interlacing on the fly with pictureScanType = 1
+
+    if (!is16BitInput) {
+
+        uint32_t     lumaBufferOffset = (dst_picture_ptr->stride_y*sequence_control_set_ptr->top_padding + sequence_control_set_ptr->left_padding) << is16BitInput;
+        uint32_t     chromaBufferOffset = (dst_picture_ptr->stride_cr*(sequence_control_set_ptr->top_padding >> 1) + (sequence_control_set_ptr->left_padding >> 1)) << is16BitInput;
+        uint16_t     lumaStride = dst_picture_ptr->stride_y << is16BitInput;
+        uint16_t     chromaStride = dst_picture_ptr->stride_cb << is16BitInput;
+        uint16_t     lumaWidth = (uint16_t)(dst_picture_ptr->width - sequence_control_set_ptr->max_input_pad_right) << is16BitInput;
+        uint16_t     chromaWidth = (lumaWidth >> 1) << is16BitInput;
+        uint16_t     lumaHeight = (uint16_t)(dst_picture_ptr->height - sequence_control_set_ptr->max_input_pad_bottom);
+
+        //uint16_t     lumaHeight  = input_picture_ptr->max_height;
+        // Y
+        for (inputRowIndex = 0; inputRowIndex < lumaHeight; inputRowIndex++) {
+
+            EB_MEMCPY((dst_picture_ptr->buffer_y + lumaBufferOffset + lumaStride * inputRowIndex),
+                (src_picture_ptr->buffer_y + lumaBufferOffset + lumaStride * inputRowIndex),
+                lumaWidth);
+        }
+
+        // U
+        for (inputRowIndex = 0; inputRowIndex < lumaHeight >> 1; inputRowIndex++) {
+            EB_MEMCPY((dst_picture_ptr->buffer_cb + chromaBufferOffset + chromaStride * inputRowIndex),
+                (src_picture_ptr->buffer_cb + chromaBufferOffset + chromaStride * inputRowIndex),
+                chromaWidth);
+        }
+
+        // V
+        for (inputRowIndex = 0; inputRowIndex < lumaHeight >> 1; inputRowIndex++) {
+            EB_MEMCPY((dst_picture_ptr->buffer_cr + chromaBufferOffset + chromaStride * inputRowIndex),
+                (src_picture_ptr->buffer_cr + chromaBufferOffset + chromaStride * inputRowIndex),
+                chromaWidth);
+        }
+
+    }
+    else if (is16BitInput && config->compressed_ten_bit_format == 1)
+    {
+        {
+            uint32_t  lumaBufferOffset = (dst_picture_ptr->stride_y*sequence_control_set_ptr->top_padding + sequence_control_set_ptr->left_padding);
+            uint32_t  chromaBufferOffset = (dst_picture_ptr->stride_cr*(sequence_control_set_ptr->top_padding >> 1) + (sequence_control_set_ptr->left_padding >> 1));
+            uint16_t  lumaStride = dst_picture_ptr->stride_y;
+            uint16_t  chromaStride = dst_picture_ptr->stride_cb;
+            uint16_t  lumaWidth = (uint16_t)(dst_picture_ptr->width - sequence_control_set_ptr->max_input_pad_right);
+            uint16_t  chromaWidth = (lumaWidth >> 1);
+            uint16_t  lumaHeight = (uint16_t)(dst_picture_ptr->height - sequence_control_set_ptr->max_input_pad_bottom);
+
+            // Y 8bit
+            for (inputRowIndex = 0; inputRowIndex < lumaHeight; inputRowIndex++) {
+
+                EB_MEMCPY((dst_picture_ptr->buffer_y + lumaBufferOffset + lumaStride * inputRowIndex),
+                    (src_picture_ptr->buffer_y + lumaBufferOffset + lumaStride * inputRowIndex),
+                    lumaWidth);
+            }
+
+            // U 8bit
+            for (inputRowIndex = 0; inputRowIndex < lumaHeight >> 1; inputRowIndex++) {
+
+                EB_MEMCPY((dst_picture_ptr->buffer_cb + chromaBufferOffset + chromaStride * inputRowIndex),
+                    (src_picture_ptr->buffer_cb + chromaBufferOffset + chromaStride * inputRowIndex),
+                    chromaWidth);
+            }
+
+            // V 8bit
+            for (inputRowIndex = 0; inputRowIndex < lumaHeight >> 1; inputRowIndex++) {
+
+                EB_MEMCPY((dst_picture_ptr->buffer_cr + chromaBufferOffset + chromaStride * inputRowIndex),
+                    (src_picture_ptr->buffer_cr + chromaBufferOffset + chromaStride * inputRowIndex),
+                    chromaWidth);
+            }
+            // AMIR to update
+            ////efficient copy - final
+            ////compressed 2Bit in 1D format
+            //{
+            //    uint16_t luma2BitWidth = sequence_control_set_ptr->max_input_luma_width / 4;
+            //    uint16_t lumaHeight = sequence_control_set_ptr->max_input_luma_height;
+
+            //    uint16_t sourceLuma2BitStride = sourceLumaStride / 4;
+            //    uint16_t sourceChroma2BitStride = sourceLuma2BitStride >> 1;
+
+            //    for (inputRowIndex = 0; inputRowIndex < lumaHeight; inputRowIndex++) {
+            //        EB_MEMCPY(input_picture_ptr->buffer_bit_inc_y + luma2BitWidth * inputRowIndex, inputPtr->luma_ext + sourceLuma2BitStride * inputRowIndex, luma2BitWidth);
+            //    }
+            //    for (inputRowIndex = 0; inputRowIndex < lumaHeight >> 1; inputRowIndex++) {
+            //        EB_MEMCPY(input_picture_ptr->buffer_bit_inc_cb + (luma2BitWidth >> 1)*inputRowIndex, inputPtr->cb_ext + sourceChroma2BitStride * inputRowIndex, luma2BitWidth >> 1);
+            //    }
+            //    for (inputRowIndex = 0; inputRowIndex < lumaHeight >> 1; inputRowIndex++) {
+            //        EB_MEMCPY(input_picture_ptr->buffer_bit_inc_cr + (luma2BitWidth >> 1)*inputRowIndex, inputPtr->cr_ext + sourceChroma2BitStride * inputRowIndex, luma2BitWidth >> 1);
+            //    }
+            //}
+
+        }
+
+    }
+    else { // 10bit packed
+        // AMIR to update
+       /* uint32_t lumaOffset = 0, chromaOffset = 0;
+        uint32_t lumaBufferOffset = (input_picture_ptr->stride_y*sequence_control_set_ptr->top_padding + sequence_control_set_ptr->left_padding);
+        uint32_t chromaBufferOffset = (input_picture_ptr->stride_cr*(sequence_control_set_ptr->top_padding >> 1) + (sequence_control_set_ptr->left_padding >> 1));
+        uint16_t lumaWidth = (uint16_t)(input_picture_ptr->width - sequence_control_set_ptr->max_input_pad_right);
+        uint16_t chromaWidth = (lumaWidth >> 1);
+        uint16_t lumaHeight = (uint16_t)(input_picture_ptr->height - sequence_control_set_ptr->max_input_pad_bottom);
+
+        uint16_t sourceLumaStride = (uint16_t)(inputPtr->y_stride);
+        uint16_t sourceCrStride = (uint16_t)(inputPtr->cr_stride);
+        uint16_t sourceCbStride = (uint16_t)(inputPtr->cb_stride);
+
+        un_pack2d(
+            (uint16_t*)(inputPtr->luma + lumaOffset),
+            sourceLumaStride,
+            input_picture_ptr->buffer_y + lumaBufferOffset,
+            input_picture_ptr->stride_y,
+            input_picture_ptr->buffer_bit_inc_y + lumaBufferOffset,
+            input_picture_ptr->stride_bit_inc_y,
+            lumaWidth,
+            lumaHeight,
+            config->asm_type);
+
+        un_pack2d(
+            (uint16_t*)(inputPtr->cb + chromaOffset),
+            sourceCbStride,
+            input_picture_ptr->buffer_cb + chromaBufferOffset,
+            input_picture_ptr->stride_cb,
+            input_picture_ptr->buffer_bit_inc_cb + chromaBufferOffset,
+            input_picture_ptr->stride_bit_inc_cb,
+            chromaWidth,
+            (lumaHeight >> 1),
+            config->asm_type);
+
+        un_pack2d(
+            (uint16_t*)(inputPtr->cr + chromaOffset),
+            sourceCrStride,
+            input_picture_ptr->buffer_cr + chromaBufferOffset,
+            input_picture_ptr->stride_cr,
+            input_picture_ptr->buffer_bit_inc_cr + chromaBufferOffset,
+            input_picture_ptr->stride_bit_inc_cr,
+            chromaWidth,
+            (lumaHeight >> 1),
+            config->asm_type);*/
+    }
+    return return_error;
+}
+static void CopyInputBuffer(
+    SequenceControlSet*    sequenceControlSet,
+    EbBufferHeaderType*     dst,
+    EbBufferHeaderType*     src
+)
+{
+    // Copy the higher level structure
+    dst->n_alloc_len = src->n_alloc_len;
+    dst->n_filled_len = src->n_filled_len;
+    dst->flags = src->flags;
+    dst->pts = src->pts;
+    dst->n_tick_count = src->n_tick_count;
+    dst->size = src->size;
+    dst->qp = src->qp;
+    dst->pic_type = src->pic_type;
+
+    // Copy the picture buffer
+    if (src->p_buffer != NULL)
+        copy_frame_buffer(sequenceControlSet, dst->p_buffer, src->p_buffer);
+}
+#endif
 /***************************************
  * ResourceCoordination Kernel
  ***************************************/
@@ -590,6 +771,7 @@ void* resource_coordination_kernel(void *input_ptr)
 
                 picture_control_set_ptr->alt_ref_ppcs_ptr = ((PictureParentControlSet*)alt_ref_picture_control_set_wrapper_ptr->object_ptr);
                 picture_control_set_ptr->alt_ref_ppcs_ptr->overlay_ppcs_ptr = picture_control_set_ptr;
+
             }
             else {
                 picture_control_set_ptr->is_overlay = 0;
@@ -605,7 +787,7 @@ void* resource_coordination_kernel(void *input_ptr)
                 picture_control_set_wrapper_ptr :
                 sequence_control_set_ptr->encode_context_ptr->previous_picture_control_set_wrapper_ptr;
 #if ALT_REF_OVERLAY
-            if (loop_index == 0) 
+            if (loop_index == 0)
 #endif
                 sequence_control_set_ptr->encode_context_ptr->previous_picture_control_set_wrapper_ptr = picture_control_set_wrapper_ptr;
             // Copy data from the svt buffer to the input frame
@@ -621,6 +803,29 @@ void* resource_coordination_kernel(void *input_ptr)
             picture_control_set_ptr->input_picture_wrapper_ptr = input_picture_wrapper_ptr;
             picture_control_set_ptr->end_of_sequence_flag = end_of_sequence_flag;
 
+#if ALT_REF_OVERLAY
+            if (loop_index == 1) {
+                // Get a new input picture for overlay.
+                EbObjectWrapper     *input_pic_wrapper_ptr;
+
+                // Get a new input picture for overlay.
+                eb_get_empty_object(
+                    sequence_control_set_ptr->encode_context_ptr->overlay_input_picture_pool_fifo_ptr,
+                    &input_pic_wrapper_ptr);
+
+                // Copy from original picture (picture_control_set_ptr->input_picture_wrapper_ptr), which is shared between overlay and alt_ref up to this point, to the new input picture.
+                if (picture_control_set_ptr->alt_ref_ppcs_ptr->input_picture_wrapper_ptr->object_ptr != NULL) {
+                    CopyInputBuffer(
+                        sequence_control_set_ptr,
+                        (EbBufferHeaderType*)input_pic_wrapper_ptr->object_ptr,
+                        (EbBufferHeaderType*)picture_control_set_ptr->alt_ref_ppcs_ptr->input_picture_wrapper_ptr->object_ptr);
+                }
+                // Assign the new picture to the new pointers
+                picture_control_set_ptr->input_ptr = (EbBufferHeaderType*)input_pic_wrapper_ptr->object_ptr;
+                picture_control_set_ptr->enhanced_picture_ptr = (EbPictureBufferDesc*)picture_control_set_ptr->input_ptr->p_buffer;
+                picture_control_set_ptr->input_picture_wrapper_ptr = input_pic_wrapper_ptr;
+            }
+#endif
             // Set Picture Control Flags
             picture_control_set_ptr->idr_flag = sequence_control_set_ptr->encode_context_ptr->initial_picture || (picture_control_set_ptr->input_ptr->pic_type == EB_AV1_KEY_PICTURE);
             picture_control_set_ptr->cra_flag = (picture_control_set_ptr->input_ptr->pic_type == EB_AV1_INTRA_ONLY_PICTURE) ? EB_TRUE : EB_FALSE;
@@ -691,26 +896,29 @@ void* resource_coordination_kernel(void *input_ptr)
             sequence_control_set_ptr->encode_context_ptr->initial_picture = EB_FALSE;
 
             // Get Empty Reference Picture Object
-            // AMIR: Do we need this for overlay pictures?
-#if ALT_REF_OVERLAY
-            if (picture_control_set_ptr->is_overlay) {
-                picture_control_set_ptr->pa_reference_picture_wrapper_ptr = picture_control_set_ptr->alt_ref_ppcs_ptr->pa_reference_picture_wrapper_ptr;
-            }
-            else
-#endif
-            {
-                eb_get_empty_object(
-                    sequence_control_set_ptr->encode_context_ptr->pa_reference_picture_pool_fifo_ptr,
-                    &reference_picture_wrapper_ptr);
+            eb_get_empty_object(
+                sequence_control_set_ptr->encode_context_ptr->pa_reference_picture_pool_fifo_ptr,
+                &reference_picture_wrapper_ptr);
 
-                picture_control_set_ptr->pa_reference_picture_wrapper_ptr = reference_picture_wrapper_ptr;
-
+            picture_control_set_ptr->pa_reference_picture_wrapper_ptr = reference_picture_wrapper_ptr;
+#if  ALT_REF_OVERLAY
+            // Since overlay pictures are not added to PA_Reference queue in PD and not released there, the life count is only set to 1
+            if (picture_control_set_ptr->is_overlay)
                 // Give the new Reference a nominal live_count of 1
                 eb_object_inc_live_count(
                     picture_control_set_ptr->pa_reference_picture_wrapper_ptr,
+                    1);
+            else
+                eb_object_inc_live_count(
+                    picture_control_set_ptr->pa_reference_picture_wrapper_ptr,
                     2);
-                ((EbPaReferenceObject*)picture_control_set_ptr->pa_reference_picture_wrapper_ptr->object_ptr)->input_padded_picture_ptr->buffer_y = picture_control_set_ptr->enhanced_picture_ptr->buffer_y;
-            }
+#else
+            eb_object_inc_live_count(
+                picture_control_set_ptr->pa_reference_picture_wrapper_ptr,
+                2);
+#endif
+            ((EbPaReferenceObject*)picture_control_set_ptr->pa_reference_picture_wrapper_ptr->object_ptr)->input_padded_picture_ptr->buffer_y = picture_control_set_ptr->enhanced_picture_ptr->buffer_y;
+
 #if !BUG_FIX_PCS_LIVE_COUNT
             eb_object_inc_live_count(
                 picture_control_set_wrapper_ptr,

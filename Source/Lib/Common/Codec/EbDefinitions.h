@@ -34,9 +34,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-
-
 #define ALT_REF_SUPPORT                   1 // ALT_REF main flag
 
 #if ALT_REF_SUPPORT
@@ -50,14 +47,11 @@ extern "C" {
 #define DIV_FIX                           1 // fix div in TF
 #define	FIX_SHORT                         1 // fix crash when filtering window is short
 
-#define ALT_REF_OVERLAY                   0 // support for ALT_REF overlay frames
+#define ALT_REF_OVERLAY                   1 // support for ALT_REF overlay frames
 #define ALT_REF_PRINTS                    0
 #endif
 
 #define PCS_ME_FIX                        1 // pcs flags shall not be set in seg based process
-
-
-
 
 
 #define MRP_SUPPORT            1// MRP Main Flag

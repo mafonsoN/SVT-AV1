@@ -4374,6 +4374,14 @@ void* rate_control_kernel(void *input_ptr)
             eb_release_object(parentpicture_control_set_ptr->sequence_control_set_wrapper_ptr);
             // Release the ParentPictureControlSet
 
+#if  ALT_REF_PRINTS
+            //printf("RC RelaseE POC:%lld\tIsOverlay:%d\n",
+            //    parentpicture_control_set_ptr->picture_number,
+            //    parentpicture_control_set_ptr->is_overlay);
+#endif
+#if 0 //ALT_REF_OVERLAY
+            if (!parentpicture_control_set_ptr->is_alt_ref || parentpicture_control_set_ptr->is_overlay)
+#endif
             eb_release_object(parentpicture_control_set_ptr->input_picture_wrapper_ptr);
             eb_release_object(rate_control_tasks_ptr->picture_control_set_wrapper_ptr);
 

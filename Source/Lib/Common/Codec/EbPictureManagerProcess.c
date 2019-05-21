@@ -165,10 +165,10 @@ void* picture_manager_kernel(void *input_ptr)
 
             //printf("\nPicture Manager Process @ %d \n ", picture_control_set_ptr->picture_number);
 #if ALT_REF_PRINTS
-            printf("PM: POC:%lld\tPOCALT:%lld\tIsOverlay:%d\n",
-                picture_control_set_ptr->picture_number,
-                picture_control_set_ptr->picture_number_alt,
-                picture_control_set_ptr->is_overlay);
+            //printf("PM: POC:%lld\tPOCALT:%lld\tIsOverlay:%d\n",
+            //    picture_control_set_ptr->picture_number,
+            //    picture_control_set_ptr->picture_number_alt,
+            //    picture_control_set_ptr->is_overlay);
 
 #endif  
 #if ALT_REF_OVERLAY

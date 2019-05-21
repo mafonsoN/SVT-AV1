@@ -16,9 +16,7 @@ typedef struct PictureDecisionReorderEntry
 {
     uint64_t                              picture_number;
     EbObjectWrapper                    *parent_pcs_wrapper_ptr;
-#if ALT_REF_OVERLAY
-    uint8_t                             overlay_arrived;
-#endif
+
 } PictureDecisionReorderEntry;
 
 

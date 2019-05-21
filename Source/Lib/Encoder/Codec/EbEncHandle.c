@@ -808,6 +808,12 @@ static EbErrorType eb_enc_handle_ctor(
     encHandlePtr->reference_picture_pool_ptr_array = (EbSystemResource**)EB_NULL;
     encHandlePtr->pa_reference_picture_pool_ptr_array = (EbSystemResource**)EB_NULL;
 
+#if ALT_REF_OVERLAY
+    // Overlay input picture
+    encHandlePtr->overlay_input_picture_pool_ptr_array = (EbSystemResource**)EB_NULL;
+    encHandlePtr->overlay_input_picture_pool_producer_fifo_ptr_dbl_array = (EbFifo***)EB_NULL;
+#endif
+
     // Picture Buffer Producer Fifos
     encHandlePtr->reference_picture_pool_producer_fifo_ptr_dbl_array = (EbFifo***)EB_NULL;
     encHandlePtr->pa_reference_picture_pool_producer_fifo_ptr_dbl_array = (EbFifo***)EB_NULL;
@@ -1157,6 +1163,10 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
     EB_MALLOC(EbSystemResource**, encHandlePtr->reference_picture_pool_ptr_array, sizeof(EbSystemResource*) * encHandlePtr->encode_instance_total_count, EB_N_PTR);
     EB_MALLOC(EbSystemResource**, encHandlePtr->pa_reference_picture_pool_ptr_array, sizeof(EbSystemResource*) * encHandlePtr->encode_instance_total_count, EB_N_PTR);
 
+#if ALT_REF_OVERLAY
+    EB_MALLOC(EbSystemResource**, encHandlePtr->overlay_input_picture_pool_ptr_array, sizeof(EbSystemResource*) * encHandlePtr->encode_instance_total_count, EB_N_PTR);
+    EB_MALLOC(EbFifo***, encHandlePtr->overlay_input_picture_pool_producer_fifo_ptr_dbl_array, sizeof(EbFifo**) * encHandlePtr->encode_instance_total_count, EB_N_PTR);
+#endif
     // Allocate Producer Fifo Arrays
     EB_MALLOC(EbFifo***, encHandlePtr->reference_picture_pool_producer_fifo_ptr_dbl_array, sizeof(EbFifo**) * encHandlePtr->encode_instance_total_count, EB_N_PTR);
     EB_MALLOC(EbFifo***, encHandlePtr->pa_reference_picture_pool_producer_fifo_ptr_dbl_array, sizeof(EbFifo**) * encHandlePtr->encode_instance_total_count, EB_N_PTR);
@@ -1275,6 +1285,29 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
         // Set the SequenceControlSet Picture Pool Fifo Ptrs
         encHandlePtr->sequence_control_set_instance_array[instance_index]->encode_context_ptr->reference_picture_pool_fifo_ptr = (encHandlePtr->reference_picture_pool_producer_fifo_ptr_dbl_array[instance_index])[0];
         encHandlePtr->sequence_control_set_instance_array[instance_index]->encode_context_ptr->pa_reference_picture_pool_fifo_ptr = (encHandlePtr->pa_reference_picture_pool_producer_fifo_ptr_dbl_array[instance_index])[0];
+
+
+#if ALT_REF_OVERLAY
+        // Overlay Input Picture Buffers
+        return_error = eb_system_resource_ctor(
+            &encHandlePtr->overlay_input_picture_pool_ptr_array[instance_index],
+            50,//encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->overlay_input_picture_buffer_init_count,
+            1,
+            0,
+            &encHandlePtr->overlay_input_picture_pool_producer_fifo_ptr_dbl_array[instance_index],
+            (EbFifo ***)EB_NULL,
+            EB_FALSE,
+            EbInputBufferHeaderCtor,
+            encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr);
+
+        if (return_error == EB_ErrorInsufficientResources) {
+            return EB_ErrorInsufficientResources;
+        }
+
+        // Set the SequenceControlSet Overlay input Picture Pool Fifo Ptrs
+        encHandlePtr->sequence_control_set_instance_array[instance_index]->encode_context_ptr->overlay_input_picture_pool_fifo_ptr = (encHandlePtr->overlay_input_picture_pool_producer_fifo_ptr_dbl_array[instance_index])[0];
+
+#endif
     }
 
     /************************************
@@ -1296,6 +1329,7 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
     if (return_error == EB_ErrorInsufficientResources) {
         return EB_ErrorInsufficientResources;
     }
+
     // EbBufferHeaderType Output Stream
     EB_MALLOC(EbSystemResource**, encHandlePtr->output_stream_buffer_resource_ptr_array, sizeof(EbSystemResource*) * encHandlePtr->encode_instance_total_count, EB_N_PTR);
     EB_MALLOC(EbFifo***, encHandlePtr->output_stream_buffer_producer_fifo_ptr_dbl_array, sizeof(EbFifo**)          * encHandlePtr->encode_instance_total_count, EB_N_PTR);

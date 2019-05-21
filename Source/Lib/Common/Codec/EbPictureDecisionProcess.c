@@ -3206,7 +3206,105 @@ void  Av1GenerateRpsInfo(
         exit(0);
     }
  }
+#if ALT_REF_OVERLAY
+/***************************************************************************************************
+// Perform Required Picture Analysis Processing for the Overlay frame
+***************************************************************************************************/
+void perform_simple_picture_analysis_for_overlay(PictureParentControlSet     *picture_control_set_ptr) {         
+    EbPictureBufferDesc           *input_padded_picture_ptr;
+    EbPictureBufferDesc           *quarter_decimated_picture_ptr;
+    EbPictureBufferDesc           *sixteenth_decimated_picture_ptr;
+    EbPictureBufferDesc           *input_picture_ptr;
+    EbPaReferenceObject           *paReferenceObject;
+    uint32_t                        picture_width_in_sb;
+    uint32_t                        pictureHeighInLcu;
+    uint32_t                        sb_total_count;
 
+    SequenceControlSet *sequence_control_set_ptr = (SequenceControlSet*)picture_control_set_ptr->sequence_control_set_wrapper_ptr->object_ptr;
+    input_picture_ptr               = picture_control_set_ptr->enhanced_picture_ptr;
+    paReferenceObject               = (EbPaReferenceObject*)picture_control_set_ptr->pa_reference_picture_wrapper_ptr->object_ptr;
+    input_padded_picture_ptr        = (EbPictureBufferDesc*)paReferenceObject->input_padded_picture_ptr;
+    quarter_decimated_picture_ptr   = (EbPictureBufferDesc*)paReferenceObject->quarter_decimated_picture_ptr;
+    sixteenth_decimated_picture_ptr = (EbPictureBufferDesc*)paReferenceObject->sixteenth_decimated_picture_ptr;
+
+    picture_width_in_sb = (sequence_control_set_ptr->luma_width + sequence_control_set_ptr->sb_sz - 1) / sequence_control_set_ptr->sb_sz;
+    pictureHeighInLcu   = (sequence_control_set_ptr->luma_height + sequence_control_set_ptr->sb_sz - 1) / sequence_control_set_ptr->sb_sz;
+    sb_total_count      = picture_width_in_sb * pictureHeighInLcu;
+
+    // Pad pictures to multiple min cu size
+    PadPictureToMultipleOfMinCuSizeDimensions(
+        sequence_control_set_ptr,
+        input_picture_ptr);
+
+    // Pre processing operations performed on the input picture
+    PicturePreProcessingOperations(
+        picture_control_set_ptr,
+        input_picture_ptr,
+        sequence_control_set_ptr,
+        quarter_decimated_picture_ptr,
+        sixteenth_decimated_picture_ptr,
+        sb_total_count,
+        sequence_control_set_ptr->encode_context_ptr->asm_type);
+
+    if (input_picture_ptr->color_format >= EB_YUV422) {
+        // Jing: Do the conversion of 422/444=>420 here since it's multi-threaded kernel
+        //       Reuse the Y, only add cb/cr in the newly created buffer desc
+        //       NOTE: since denoise may change the src, so this part is after PicturePreProcessingOperations()
+        picture_control_set_ptr->chroma_downsampled_picture_ptr->buffer_y = input_picture_ptr->buffer_y;
+        DownSampleChroma(input_picture_ptr, picture_control_set_ptr->chroma_downsampled_picture_ptr);
+    }
+    else {
+        picture_control_set_ptr->chroma_downsampled_picture_ptr = input_picture_ptr;
+    }
+
+    // Pad input picture to complete border LCUs
+    PadPictureToMultipleOfLcuDimensions(
+        input_padded_picture_ptr);
+
+    // 1/4 & 1/16 input picture decimation
+    DecimateInputPicture(
+        picture_control_set_ptr,
+        input_padded_picture_ptr,
+        quarter_decimated_picture_ptr,
+        sixteenth_decimated_picture_ptr);
+
+    // Gathering statistics of input picture, including Variance Calculation, Histogram Bins
+    GatheringPictureStatistics(
+        sequence_control_set_ptr,
+        picture_control_set_ptr,
+        picture_control_set_ptr->chroma_downsampled_picture_ptr, //420 input_picture_ptr
+        input_padded_picture_ptr,
+        sixteenth_decimated_picture_ptr,
+        sb_total_count,
+        sequence_control_set_ptr->encode_context_ptr->asm_type);
+
+    picture_control_set_ptr->sc_content_detected = picture_control_set_ptr->alt_ref_ppcs_ptr->sc_content_detected;
+
+}
+/***************************************************************************************************
+ * Initialize the overlay frame
+***************************************************************************************************/
+void initialize_overlay_frame(PictureParentControlSet     *picture_control_set_ptr) {
+
+    picture_control_set_ptr->fade_out_from_black = picture_control_set_ptr->alt_ref_ppcs_ptr->fade_out_from_black;
+    picture_control_set_ptr->fade_in_to_black = picture_control_set_ptr->alt_ref_ppcs_ptr->fade_in_to_black;
+    picture_control_set_ptr->scene_change_flag = EB_FALSE;
+    picture_control_set_ptr->cra_flag = EB_FALSE;
+    picture_control_set_ptr->idr_flag = EB_FALSE;
+    picture_control_set_ptr->target_bit_rate = picture_control_set_ptr->alt_ref_ppcs_ptr->target_bit_rate;
+    picture_control_set_ptr->last_idr_picture = picture_control_set_ptr->alt_ref_ppcs_ptr->last_idr_picture;
+    picture_control_set_ptr->use_rps_in_sps = EB_FALSE;
+    picture_control_set_ptr->open_gop_cra_flag = EB_FALSE;
+    picture_control_set_ptr->pred_structure = picture_control_set_ptr->alt_ref_ppcs_ptr->pred_structure;
+    picture_control_set_ptr->pred_struct_ptr = picture_control_set_ptr->alt_ref_ppcs_ptr->pred_struct_ptr;
+    picture_control_set_ptr->hierarchical_levels = picture_control_set_ptr->alt_ref_ppcs_ptr->hierarchical_levels;
+    picture_control_set_ptr->hierarchical_layers_diff = 0;
+    picture_control_set_ptr->init_pred_struct_position_flag = EB_FALSE;
+    picture_control_set_ptr->pre_assignment_buffer_count = picture_control_set_ptr->alt_ref_ppcs_ptr->pre_assignment_buffer_count;
+
+    perform_simple_picture_analysis_for_overlay(picture_control_set_ptr);
+ }
+#endif
 /***************************************************************************************************
  * Picture Decision Kernel
  *
@@ -3386,9 +3484,10 @@ void* picture_decision_kernel(void *input_ptr)
         // can arrive out-of-display-order, so a the Picture Decision Reordering Queue is used to enforce processing of
         // pictures in display order
 #if  ALT_REF_PRINTS
-        //printf("PD: POC:%lld\tIsOverlay:%d\n",
-        //    picture_control_set_ptr->picture_number,
-        //    picture_control_set_ptr->is_overlay);
+        //if(!picture_control_set_ptr->is_overlay)
+        //    printf("PD: POC:%lld\tIsOverlay:%d\n",
+        //        picture_control_set_ptr->picture_number,
+        //        picture_control_set_ptr->is_overlay);
 #endif      
 
 #if ALT_REF_OVERLAY
@@ -3398,11 +3497,6 @@ void* picture_decision_kernel(void *input_ptr)
             queueEntryIndex += encode_context_ptr->picture_decision_reorder_queue_head_index;
             queueEntryIndex = (queueEntryIndex > PICTURE_DECISION_REORDER_QUEUE_MAX_DEPTH - 1) ? queueEntryIndex - PICTURE_DECISION_REORDER_QUEUE_MAX_DEPTH : queueEntryIndex;
             queueEntryPtr = encode_context_ptr->picture_decision_reorder_queue[queueEntryIndex];
-#if 0// ALT_REF_OVERLAY
-            if (picture_control_set_ptr->is_overlay)
-                queueEntryPtr->overlay_arrived = 1;
-            else
-#endif
             if (queueEntryPtr->parent_pcs_wrapper_ptr != NULL) {
                 CHECK_REPORT_ERROR_NC(
                     encode_context_ptr->app_callback_ptr,
@@ -3416,8 +3510,6 @@ void* picture_decision_kernel(void *input_ptr)
 #if MOVE_TF
 			picture_control_set_ptr->pic_decision_reorder_queue_idx = queueEntryIndex;
 #endif
-
-
 #if ALT_REF_OVERLAY
         }
 #endif
@@ -3845,11 +3937,15 @@ void* picture_decision_kernel(void *input_ptr)
                             // release the overlay PCS for non alt ref pictures. First picture does not have overlay PCS
                             else if (picture_control_set_ptr->picture_number){
 #if  ALT_REF_PRINTS
-                                printf("PD: RELEASE POC:%lld\tIsOverlay:%d\t%lld\n",
-                                    picture_control_set_ptr->overlay_ppcs_ptr->picture_number,
-                                    picture_control_set_ptr->overlay_ppcs_ptr->is_overlay,
-                                    picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr->object_ptr);
+                                //printf("PD: RELEASE POC:%lld\tIsOverlay:%d\t%lld\n",
+                                //    picture_control_set_ptr->overlay_ppcs_ptr->picture_number,
+                                //    picture_control_set_ptr->overlay_ppcs_ptr->is_overlay,
+                                //    picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr->object_ptr);
 #endif
+                                eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->input_picture_wrapper_ptr);
+                                // release the pa_reference_picture
+                                eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->pa_reference_picture_wrapper_ptr);
+                                // release the parent pcs
                                 eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
 #if !BUG_FIX_PCS_LIVE_COUNT
                                 eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
@@ -3857,32 +3953,18 @@ void* picture_decision_kernel(void *input_ptr)
 #endif
                                 picture_control_set_ptr->overlay_ppcs_ptr = EB_NULL;
                             }
+                            PictureParentControlSet       *cur_picture_control_set_ptr = picture_control_set_ptr;
                             for (uint8_t loop_index = 0; loop_index <= picture_control_set_ptr->is_alt_ref; loop_index++) {
                                 // Set missing parts in the overlay  pictures
                                 if (loop_index == 1) {
                                     picture_control_set_ptr = picture_control_set_ptr->overlay_ppcs_ptr;
-                                    picture_control_set_ptr->fade_out_from_black    = picture_control_set_ptr->alt_ref_ppcs_ptr->fade_out_from_black;
-                                    picture_control_set_ptr->fade_in_to_black       = picture_control_set_ptr->alt_ref_ppcs_ptr->fade_in_to_black;
-                                    picture_control_set_ptr->scene_change_flag      = EB_FALSE;
-                                    picture_control_set_ptr->cra_flag               = EB_FALSE;
-                                    picture_control_set_ptr->idr_flag               = EB_FALSE;
-                                    picture_control_set_ptr->target_bit_rate        = picture_control_set_ptr->alt_ref_ppcs_ptr->target_bit_rate;
-                                    picture_control_set_ptr->last_idr_picture       = picture_control_set_ptr->alt_ref_ppcs_ptr->last_idr_picture;
-                                    picture_control_set_ptr->use_rps_in_sps         = EB_FALSE;
-                                    picture_control_set_ptr->open_gop_cra_flag      = EB_FALSE;
-                                    picture_control_set_ptr->pred_structure         = picture_control_set_ptr->alt_ref_ppcs_ptr->pred_structure;                                   
-                                    picture_control_set_ptr->pred_struct_ptr        = picture_control_set_ptr->alt_ref_ppcs_ptr->pred_struct_ptr; 
-                                    picture_control_set_ptr->hierarchical_levels    = picture_control_set_ptr->alt_ref_ppcs_ptr->hierarchical_levels;
-                                    picture_control_set_ptr->hierarchical_layers_diff       = 0;
-                                    picture_control_set_ptr->init_pred_struct_position_flag = EB_FALSE;
-                                    picture_control_set_ptr->pre_assignment_buffer_count    = picture_control_set_ptr->alt_ref_ppcs_ptr->pre_assignment_buffer_count;
+                                    initialize_overlay_frame(picture_control_set_ptr);
                                     picture_type = P_SLICE;
                                 }
-
 #endif
-                            // Set the Slice type
+                                // Set the Slice type
                                 picture_control_set_ptr->slice_type = picture_type;
-#if ALT_REF_OVERLAY
+#if 0 //ALT_REF_OVERLAY
                                 // overlay picture do not have a seperate pa_reference_picture_wrapper_ptr and they share it with the alt_ref picture
                                 if (loop_index == 0)
 #endif
@@ -4338,21 +4420,22 @@ void* picture_decision_kernel(void *input_ptr)
 
                                 EB_MEMSET(picture_control_set_ptr->ref_pa_pic_ptr_array, 0, 2 * sizeof(uint32_t));
 #endif
-//#if ALT_REF_OVERLAY
-//                            }
-//#endif
-
+#if ALT_REF_OVERLAY
+                            }
+                            picture_control_set_ptr = cur_picture_control_set_ptr;
+#endif
 
 #if MOVE_TF
-							int altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
-							int num_past_pics = altref_nframes / 2;
-							int num_future_pics = altref_nframes - num_past_pics - 1;
-							ASSERT(num_future_pics >= 0);
-
 							if (picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE &&
-								picture_control_set_ptr->slice_type != I_SLICE && picture_control_set_ptr->temporal_layer_index == 0 //TODO replace these two with is_altref
-								) {
-
+#if ALT_REF_OVERLAY
+                                picture_control_set_ptr->is_alt_ref) {
+#else
+                                picture_control_set_ptr->slice_type != I_SLICE && picture_control_set_ptr->temporal_layer_index == 0 ){ //TODO replace these two with is_altref
+#endif
+                                int altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
+                                int num_past_pics = altref_nframes / 2;
+                                int num_future_pics = altref_nframes - num_past_pics - 1;
+                                ASSERT(num_future_pics >= 0);
 								printf("TF-POC %i   ", picture_control_set_ptr->picture_number);
 								
 								//initilize list
@@ -4461,9 +4544,7 @@ void* picture_decision_kernel(void *input_ptr)
 							}
 #endif
 
-#if ALT_REF_OVERLAY
-							}
-#endif
+
 
                         }
 
