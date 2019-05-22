@@ -522,50 +522,32 @@ static EbErrorType copy_frame_buffer(
 
     }
     else { // 10bit packed
-        // AMIR to update
-       /* uint32_t lumaOffset = 0, chromaOffset = 0;
-        uint32_t lumaBufferOffset = (input_picture_ptr->stride_y*sequence_control_set_ptr->top_padding + sequence_control_set_ptr->left_padding);
-        uint32_t chromaBufferOffset = (input_picture_ptr->stride_cr*(sequence_control_set_ptr->top_padding >> 1) + (sequence_control_set_ptr->left_padding >> 1));
-        uint16_t lumaWidth = (uint16_t)(input_picture_ptr->width - sequence_control_set_ptr->max_input_pad_right);
-        uint16_t chromaWidth = (lumaWidth >> 1);
-        uint16_t lumaHeight = (uint16_t)(input_picture_ptr->height - sequence_control_set_ptr->max_input_pad_bottom);
 
-        uint16_t sourceLumaStride = (uint16_t)(inputPtr->y_stride);
-        uint16_t sourceCrStride = (uint16_t)(inputPtr->cr_stride);
-        uint16_t sourceCbStride = (uint16_t)(inputPtr->cb_stride);
 
-        un_pack2d(
-            (uint16_t*)(inputPtr->luma + lumaOffset),
-            sourceLumaStride,
-            input_picture_ptr->buffer_y + lumaBufferOffset,
-            input_picture_ptr->stride_y,
-            input_picture_ptr->buffer_bit_inc_y + lumaBufferOffset,
-            input_picture_ptr->stride_bit_inc_y,
-            lumaWidth,
-            lumaHeight,
-            config->asm_type);
+		EB_MEMCPY(dst_picture_ptr->buffer_y,
+			src_picture_ptr->buffer_y ,
+			src_picture_ptr->luma_size);
 
-        un_pack2d(
-            (uint16_t*)(inputPtr->cb + chromaOffset),
-            sourceCbStride,
-            input_picture_ptr->buffer_cb + chromaBufferOffset,
-            input_picture_ptr->stride_cb,
-            input_picture_ptr->buffer_bit_inc_cb + chromaBufferOffset,
-            input_picture_ptr->stride_bit_inc_cb,
-            chromaWidth,
-            (lumaHeight >> 1),
-            config->asm_type);
+		EB_MEMCPY(dst_picture_ptr->buffer_cb,
+			src_picture_ptr->buffer_cb,
+			src_picture_ptr->chroma_size);
 
-        un_pack2d(
-            (uint16_t*)(inputPtr->cr + chromaOffset),
-            sourceCrStride,
-            input_picture_ptr->buffer_cr + chromaBufferOffset,
-            input_picture_ptr->stride_cr,
-            input_picture_ptr->buffer_bit_inc_cr + chromaBufferOffset,
-            input_picture_ptr->stride_bit_inc_cr,
-            chromaWidth,
-            (lumaHeight >> 1),
-            config->asm_type);*/
+		EB_MEMCPY(dst_picture_ptr->buffer_cr,
+			src_picture_ptr->buffer_cr,
+			src_picture_ptr->chroma_size);
+
+		EB_MEMCPY(dst_picture_ptr->buffer_bit_inc_y,
+			src_picture_ptr->buffer_bit_inc_y,
+			src_picture_ptr->luma_size);
+
+		EB_MEMCPY(dst_picture_ptr->buffer_bit_inc_cb,
+			src_picture_ptr->buffer_bit_inc_cb,
+			src_picture_ptr->chroma_size);
+
+		EB_MEMCPY(dst_picture_ptr->buffer_bit_inc_cr,
+			src_picture_ptr->buffer_bit_inc_cr,
+			src_picture_ptr->chroma_size);
+       
     }
     return return_error;
 }
@@ -722,9 +704,11 @@ void* resource_coordination_kernel(void *input_ptr)
             sb_geom_init(sequence_control_set_ptr);
 
 #if ALTREF_MODE
-			sequence_control_set_ptr->enable_altrefs = sequence_control_set_ptr->static_config.enable_altrefs && sequence_control_set_ptr->static_config.enc_mode == ENC_M0 ? EB_TRUE: EB_FALSE;
+			sequence_control_set_ptr->enable_altrefs =  sequence_control_set_ptr->static_config.enable_altrefs && 
+				sequence_control_set_ptr->static_config.enc_mode == ENC_M0  && 
+				sequence_control_set_ptr->static_config.encoder_bit_depth == EB_8BIT ? EB_TRUE : EB_FALSE;
 #endif
-
+			
             // Sep PM mode
             sequence_control_set_ptr->pm_mode = sequence_control_set_ptr->input_resolution < INPUT_SIZE_4K_RANGE ?
                 PM_MODE_2 :
