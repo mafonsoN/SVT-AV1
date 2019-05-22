@@ -1207,7 +1207,7 @@ EbErrorType picture_parent_control_set_ctor(
 	EB_CREATESEMAPHORE(EbHandle, object_ptr->temp_filt_done_semaphore, sizeof(EbHandle), EB_SEMAPHORE, 0, 1);
 	EB_CREATEMUTEX(EbHandle, object_ptr->temp_filt_mutex, sizeof(EbHandle), EB_MUTEX);
 	EB_CREATEMUTEX(EbHandle, object_ptr->debug_mutex, sizeof(EbHandle), EB_MUTEX);
-	
+#if !INPLACE_FILT
 	{
 	    //TODO: get it from input SRM. 
 		EbPictureBufferDescInitData desc_init_data;
@@ -1230,6 +1230,7 @@ EbErrorType picture_parent_control_set_ctor(
 			return EB_ErrorInsufficientResources;
 		}
 	}
+#endif
 #endif
     EB_MALLOC(Av1Common*, object_ptr->av1_cm, sizeof(Av1Common), EB_N_PTR);
 

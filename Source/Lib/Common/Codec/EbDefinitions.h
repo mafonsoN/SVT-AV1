@@ -46,6 +46,7 @@ extern "C" {
 #define TF_MCP                            1 // use aom mcp for temporal filtering compensation.
 #define DIV_FIX                           1 // fix div in TF
 #define	FIX_SHORT                         1 // fix crash when filtering window is short
+#define	INPLACE_FILT                      1 // in place filtering.
 
 #define ALT_REF_OVERLAY                   1 // support for ALT_REF overlay frames
 #define ALT_REF_PRINTS                    0

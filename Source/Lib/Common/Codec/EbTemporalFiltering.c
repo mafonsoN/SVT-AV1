@@ -1976,6 +1976,7 @@ int replace_src_pic_buffers(PictureParentControlSet *picture_control_set_ptr_cen
                      0);
 #endif
 
+#if !INPLACE_FILT
     // Y
     copy_pixels_with_origin(picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y,
                          picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
@@ -2011,7 +2012,7 @@ int replace_src_pic_buffers(PictureParentControlSet *picture_control_set_ptr_cen
                          0,
                          picture_control_set_ptr_central->enhanced_picture_ptr->width >> 1,
                          picture_control_set_ptr_central->enhanced_picture_ptr->height >> 1);
-
+#endif
 
     // Replace enhanced picture buffer
 
@@ -2046,6 +2047,7 @@ int replace_src_pic_buffers(PictureParentControlSet *picture_control_set_ptr_cen
                    0, 0);
 #endif
 
+#if !INPLACE_FILT
     copy_pixels_with_origin(padded_pic_ptr->buffer_y,
                          padded_pic_ptr->stride_y,
                          padded_pic_ptr->origin_y,
@@ -2056,19 +2058,22 @@ int replace_src_pic_buffers(PictureParentControlSet *picture_control_set_ptr_cen
                          0,
                          picture_control_set_ptr_central->enhanced_picture_ptr->width,
                          picture_control_set_ptr_central->enhanced_picture_ptr->height);
+#endif
 
-    generate_padding(
-            &(padded_pic_ptr->buffer_y[0]),
-            padded_pic_ptr->stride_y,
-            padded_pic_ptr->width,
-            padded_pic_ptr->height,
-            padded_pic_ptr->origin_x,
-            padded_pic_ptr->origin_y);
+	//only in Mode1 do the padd+decimation
 
-    DecimateInputPicture(picture_control_set_ptr_central,
-                         padded_pic_ptr,
-                         quarter_pic_ptr,
-                         sixteenth_pic_ptr);
+		generate_padding(
+			&(padded_pic_ptr->buffer_y[0]),
+			padded_pic_ptr->stride_y,
+			padded_pic_ptr->width,
+			padded_pic_ptr->height,
+			padded_pic_ptr->origin_x,
+			padded_pic_ptr->origin_y);
+
+		DecimateInputPicture(picture_control_set_ptr_central,
+			padded_pic_ptr,
+			quarter_pic_ptr,
+			sixteenth_pic_ptr);
 
 #if DEBUG_TEMPORAL_FILTER
     save_Y_to_file("padded_picture.yuv",
@@ -2220,6 +2225,17 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
     }
 
 #if MOVE_TF	
+#if INPLACE_FILT
+	alt_ref_buffer[0] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y +
+		picture_control_set_ptr_central->enhanced_picture_ptr->origin_x +
+		picture_control_set_ptr_central->enhanced_picture_ptr->origin_y*picture_control_set_ptr_central->enhanced_picture_ptr->stride_y;
+	alt_ref_buffer[1] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_cb +
+		picture_control_set_ptr_central->enhanced_picture_ptr->origin_x / 2 +
+		(picture_control_set_ptr_central->enhanced_picture_ptr->origin_y / 2)*picture_control_set_ptr_central->enhanced_picture_ptr->stride_cb;
+	alt_ref_buffer[2] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_cr +
+		picture_control_set_ptr_central->enhanced_picture_ptr->origin_x / 2 +
+		(picture_control_set_ptr_central->enhanced_picture_ptr->origin_y / 2)*picture_control_set_ptr_central->enhanced_picture_ptr->stride_cr;
+#else
 	alt_ref_buffer[0] = picture_control_set_ptr_central->new_enhanced_picture_ptr->buffer_y +
 		picture_control_set_ptr_central->new_enhanced_picture_ptr->origin_x + 
 		picture_control_set_ptr_central->new_enhanced_picture_ptr->origin_y*picture_control_set_ptr_central->new_enhanced_picture_ptr->stride_y;
@@ -2229,6 +2245,7 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
 	alt_ref_buffer[2] = picture_control_set_ptr_central->new_enhanced_picture_ptr->buffer_cr +
 		picture_control_set_ptr_central->new_enhanced_picture_ptr->origin_x / 2 +
 		(picture_control_set_ptr_central->new_enhanced_picture_ptr->origin_y / 2)*picture_control_set_ptr_central->new_enhanced_picture_ptr->stride_cr;
+#endif
 		
 #else
     // allocate memory for the alt-ref buffer - to be replaced by some other final structure
