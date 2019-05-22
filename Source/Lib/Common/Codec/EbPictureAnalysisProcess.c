@@ -5050,12 +5050,6 @@ void* picture_analysis_kernel(void *input_ptr)
         if (!picture_control_set_ptr->is_overlay) 
         {
 #endif
-
-#if ALT_REF_PRINTS
-            //printf("PA: POC:%lld\tIsOverlay:%d\n",
-            //    picture_control_set_ptr->picture_number,
-            //    picture_control_set_ptr->is_overlay);
-#endif
             sequence_control_set_ptr = (SequenceControlSet*)picture_control_set_ptr->sequence_control_set_wrapper_ptr->object_ptr;
             input_picture_ptr = picture_control_set_ptr->enhanced_picture_ptr;
             paReferenceObject = (EbPaReferenceObject*)picture_control_set_ptr->pa_reference_picture_wrapper_ptr->object_ptr;
@@ -5146,12 +5140,6 @@ void* picture_analysis_kernel(void *input_ptr)
                 paReferenceObject->y_mean[sb_index] = picture_control_set_ptr->y_mean[sb_index][ME_TIER_ZERO_PU_64x64];
 
             }
-
-#if ALT_REF_PRINTS
- /*           printf("PA POST POC:%lld\tIsOverlay:%d\n",
-                picture_control_set_ptr->picture_number,
-                picture_control_set_ptr->is_overlay);*/
-#endif
 #if ALT_REF_OVERLAY
         }
 #endif

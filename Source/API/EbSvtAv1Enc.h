@@ -13,8 +13,8 @@ extern "C" {
 #include "stdint.h"
 #include "EbSvtAv1.h"
 
-#define  TILES    1
-
+#define TILES    1
+#define ALT_REF_OVERLAY_APP                         1
     //***HME***
 #define EB_HME_SEARCH_AREA_COLUMN_MAX_COUNT         2
 #define EB_HME_SEARCH_AREA_ROW_MAX_COUNT            2
@@ -428,6 +428,7 @@ typedef struct EbSvtAv1EncConfiguration
     EbBool                   enable_altrefs;
     uint8_t                  altref_strength;
     uint8_t                  altref_nframes;
+    EbBool                   enable_overlays;
 
 } EbSvtAv1EncConfiguration;
 

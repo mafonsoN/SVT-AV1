@@ -164,13 +164,7 @@ void* picture_manager_kernel(void *input_ptr)
             encode_context_ptr = sequence_control_set_ptr->encode_context_ptr;
 
             //printf("\nPicture Manager Process @ %d \n ", picture_control_set_ptr->picture_number);
-#if ALT_REF_PRINTS
-            //printf("PM: POC:%lld\tPOCALT:%lld\tIsOverlay:%d\n",
-            //    picture_control_set_ptr->picture_number,
-            //    picture_control_set_ptr->picture_number_alt,
-            //    picture_control_set_ptr->is_overlay);
 
-#endif  
 #if ALT_REF_OVERLAY
             queueEntryIndex = (int32_t)(picture_control_set_ptr->picture_number_alt - encode_context_ptr->picture_manager_reorder_queue[encode_context_ptr->picture_manager_reorder_queue_head_index]->picture_number);
 #else
@@ -1194,7 +1188,6 @@ void* picture_manager_kernel(void *input_ptr)
                 {
                     // Release the nominal live_count value
                     eb_release_object(referenceEntryPtr->reference_object_ptr);
-
                     referenceEntryPtr->reference_object_ptr = (EbObjectWrapper*)EB_NULL;
                     referenceEntryPtr->reference_available = EB_FALSE;
                     referenceEntryPtr->is_used_as_reference_flag = EB_FALSE;

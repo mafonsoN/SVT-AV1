@@ -374,6 +374,7 @@ typedef struct EbConfig
     EbBool                  enable_altrefs;
     uint8_t                 altref_strength;
     uint8_t                 altref_nframes;
+    EbBool                  enable_overlays;
     // --- end: ALTREF_FILTERING_SUPPORT
 
 } EbConfig;

@@ -598,11 +598,6 @@ void* motion_estimation_kernel(void *input_ptr)
         input_padded_picture_ptr = (EbPictureBufferDesc*)paReferenceObject->input_padded_picture_ptr;
 
         input_picture_ptr = picture_control_set_ptr->enhanced_picture_ptr;
-#if ALT_REF_PRINTS
-    /*    printf("ME: POC:%lld\tIsOverlay:%d\n",
-            picture_control_set_ptr->picture_number,
-            picture_control_set_ptr->is_overlay);*/
-#endif      
 
 #if !ME_CLEAN
         // Segments

@@ -3916,12 +3916,6 @@ void* rate_control_kernel(void *input_ptr)
             picture_control_set_ptr = (PictureControlSet  *)rate_control_tasks_ptr->picture_control_set_wrapper_ptr->object_ptr;
             sequence_control_set_ptr = (SequenceControlSet *)picture_control_set_ptr->sequence_control_set_wrapper_ptr->object_ptr;
 
-#if ALT_REF_PRINTS
-            //printf("RateControl: POC:%lld\tIsOverlay:%d\n",
-            //    picture_control_set_ptr->parent_pcs_ptr->picture_number,
-            //    picture_control_set_ptr->parent_pcs_ptr->is_overlay);
-#endif  
-
             if (picture_control_set_ptr->picture_number == 0) {
 
                 rate_control_model_init(rc_model_ptr, sequence_control_set_ptr);
@@ -4373,15 +4367,6 @@ void* rate_control_kernel(void *input_ptr)
             // Release the SequenceControlSet
             eb_release_object(parentpicture_control_set_ptr->sequence_control_set_wrapper_ptr);
             // Release the ParentPictureControlSet
-
-#if  ALT_REF_PRINTS
-            //printf("RC RelaseE POC:%lld\tIsOverlay:%d\n",
-            //    parentpicture_control_set_ptr->picture_number,
-            //    parentpicture_control_set_ptr->is_overlay);
-#endif
-#if 0 //ALT_REF_OVERLAY
-            if (!parentpicture_control_set_ptr->is_alt_ref || parentpicture_control_set_ptr->is_overlay)
-#endif
             eb_release_object(parentpicture_control_set_ptr->input_picture_wrapper_ptr);
             eb_release_object(rate_control_tasks_ptr->picture_control_set_wrapper_ptr);
 

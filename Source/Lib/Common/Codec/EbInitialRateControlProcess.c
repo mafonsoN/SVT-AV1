@@ -1750,14 +1750,6 @@ void* initial_rate_control_kernel(void *input_ptr)
         if (SEGMENT_COMPLETION_MASK_TEST(picture_control_set_ptr->me_segments_completion_mask, picture_control_set_ptr->me_segments_total_count)) {
             sequence_control_set_ptr = (SequenceControlSet*)picture_control_set_ptr->sequence_control_set_wrapper_ptr->object_ptr;
             encode_context_ptr = (EncodeContext*)sequence_control_set_ptr->encode_context_ptr;
-#if ALT_REF_PRINTS
-            //printf("IRC: POC:%lld\tPOCNew:%lld\tDecOrder:%lld\tIsOverlay:%d\t%lld\n",
-            //    picture_control_set_ptr->picture_number,
-            //    picture_control_set_ptr->picture_number_alt,
-            //    picture_control_set_ptr->decode_order,
-            //    picture_control_set_ptr->is_overlay,
-            //    inputResultsPtr->picture_control_set_wrapper_ptr->object_ptr);
-#endif  
             // Mark picture when global motion is detected using ME results
             //reset intraCodedEstimationLcu
             MeBasedGlobalMotionDetection(
@@ -2081,22 +2073,13 @@ void* initial_rate_control_kernel(void *input_ptr)
 
                         picture_control_set_ptr->output_stream_wrapper_ptr = output_stream_wrapper_ptr;
 
-
                         // Get Empty Results Object
                         eb_get_empty_object(
                             context_ptr->initialrate_control_results_output_fifo_ptr,
                             &outputResultsWrapperPtr);
 
                         outputResultsPtr = (InitialRateControlResults*)outputResultsWrapperPtr->object_ptr;
-#if ALT_REF_PRINTS
-            /*            printf("IRC POST: POC:%lld\tPOCNew:%lld\tDecOrder:%lld\tIsOverlay:%d\t%d\t%lld\n",
-                            picture_control_set_ptr->picture_number,
-                            picture_control_set_ptr->picture_number_alt,
-                            picture_control_set_ptr->decode_order,
-                            picture_control_set_ptr->is_overlay,
-                            encode_context_ptr->initial_rate_control_reorder_queue_head_index,
-                            (queueEntryPtr->parent_pcs_wrapper_ptr)->object_ptr);*/
-#endif 
+
 #if ALT_REF_OVERLAY
                         if (loop_index)
                             outputResultsPtr->picture_control_set_wrapper_ptr = picture_control_set_ptr->p_pcs_wrapper_ptr;

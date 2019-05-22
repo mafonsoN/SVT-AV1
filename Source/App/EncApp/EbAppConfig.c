@@ -78,6 +78,7 @@
 #define ENABLE_ALTREFS                  "-enable-altrefs"
 #define ALTREF_STRENGTH                 "-altref-strength"
 #define ALTREF_NFRAMES                  "-altref-nframes"
+#define ENABLE_OVERLAYS                 "-enable-overlays"
 // --- end: ALTREF_FILTERING_SUPPORT
 #define CONSTRAINED_INTRA_ENABLE_TOKEN  "-constrd-intra"
 #define IMPROVE_SHARPNESS_TOKEN         "-sharp"
@@ -226,6 +227,7 @@ static void SetScreenContentMode                (const char *value, EbConfig *cf
 static void SetEnableAltRefs                    (const char *value, EbConfig *cfg) {cfg->enable_altrefs = (EbBool)strtoul(value, NULL, 0);};
 static void SetAltRefStrength                   (const char *value, EbConfig *cfg) {cfg->altref_strength = strtoul(value, NULL, 0);};
 static void SetAltRefNFrames                    (const char *value, EbConfig *cfg) {cfg->altref_nframes = strtoul(value, NULL, 0);};
+static void SetEnableOverlays                   (const char *value, EbConfig *cfg) { cfg->enable_overlays = (EbBool)strtoul(value, NULL, 0); };
 // --- end: ALTREF_FILTERING_SUPPORT
 static void SetEnableConstrainedIntra           (const char *value, EbConfig *cfg) {cfg->constrained_intra                                             = (EbBool)strtoul(value, NULL, 0);};
 static void SetImproveSharpness                 (const char *value, EbConfig *cfg) {cfg->improve_sharpness               = (EbBool)strtol(value,  NULL, 0);};
@@ -384,6 +386,7 @@ config_entry_t config_entry[] = {
     { SINGLE_INPUT, ENABLE_ALTREFS, "enableAltRefs", SetEnableAltRefs },
     { SINGLE_INPUT, ALTREF_STRENGTH, "altRefStrength", SetAltRefStrength },
     { SINGLE_INPUT, ALTREF_NFRAMES, "altRefNframes", SetAltRefNFrames },
+    { SINGLE_INPUT, ENABLE_OVERLAYS, "enableOverlays", SetEnableOverlays },
     // --- end: ALTREF_FILTERING_SUPPORT
 
     // Termination
@@ -531,6 +534,7 @@ void eb_config_ctor(EbConfig *config_ptr)
     config_ptr->enable_altrefs                       = EB_FALSE;
     config_ptr->altref_strength                      = 5;
     config_ptr->altref_nframes                       = 7;
+    config_ptr->enable_altrefs                       = EB_TRUE;
     // --- end: ALTREF_FILTERING_SUPPORT
 
     return;

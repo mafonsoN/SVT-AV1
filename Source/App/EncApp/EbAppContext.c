@@ -220,6 +220,7 @@ EbErrorType CopyConfigurationParameters(
     callback_data->eb_enc_parameters.enable_altrefs  = (EbBool)config->enable_altrefs;
     callback_data->eb_enc_parameters.altref_strength = config->altref_strength;
     callback_data->eb_enc_parameters.altref_nframes  = config->altref_nframes;
+    callback_data->eb_enc_parameters.enable_overlays = (EbBool)config->enable_overlays;
     // --- end: ALTREF_FILTERING_SUPPORT
 
     for (hmeRegionIndex = 0; hmeRegionIndex < callback_data->eb_enc_parameters.number_hme_search_region_in_width; ++hmeRegionIndex) {

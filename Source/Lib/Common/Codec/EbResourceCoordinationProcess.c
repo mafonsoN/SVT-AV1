@@ -600,9 +600,7 @@ void* resource_coordination_kernel(void *input_ptr)
 
     uint32_t                         input_size = 0;
     EbObjectWrapper               *prevPictureControlSetWrapperPtr = 0;
-#if ALT_REF_PRINTS
-    uint32_t loop_counter = 0;
-#endif
+
     for (;;) {
 
         // Tie instance_index to zero for now...
@@ -614,13 +612,6 @@ void* resource_coordination_kernel(void *input_ptr)
             &ebInputWrapperPtr);
         ebInputPtr = (EbBufferHeaderType*)ebInputWrapperPtr->object_ptr;
         sequence_control_set_ptr = context_ptr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr;
-#if ALT_REF_PRINTS
-        //printf("RC INPUT: POC:%lld\t%d\n",
-        //    loop_counter++,
-        //    (ebInputPtr->flags & EB_BUFFERFLAG_EOS)
-        //    );
-#endif
-
 
         // If config changes occured since the last picture began encoding, then
         //   prepare a new sequence_control_set_ptr containing the new changes and update the state
@@ -708,7 +699,7 @@ void* resource_coordination_kernel(void *input_ptr)
 				sequence_control_set_ptr->static_config.enc_mode == ENC_M0  && 
 				sequence_control_set_ptr->static_config.encoder_bit_depth == EB_8BIT ? EB_TRUE : EB_FALSE;
 #endif
-			
+
             // Sep PM mode
             sequence_control_set_ptr->pm_mode = sequence_control_set_ptr->input_resolution < INPUT_SIZE_4K_RANGE ?
                 PM_MODE_2 :
@@ -730,7 +721,8 @@ void* resource_coordination_kernel(void *input_ptr)
         // Since at this stage we do not know the prediction structure and the location of ALT_REF pictures, 
         // for every picture (except first picture), we allocate two: 1. original picture, 2. potential Overlay picture. 
         // In Picture Decision Process, where the overlay frames are known, they extra pictures are released      
-        uint8_t has_overlay = context_ptr->sequence_control_set_instance_array[instance_index]->encode_context_ptr->initial_picture ? 0 : 1;
+        uint8_t has_overlay = (sequence_control_set_ptr->static_config.enable_overlays == EB_FALSE ||
+            context_ptr->sequence_control_set_instance_array[instance_index]->encode_context_ptr->initial_picture) ? 0 : 1;
         for (uint8_t loop_index = 0; loop_index <= has_overlay && !end_of_sequence_flag; loop_index++) {
 #endif
             //Get a New ParentPCS where we will hold the new inputPicture
@@ -770,7 +762,6 @@ void* resource_coordination_kernel(void *input_ptr)
             picture_control_set_ptr->enc_mode = sequence_control_set_ptr->static_config.enc_mode;
 
             // Keep track of the previous input for the ZZ SADs computation
-            // AMIR: check this
             picture_control_set_ptr->previous_picture_control_set_wrapper_ptr = (context_ptr->sequence_control_set_instance_array[instance_index]->encode_context_ptr->initial_picture) ?
                 picture_control_set_wrapper_ptr :
                 sequence_control_set_ptr->encode_context_ptr->previous_picture_control_set_wrapper_ptr;
@@ -926,12 +917,6 @@ void* resource_coordination_kernel(void *input_ptr)
                 if (((PictureParentControlSet       *)prevPictureControlSetWrapperPtr->object_ptr)->is_overlay && end_of_sequence_flag) {
                     ((PictureParentControlSet       *)prevPictureControlSetWrapperPtr->object_ptr)->alt_ref_ppcs_ptr->end_of_sequence_flag = EB_TRUE;
                 }
-#endif
-#if ALT_REF_PRINTS
-                //printf("RC POST: POC:%lld\tIsOverlay:%d\tEOS:%d\n",
-                //    ((PictureParentControlSet       *)prevPictureControlSetWrapperPtr->object_ptr)->picture_number,
-                //    ((PictureParentControlSet       *)prevPictureControlSetWrapperPtr->object_ptr)->is_overlay,
-                //    end_of_sequence_flag);
 #endif
                 // Post the finished Results Object
                 eb_post_full_object(outputWrapperPtr);

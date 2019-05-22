@@ -615,6 +615,9 @@ EbErrorType load_default_buffer_configuration_settings(
                                                                           (uint32_t)((1 << sequence_control_set_ptr->static_config.hierarchical_levels) + 2)) +
                                                                           sequence_control_set_ptr->static_config.look_ahead_distance + SCD_LAD;
     sequence_control_set_ptr->output_recon_buffer_fifo_init_count       = sequence_control_set_ptr->reference_picture_buffer_init_count;
+#if ALT_REF_OVERLAY
+    sequence_control_set_ptr->overlay_input_picture_buffer_init_count   = sequence_control_set_ptr->static_config.enable_overlays ? 30 :1;
+#endif
 
     //#====================== Inter process Fifos ======================
     sequence_control_set_ptr->resource_coordination_fifo_init_count       = 300;
@@ -1291,7 +1294,7 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
         // Overlay Input Picture Buffers
         return_error = eb_system_resource_ctor(
             &encHandlePtr->overlay_input_picture_pool_ptr_array[instance_index],
-            50,//encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->overlay_input_picture_buffer_init_count,
+            encHandlePtr->sequence_control_set_instance_array[instance_index]->sequence_control_set_ptr->overlay_input_picture_buffer_init_count,
             1,
             0,
             &encHandlePtr->overlay_input_picture_pool_producer_fifo_ptr_dbl_array[instance_index],
@@ -2303,6 +2306,12 @@ void SetParamBasedOnInput(SequenceControlSet *sequence_control_set_ptr)
     sequence_control_set_ptr->static_config.super_block_size = (sequence_control_set_ptr->static_config.rate_control_mode > 1) ? 64 : sequence_control_set_ptr->static_config.super_block_size;
    // sequence_control_set_ptr->static_config.hierarchical_levels = (sequence_control_set_ptr->static_config.rate_control_mode > 1) ? 3 : sequence_control_set_ptr->static_config.hierarchical_levels;
 #endif
+#if ALT_REF_OVERLAY_MODE
+    sequence_control_set_ptr->static_config.enable_overlays = (sequence_control_set_ptr->static_config.rate_control_mode > 0) ||
+        (sequence_control_set_ptr->static_config.enc_mode > ENC_M0) || 
+        sequence_control_set_ptr->static_config.encoder_bit_depth != EB_8BIT ?
+        0 : sequence_control_set_ptr->static_config.enable_overlays;
+#endif
 
 #if MEMORY_FOOTPRINT_OPT_ME_MV
     //0: MRP Mode 0 (4,3)
@@ -2525,6 +2534,7 @@ void CopyApiFromApp(
     sequence_control_set_ptr->static_config.enable_altrefs = pComponentParameterStructure->enable_altrefs;
     sequence_control_set_ptr->static_config.altref_strength = pComponentParameterStructure->altref_strength;
     sequence_control_set_ptr->static_config.altref_nframes = pComponentParameterStructure->altref_nframes;
+    sequence_control_set_ptr->static_config.enable_overlays = pComponentParameterStructure->enable_overlays;
 
     return;
 }
@@ -2995,6 +3005,8 @@ EbErrorType eb_svt_enc_init_parameter(
 	config_ptr->enable_altrefs = EB_TRUE;// EB_FALSE;
     config_ptr->altref_nframes = 7;
     config_ptr->altref_strength = 5;
+    config_ptr->enable_overlays = EB_TRUE;
+
 
     return return_error;
 }
@@ -3473,7 +3485,7 @@ __attribute__((visibility("default")))
 EB_API void eb_svt_release_out_buffer(
     EbBufferHeaderType  **p_buffer)
 {
-    if (p_buffer&&(*p_buffer)->wrapper_ptr)
+    if (p_buffer && (*p_buffer)->wrapper_ptr)
         // Release out put buffer back into the pool
         eb_release_object((EbObjectWrapper  *)(*p_buffer)->wrapper_ptr);
     return;

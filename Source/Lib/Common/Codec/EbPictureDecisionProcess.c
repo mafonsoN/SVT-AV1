@@ -3483,13 +3483,6 @@ void* picture_decision_kernel(void *input_ptr)
         // P.S. Since the prior Picture Analysis processes stage is multithreaded, inputs to the Picture Decision Process
         // can arrive out-of-display-order, so a the Picture Decision Reordering Queue is used to enforce processing of
         // pictures in display order
-#if  ALT_REF_PRINTS
-        //if(!picture_control_set_ptr->is_overlay)
-        //    printf("PD: POC:%lld\tIsOverlay:%d\n",
-        //        picture_control_set_ptr->picture_number,
-        //        picture_control_set_ptr->is_overlay);
-#endif      
-
 #if ALT_REF_OVERLAY
         if (!picture_control_set_ptr->is_overlay ) {
 #endif
@@ -3927,31 +3920,28 @@ void* picture_decision_kernel(void *input_ptr)
 
                             predPositionPtr = picture_control_set_ptr->pred_struct_ptr->pred_struct_entry_ptr_array[encode_context_ptr->pred_struct_position];
 #if ALT_REF_OVERLAY
-                            // At this stage we know the prediction structure and the location of ALT_REF pictures.
-                            // For every ALTREF picture, there is an overlay picture. They extra pictures are released
-                            // is_alt_ref flag is set for non-slice base layer pictures
-                            if (predPositionPtr->temporal_layer_index == 0 && picture_type != I_SLICE) {
-                                picture_control_set_ptr->is_alt_ref = 1;
-                                ((PictureParentControlSet*)encode_context_ptr->pre_assignment_buffer[pictureIndex - 1]->object_ptr)->has_show_existing = EB_FALSE;
-                            }
-                            // release the overlay PCS for non alt ref pictures. First picture does not have overlay PCS
-                            else if (picture_control_set_ptr->picture_number){
-#if  ALT_REF_PRINTS
-                                //printf("PD: RELEASE POC:%lld\tIsOverlay:%d\t%lld\n",
-                                //    picture_control_set_ptr->overlay_ppcs_ptr->picture_number,
-                                //    picture_control_set_ptr->overlay_ppcs_ptr->is_overlay,
-                                //    picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr->object_ptr);
-#endif
-                                eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->input_picture_wrapper_ptr);
-                                // release the pa_reference_picture
-                                eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->pa_reference_picture_wrapper_ptr);
-                                // release the parent pcs
-                                eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
+                            if (sequence_control_set_ptr->static_config.enable_overlays == EB_TRUE) {
+                                // At this stage we know the prediction structure and the location of ALT_REF pictures.
+                                // For every ALTREF picture, there is an overlay picture. They extra pictures are released
+                                // is_alt_ref flag is set for non-slice base layer pictures
+                                if (predPositionPtr->temporal_layer_index == 0 && picture_type != I_SLICE) {
+                                    picture_control_set_ptr->is_alt_ref = 1;
+                                    picture_control_set_ptr->showable_frame = 0;
+                                    ((PictureParentControlSet*)encode_context_ptr->pre_assignment_buffer[pictureIndex - 1]->object_ptr)->has_show_existing = EB_FALSE;
+                                }
+                                // release the overlay PCS for non alt ref pictures. First picture does not have overlay PCS
+                                else if (picture_control_set_ptr->picture_number) {
+                                    eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->input_picture_wrapper_ptr);
+                                    // release the pa_reference_picture
+                                    eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->pa_reference_picture_wrapper_ptr);
+                                    // release the parent pcs
+                                    eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
 #if !BUG_FIX_PCS_LIVE_COUNT
-                                eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
-                                eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
+                                    eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
+                                    eb_release_object(picture_control_set_ptr->overlay_ppcs_ptr->p_pcs_wrapper_ptr);
 #endif
-                                picture_control_set_ptr->overlay_ppcs_ptr = EB_NULL;
+                                    picture_control_set_ptr->overlay_ppcs_ptr = EB_NULL;
+                                }
                             }
                             PictureParentControlSet       *cur_picture_control_set_ptr = picture_control_set_ptr;
                             for (uint8_t loop_index = 0; loop_index <= picture_control_set_ptr->is_alt_ref; loop_index++) {
@@ -3964,11 +3954,7 @@ void* picture_decision_kernel(void *input_ptr)
 #endif
                                 // Set the Slice type
                                 picture_control_set_ptr->slice_type = picture_type;
-#if 0 //ALT_REF_OVERLAY
-                                // overlay picture do not have a seperate pa_reference_picture_wrapper_ptr and they share it with the alt_ref picture
-                                if (loop_index == 0)
-#endif
-                                    ((EbPaReferenceObject*)picture_control_set_ptr->pa_reference_picture_wrapper_ptr->object_ptr)->slice_type = picture_control_set_ptr->slice_type;
+                                ((EbPaReferenceObject*)picture_control_set_ptr->pa_reference_picture_wrapper_ptr->object_ptr)->slice_type = picture_control_set_ptr->slice_type;
 
                                 switch (picture_type) {
 
@@ -4433,7 +4419,8 @@ void* picture_decision_kernel(void *input_ptr)
 
 							if (picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE &&
 #if ALT_REF_OVERLAY
-                                picture_control_set_ptr->is_alt_ref) {
+                               ( (picture_control_set_ptr->is_alt_ref && sequence_control_set_ptr->static_config.enable_overlays == EB_TRUE) ||
+                                   picture_control_set_ptr->slice_type != I_SLICE && picture_control_set_ptr->temporal_layer_index == 0)) {
 #else
                                 picture_control_set_ptr->slice_type != I_SLICE && picture_control_set_ptr->temporal_layer_index == 0 ){ //TODO replace these two with is_altref
 #endif
@@ -4494,10 +4481,10 @@ void* picture_decision_kernel(void *input_ptr)
 
 								if(altref_nframes< picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes)
 									printf("TF %i  using only % frames/%i   \n", picture_control_set_ptr->picture_number, altref_nframes, picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes);
-								for (int tt = 0; tt < altref_nframes; tt++)
+								/*for (int tt = 0; tt < altref_nframes; tt++)
 								{
-									//printf("%i   ", picture_control_set_ptr->temp_filt_pcs_list[tt]->picture_number);
-								}
+									printf("%i   ", picture_control_set_ptr->temp_filt_pcs_list[tt]->picture_number);
+								}*/
 #if FIX_SHORT
 								picture_control_set_ptr->altref_nframes = altref_nframes;
 #endif
