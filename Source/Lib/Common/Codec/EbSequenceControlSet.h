@@ -130,9 +130,12 @@ extern "C" {
 
         uint32_t                                rest_segment_column_count;
         uint32_t                                rest_segment_row_count;
-#if MOVE_TF
+#if MOVE_TF		
 		uint32_t                                tf_segment_column_count;
 		uint32_t                                tf_segment_row_count;
+#endif
+#if ALTREF_MODE
+		uint8_t                                 enable_altrefs;
 #endif
 
         // Buffers

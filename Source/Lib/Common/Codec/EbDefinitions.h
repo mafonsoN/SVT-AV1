@@ -34,7 +34,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-#define ALT_REF_SUPPORT                   1 // ALT_REF main flag
+#define ALT_REF_SUPPORT                   1// ALT_REF main flag
 
 #if ALT_REF_SUPPORT
 #define ALTREF_FILTERING_SUPPORT          1 //Temporal filter
@@ -47,6 +47,8 @@ extern "C" {
 #define DIV_FIX                           1 // fix div in TF
 #define	FIX_SHORT                         1 // fix crash when filtering window is short
 #define	INPLACE_FILT                      1 // in place filtering.
+#define	ALTREF_MODE                       1 // make altref mode dependent
+
 
 #define ALT_REF_OVERLAY                   1 // support for ALT_REF overlay frames
 #define ALT_REF_PRINTS                    0

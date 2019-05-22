@@ -4426,11 +4426,17 @@ void* picture_decision_kernel(void *input_ptr)
 #endif
 
 #if MOVE_TF
+#if ALTREF_MODE
+							if ( sequence_control_set_ptr->enable_altrefs == EB_TRUE &&
+								 picture_control_set_ptr->slice_type != I_SLICE && picture_control_set_ptr->temporal_layer_index == 0) {
+#else
+
 							if (picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE &&
 #if ALT_REF_OVERLAY
                                 picture_control_set_ptr->is_alt_ref) {
 #else
                                 picture_control_set_ptr->slice_type != I_SLICE && picture_control_set_ptr->temporal_layer_index == 0 ){ //TODO replace these two with is_altref
+#endif
 #endif
                                 int altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
                                 int num_past_pics = altref_nframes / 2;
