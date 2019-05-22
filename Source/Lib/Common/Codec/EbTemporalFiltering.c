@@ -59,6 +59,61 @@ static const uint32_t index_16x16_from_subindexes[4][4] = { {0, 1, 4, 5}, {2, 3,
 
 extern aom_variance_fn_ptr_t mefn_ptr[BlockSizeS_ALL];
 
+typedef void(*TempFilteringType)(const uint8_t *y_src,
+                                 int y_src_stride,
+                                 const uint8_t *y_pre,
+                                 int y_pre_stride,
+                                 const uint8_t *u_src,
+                                 const uint8_t *v_src,
+                                 int uv_src_stride,
+                                 const uint8_t *u_pre,
+                                 const uint8_t *v_pre,
+                                 int uv_pre_stride,
+                                 unsigned int block_width,
+                                 unsigned int block_height,
+                                 int ss_x,
+                                 int ss_y,
+                                 int strength,
+                                 const int *blk_fw,
+                                 int use_whole_blk,
+                                 uint32_t *y_accum,
+                                 uint16_t *y_count,
+                                 uint32_t *u_accum,
+                                 uint16_t *u_count,
+                                 uint32_t *v_accum,
+                                 uint16_t *v_count);
+
+void apply_filtering_c(const uint8_t *y_src,
+                       int y_src_stride,
+                       const uint8_t *y_pre,
+                       int y_pre_stride,
+                       const uint8_t *u_src,
+                       const uint8_t *v_src,
+                       int uv_src_stride,
+                       const uint8_t *u_pre,
+                       const uint8_t *v_pre,
+                       int uv_pre_stride,
+                       unsigned int block_width,
+                       unsigned int block_height,
+                       int ss_x,
+                       int ss_y,
+                       int strength,
+                       const int *blk_fw,
+                       int use_whole_blk,
+                       uint32_t *y_accum,
+                       uint16_t *y_count,
+                       uint32_t *u_accum,
+                       uint16_t *u_count,
+                       uint32_t *v_accum,
+                       uint16_t *v_count);
+
+static TempFilteringType FUNC_TABLE apply_temp_filtering_32x32_func_ptr_array[ASM_TYPE_TOTAL] = {
+        // NON_SIMD
+        apply_filtering_c,
+        // SSE4
+        av1_apply_temporal_filter_sse4_1
+};
+
 // Debug function
 void print_block_uint8(EbByte src, int width, int height, int stride){
 
@@ -613,20 +668,30 @@ static INLINE void calculate_squared_errors(const uint8_t *s,
 
 }
 
-// Main function that applies filtering to a block according to weights
-// TODO: libaom uses an intrinsics version of this function
-void apply_filtering(EbByte *src,
-                    EbByte *pred,
-                    uint32_t **accum,
-                    uint16_t **count,
-                    int *stride_src,
-                    int *stride_pred,
-                    unsigned int block_width,
-                    unsigned int block_height,
-                    int ss_x, // chroma sub-sampling in x
-                    int ss_y, // chroma sub-sampling in y
-                    int strength,
-                    const int *blk_fw){ // sub-block filter weights
+// Main function that applies filtering to a block according to the weights
+void apply_filtering_c(const uint8_t *y_src,
+                        int y_src_stride,
+                        const uint8_t *y_pre,
+                        int y_pre_stride,
+                        const uint8_t *u_src,
+                        const uint8_t *v_src,
+                        int uv_src_stride,
+                        const uint8_t *u_pre,
+                        const uint8_t *v_pre,
+                        int uv_pre_stride,
+                        unsigned int block_width,
+                        unsigned int block_height,
+                        int ss_x,
+                        int ss_y,
+                        int strength,
+                        const int *blk_fw,
+                        int use_whole_blk,
+                        uint32_t *y_accum,
+                        uint16_t *y_count,
+                        uint32_t *u_accum,
+                        uint16_t *u_count,
+                        uint32_t *v_accum,
+                        uint16_t *v_count){ // sub-block filter weights
 
     unsigned int i, j, k, m;
     int idx, idy;
@@ -642,27 +707,22 @@ void apply_filtering(EbByte *src,
     memset(u_diff_sse, 0, BLK_PELS * sizeof(uint16_t));
     memset(v_diff_sse, 0, BLK_PELS * sizeof(uint16_t));
 
-    EbByte src_y = src[0], src_u = src[1], src_v = src[2];
-    EbByte pred_y = pred[0], pred_u = pred[1], pred_v = pred[2];
-    uint32_t *accum_y = accum[0], *accum_u = accum[1], *accum_v = accum[2];
-    uint16_t *count_y = count[0], *count_u = count[1], *count_v = count[2];
-
     // Calculate squared differences for each pixel of the block (pred-orig)
-    calculate_squared_errors(src_y, stride_src[0], pred_y, stride_pred[0], y_diff_sse,
+    calculate_squared_errors(y_src, y_src_stride, y_pre, y_pre_stride, y_diff_sse,
                              block_width, block_height);
-    calculate_squared_errors(src_u, stride_src[1], pred_u, stride_pred[1],
+    calculate_squared_errors(u_src, uv_src_stride, u_pre, uv_pre_stride,
                              u_diff_sse, uv_block_width, uv_block_height);
-    calculate_squared_errors(src_v, stride_src[2], pred_v, stride_pred[2],
+    calculate_squared_errors(v_src, uv_src_stride, v_pre, uv_pre_stride,
                              v_diff_sse, uv_block_width, uv_block_height);
 
     for (i = 0; i < block_height; i++) {
         for (j = 0; j < block_width; j++) {
 
-            const int pixel_value = pred_y[i * stride_pred[C_Y] + j];
+            const int pixel_value = y_pre[i * y_pre_stride + j];
 
             int filter_weight;
 
-            if(block_width == 32){
+            if(block_width == (BW>>1)){
                 filter_weight = get_subblock_filter_weight_4subblocks(i, j, block_height, block_width, blk_fw);
             }else{
                 filter_weight = get_subblock_filter_weight_16subblocks(i, j, block_height, block_width, blk_fw);
@@ -697,15 +757,15 @@ void apply_filtering(EbByte *src,
 
             modifier = adjust_modifier(modifier, y_index, rounding, strength, filter_weight);
 
-            k = i * stride_pred[0] + j;
+            k = i * y_pre_stride + j;
 
-            count_y[k] += modifier;
-            accum_y[k] += modifier * pixel_value;
+            y_count[k] += modifier;
+            y_accum[k] += modifier * pixel_value;
 
             // Process chroma component
             if (!(i & ss_y) && !(j & ss_x)) {
-                const int u_pixel_value = pred_u[uv_r * stride_pred[C_U] + uv_c];
-                const int v_pixel_value = pred_v[uv_r * stride_pred[C_V] + uv_c];
+                const int u_pixel_value = u_pre[uv_r * uv_pre_stride + uv_c];
+                const int v_pixel_value = v_pre[uv_r * uv_pre_stride + uv_c];
 
                 // non-local mean approach
                 int cr_index = 0;
@@ -743,15 +803,15 @@ void apply_filtering(EbByte *src,
                 u_mod = adjust_modifier(u_mod, cr_index, rounding, strength, filter_weight);
                 v_mod = adjust_modifier(v_mod, cr_index, rounding, strength, filter_weight);
 
-                m = (i>>ss_y) * stride_pred[C_U] + (j>>ss_x);
+                m = (i>>ss_y) * uv_pre_stride + (j>>ss_x);
 
-                count_u[m] += u_mod;
-                accum_u[m] += u_mod * u_pixel_value;
+                u_count[m] += u_mod;
+                u_accum[m] += u_mod * u_pixel_value;
 
-                m = (i>>ss_y) * stride_pred[C_V] + (j>>ss_x);
+                m = (i>>ss_y) * uv_pre_stride + (j>>ss_x);
 
-                count_v[m] += v_mod;
-                accum_v[m] += v_mod * v_pixel_value;
+                v_count[m] += v_mod;
+                v_accum[m] += v_mod * v_pixel_value;
 
             }
         }
@@ -771,7 +831,8 @@ void apply_filtering_block(int block_row,
                            int ss_x, // chroma sub-sampling in x
                            int ss_y, // chroma sub-sampling in y
                            int altref_strength,
-                           const int *blk_fw) {
+                           const int *blk_fw,
+                           EbAsm asm_type) {
 
     int offset_src_buffer_Y = block_row * (BH>>1) * stride[C_Y] + block_col * (BW>>1);
     int offset_src_buffer_U = block_row * (BH>>2) * stride[C_U] + block_col * (BW>>2);
@@ -814,45 +875,32 @@ void apply_filtering_block(int block_row,
     count_ptr[C_U] = count[C_U] + offset_block_buffer_U;
     count_ptr[C_V] = count[C_V] + offset_block_buffer_V;
 
+    TempFilteringType apply_32x32_temp_filter_fn = apply_temp_filtering_32x32_func_ptr_array[asm_type];
+
     // Apply the temporal filtering strategy
-#if !USE_SSE4_FW_32X32
-    apply_filtering(src_ptr,
-                    pred_ptr,
-                    accum_ptr,
-                    count_ptr,
-                    stride,
-                    stride_pred,
-                    block_width,
-                    block_height,
-                    ss_x,
-                    ss_y,
-                    altref_strength,
-                    blk_fw_32x32); // depends on the error of the MC step
-#else
-    av1_apply_temporal_filter_sse4_1(src_ptr[C_Y],
-                                     stride[C_Y],
-                                     pred_ptr[C_Y],
-                                     stride_pred[C_Y],
-                                     src_ptr[C_U],
-                                     src_ptr[C_V],
-                                     stride[C_U],
-                                     pred_ptr[C_U],
-                                     pred_ptr[C_V],
-                                     stride_pred[C_U],
-                                     BW>>1,
-                                     BH>>1,
-                                     ss_x,
-                                     ss_y,
-                                     altref_strength,
-                                     blk_fw_32x32,
-                                     0, // use_32x32
-                                     accum_ptr[C_Y],
-                                     count_ptr[C_Y],
-                                     accum_ptr[C_U],
-                                     count_ptr[C_U],
-                                     accum_ptr[C_V],
-                                     count_ptr[C_V]);
-#endif
+    apply_32x32_temp_filter_fn(src_ptr[C_Y],
+                               stride[C_Y],
+                               pred_ptr[C_Y],
+                               stride_pred[C_Y],
+                               src_ptr[C_U],
+                               src_ptr[C_V],
+                               stride[C_U],
+                               pred_ptr[C_U],
+                               pred_ptr[C_V],
+                               stride_pred[C_U],
+                               block_width,
+                               block_height,
+                               ss_x,
+                               ss_y,
+                               altref_strength,
+                               blk_fw_32x32,
+                               0, // use_32x32
+                               accum_ptr[C_Y],
+                               count_ptr[C_Y],
+                               accum_ptr[C_U],
+                               count_ptr[C_U],
+                               accum_ptr[C_V],
+                               count_ptr[C_V]);
 
 }
 
@@ -1757,7 +1805,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                                   1, // chroma sub-sampling in x
                                                   1, // chroma sub-sampling in y
                                                   altref_strength,
-                                                  blk_fw);
+                                                  blk_fw,
+                                                  asm_type);
 
                         }
                     }
