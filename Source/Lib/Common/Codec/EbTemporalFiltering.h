@@ -73,7 +73,6 @@
 #define THRES_DIFF_HIGH 450
 #endif
 
-#define _MM_HINT_T2  1
 #define OD_DIVU_DMAX (1024)
 
 #if MOVE_TF
