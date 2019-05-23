@@ -38,9 +38,7 @@ extern "C" {
 
 #if ALT_REF_SUPPORT
 #define ALTREF_FILTERING_SUPPORT          1 //Temporal filter
-
 #define ALT_REF_OVERLAY                   1 // support for ALT_REF overlay frames.
-#define	ALT_REF_OVERLAY_MODE              1 // make overlay mode dependent. Active only for M0 for now
 #endif
 
 #define PCS_ME_FIX                        1 // pcs flags shall not be set in seg based process

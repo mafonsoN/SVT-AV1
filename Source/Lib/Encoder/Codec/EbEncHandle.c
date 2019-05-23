@@ -2306,7 +2306,7 @@ void SetParamBasedOnInput(SequenceControlSet *sequence_control_set_ptr)
     sequence_control_set_ptr->static_config.super_block_size = (sequence_control_set_ptr->static_config.rate_control_mode > 1) ? 64 : sequence_control_set_ptr->static_config.super_block_size;
    // sequence_control_set_ptr->static_config.hierarchical_levels = (sequence_control_set_ptr->static_config.rate_control_mode > 1) ? 3 : sequence_control_set_ptr->static_config.hierarchical_levels;
 #endif
-#if ALT_REF_OVERLAY_MODE
+#if ALT_REF_OVERLAY
     sequence_control_set_ptr->static_config.enable_overlays = (sequence_control_set_ptr->static_config.rate_control_mode > 0) ||
         (sequence_control_set_ptr->static_config.enc_mode > ENC_M0) || 
         sequence_control_set_ptr->static_config.encoder_bit_depth != EB_8BIT ?
