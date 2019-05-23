@@ -31,6 +31,8 @@
 
 #if ALTREF_FILTERING_SUPPORT
 
+#define _MM_HINT_T2  1
+
 /*#define OD_DIVU_SMALL(_x, _d)                                     \
   ((uint32_t)((OD_DIVU_SMALL_CONSTS[(_d)-1][0] * (uint64_t)(_x) + \
                OD_DIVU_SMALL_CONSTS[(_d)-1][1]) >>                \
