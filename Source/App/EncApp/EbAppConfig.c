@@ -534,7 +534,7 @@ void eb_config_ctor(EbConfig *config_ptr)
     config_ptr->enable_altrefs                       = EB_FALSE;
     config_ptr->altref_strength                      = 5;
     config_ptr->altref_nframes                       = 7;
-    config_ptr->enable_altrefs                       = EB_TRUE;
+    config_ptr->enable_overlays                      = EB_TRUE;
     // --- end: ALTREF_FILTERING_SUPPORT
 
     return;
