@@ -62,11 +62,8 @@
 
 #if MOVE_TF
 
-
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
-#if FIX_SHORT
     PictureParentControlSet *picture_control_set_ptr_central,
-#endif
 #if ME_CLEAN
 	MotionEstimationContext_t *me_context_ptr,
 #endif

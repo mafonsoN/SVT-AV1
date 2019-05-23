@@ -14405,9 +14405,7 @@ extern "C" {
 		uint8_t                               tf_segments_column_count;
 		uint8_t                               tf_segments_row_count;
 #endif
-#if FIX_SHORT
 		uint8_t                               altref_nframes;
-#endif
     } PictureParentControlSet;
 
     typedef struct PictureControlSetInitData

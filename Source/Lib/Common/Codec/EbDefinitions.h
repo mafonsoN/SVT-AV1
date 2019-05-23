@@ -44,7 +44,6 @@ extern "C" {
 #define	FIX_ME_CFG                        1 // fix ME config in TF
 #define TF_MCP                            1 // use aom mcp for temporal filtering compensation.
 #define DIV_FIX                           1 // fix div in TF
-#define	FIX_SHORT                         1 // fix crash when filtering window is short
 #define	ALTREF_MODE                       1 // make altref mode dependent
 #define	ALT_REF_SC                        1 // use regular search region for screen content
 

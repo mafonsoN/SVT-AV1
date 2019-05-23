@@ -1221,11 +1221,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     EbPictureBufferDesc *input_picture_ptr_central;
 
     // index of the center frame
-#if FIX_SHORT
 	index_center = (uint8_t)(list_picture_control_set_ptr[0]->sequence_control_set_ptr->static_config.altref_nframes / 2);
-#else
-    index_center = altref_nframes/2;
-#endif
 
     picture_control_set_ptr_central = list_picture_control_set_ptr[index_center];
     input_picture_ptr_central = list_input_picture_ptr[index_center];
@@ -1776,40 +1772,28 @@ int read_YUV_frame_from_file(uint8_t **alt_ref_buffer, int picture_number, int w
 
 #if MOVE_TF
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
-#if FIX_SHORT
-	PictureParentControlSet *picture_control_set_ptr_central,
-#endif
+	                                PictureParentControlSet *picture_control_set_ptr_central,
 #if ME_CLEAN
-    MotionEstimationContext_t *me_context_ptr,
+                                    MotionEstimationContext_t *me_context_ptr,
 #endif
-	int32_t segment_index) {
+	                                int32_t segment_index) {
 #else
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr) {
 #endif
 
     uint8_t altref_strength, altref_nframes, index_center;
     EbPictureBufferDesc *input_picture_ptr;
-#if !FIX_SHORT
-    PictureParentControlSet *picture_control_set_ptr_central = list_picture_control_set_ptr[0]; // picture control set of the first frame
-#endif
     uint8_t *alt_ref_buffer[COLOR_CHANNELS];
 
     // user-defined encoder parameters related to alt-refs
 #if !MOVE_TF	
     altref_strength = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_strength;
 #endif
-	
-#if FIX_SHORT
+
 	altref_nframes = picture_control_set_ptr_central->altref_nframes;
 	// index of the central source frame
 	index_center = (uint8_t)(picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_nframes / 2);
-#else
-    altref_nframes = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_nframes;
 
-    // index of the central source frame
-    index_center = (uint8_t)(altref_nframes/2);
-    picture_control_set_ptr_central = list_picture_control_set_ptr[index_center];
-#endif
     // source central frame picture buffer
     input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
 
