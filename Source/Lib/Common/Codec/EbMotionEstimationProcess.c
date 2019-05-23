@@ -19,7 +19,7 @@
 
 #include "emmintrin.h"
 
-#if MOVE_TF
+#if ALTREF_FILTERING_SUPPORT
 #include "EbTemporalFiltering.h"
 #endif
 
@@ -933,7 +933,7 @@ void* motion_estimation_kernel(void *input_ptr)
 			// Post the Full Results Object
 			eb_post_full_object(outputResultsWrapperPtr);
 
-#if MOVE_TF
+#if ALTREF_FILTERING_SUPPORT
 		}
 		else {
 

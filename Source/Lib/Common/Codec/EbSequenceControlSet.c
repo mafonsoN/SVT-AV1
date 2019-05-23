@@ -351,7 +351,7 @@ EbErrorType copy_sequence_control_set(
 
     dst->rest_segment_column_count = src->rest_segment_column_count;
     dst->rest_segment_row_count = src->rest_segment_row_count;
-#if MOVE_TF
+#if ALTREF_FILTERING_SUPPORT
 	dst->tf_segment_column_count = src->tf_segment_column_count;
 	dst->tf_segment_row_count = src->tf_segment_row_count;
 #endif

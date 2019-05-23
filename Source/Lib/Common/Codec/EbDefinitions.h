@@ -38,7 +38,6 @@ extern "C" {
 
 #if ALT_REF_SUPPORT
 #define ALTREF_FILTERING_SUPPORT          1 //Temporal filter
-#define MOVE_TF                           1 // Move Temp Filter to ME
 
 #define ALT_REF_OVERLAY                   1 // support for ALT_REF overlay frames.
 #define	ALT_REF_OVERLAY_MODE              1 // make overlay mode dependent. Active only for M0 for now

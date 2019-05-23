@@ -1181,11 +1181,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                             uint8_t altref_strength,
                                             uint8_t altref_nframes,
                                             uint8_t **alt_ref_buffer,
-                                            MotionEstimationContext_t *me_context_ptr
-#if MOVE_TF
-	                                        , int32_t segment_index
-#endif
-) {
+                                            MotionEstimationContext_t *me_context_ptr,
+                                            int32_t segment_index) {
 
     int frame_index;
     DECLARE_ALIGNED(16, uint32_t, accumulator[BLK_PELS * COLOR_CHANNELS]);
@@ -1248,7 +1245,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
 	MeContext *context_ptr = me_context_ptr->me_context_ptr;
 
-#if  MOVE_TF	
 	uint32_t  x_seg_idx;
 	uint32_t  y_seg_idx;
 	uint32_t picture_width_in_b64 = blk_cols;
@@ -1261,23 +1257,12 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
 	for (blk_row = y_b64_start_idx; blk_row < y_b64_end_idx; blk_row++) {
 		for (blk_col = x_b64_start_idx; blk_col < x_b64_end_idx; blk_col++) {
-#else
 
-    // for each block
-    for (blk_row = 0; blk_row < blk_rows; blk_row++) {
-
-        for (blk_col = 0; blk_col < blk_cols; blk_col++) {
-
-#endif
-			
-
-#if MOVE_TF
 			blk_y_offset      = (blk_col * BW) + (blk_row * BH) * stride[C_Y];
 			blk_y_src_offset  = (blk_col * BW) + (blk_row * BH) * stride[C_Y];
 			
 			blk_ch_offset      = (blk_col * blk_width_ch) + (blk_row * blk_height_ch) * stride[C_U];
 			blk_ch_src_offset  = (blk_col * blk_width_ch) + (blk_row * blk_height_ch) * stride[C_U];
-#endif
 
             // reset accumulator and count
             memset(accumulator, 0, BLK_PELS * COLOR_CHANNELS * sizeof(accumulator[0]));
@@ -1486,21 +1471,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                 }
                 byte += stride[C_U] - (BW_CH);
             }
-
-#if !MOVE_TF
-            // this is how libaom was implementing the blocks indexes (I did differently in the memcpy above)
-            blk_y_offset += BW;
-            blk_y_src_offset += BW;
-            blk_ch_offset += blk_width_ch;
-            blk_ch_src_offset += blk_width_ch;
-#endif
         }
-#if !MOVE_TF
-        blk_y_offset += BH * stride[C_Y] - BW * blk_cols;
-        blk_y_src_offset += BH * stride[C_Y] - BW * blk_cols;
-        blk_ch_offset += blk_height_ch * stride[C_U] - blk_width_ch * blk_cols;
-        blk_ch_src_offset += blk_height_ch * stride[C_U] - blk_width_ch * blk_cols;
-#endif
     }
 
 #if DEBUG_TF
@@ -1720,32 +1691,24 @@ int read_YUV_frame_from_file(uint8_t **alt_ref_buffer, int picture_number, int w
     return 0;
 }
 
-#if MOVE_TF
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
 	                                PictureParentControlSet *picture_control_set_ptr_central,
                                     MotionEstimationContext_t *me_context_ptr,
 	                                int32_t segment_index) {
-#else
-EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr) {
-#endif
 
     uint8_t altref_strength, altref_nframes, index_center;
     EbPictureBufferDesc *input_picture_ptr;
     uint8_t *alt_ref_buffer[COLOR_CHANNELS];
 
-    // user-defined encoder parameters related to alt-refs
-#if !MOVE_TF	
-    altref_strength = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_strength;
-#endif
-
+    // number of frames to filter
 	altref_nframes = picture_control_set_ptr_central->altref_nframes;
+
 	// index of the central source frame
 	index_center = (uint8_t)(picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_nframes / 2);
 
     // source central frame picture buffer
     input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
 
-#if MOVE_TF
 	//only one performs any picture based prep
 	eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
 	if (picture_control_set_ptr_central->temp_filt_prep_done == 0){
@@ -1780,10 +1743,6 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
 
 	}
 	eb_release_mutex(picture_control_set_ptr_central->temp_filt_mutex);
-#else
-    adjust_filter_params(input_picture_ptr, &altref_strength, &altref_nframes);
-#endif
-	
 
     // populate source frames picture buffer list
     EbPictureBufferDesc *list_input_picture_ptr[ALTREF_MAX_NFRAMES] = { NULL };
@@ -1791,7 +1750,6 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
         list_input_picture_ptr[i] = list_picture_control_set_ptr[i]->enhanced_picture_ptr;
     }
 
-#if MOVE_TF
     alt_ref_buffer[0] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y +
                         picture_control_set_ptr_central->enhanced_picture_ptr->origin_x +
                         picture_control_set_ptr_central->enhanced_picture_ptr->origin_y*picture_control_set_ptr_central->enhanced_picture_ptr->stride_y;
@@ -1801,20 +1759,10 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
     alt_ref_buffer[2] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_cr +
                         picture_control_set_ptr_central->enhanced_picture_ptr->origin_x / 2 +
                         (picture_control_set_ptr_central->enhanced_picture_ptr->origin_y / 2)*picture_control_set_ptr_central->enhanced_picture_ptr->stride_cr;
-#else
-    // allocate memory for the alt-ref buffer - to be replaced by some other final structure
-    for(int c=0; c<COLOR_CHANNELS; c++){
-        alt_ref_buffer[c] = (EbByte) malloc(input_picture_ptr->luma_size * sizeof(uint8_t));
-    }
-#endif
 
 #if LIBAOM_FILTERING==0
     EbErrorType ret;
- #if MOVE_TF
-		ret = produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, picture_control_set_ptr_central->altref_strength, altref_nframes, alt_ref_buffer, (MotionEstimationContext_t *) me_context_ptr,segment_index);
- #else
-    ret = produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, altref_strength, altref_nframes, alt_ref_buffer);
- #endif
+    ret = produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, picture_control_set_ptr_central->altref_strength, altref_nframes, alt_ref_buffer, (MotionEstimationContext_t *) me_context_ptr,segment_index);
 #else
     int ret = read_YUV_frame_from_file(alt_ref_buffer,
                             (int)picture_control_set_ptr_central->picture_number,
@@ -1823,14 +1771,12 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
                             list_input_picture_ptr[index_center]->stride_y);
 #endif
 
-#if MOVE_TF
 	eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
 	picture_control_set_ptr_central->temp_filt_seg_acc++;
-	if (picture_control_set_ptr_central->temp_filt_seg_acc == picture_control_set_ptr_central->tf_segments_total_count)
-	{
-#endif
 
-	pad_and_decimate_filtered_pic(picture_control_set_ptr_central);
+	if (picture_control_set_ptr_central->temp_filt_seg_acc == picture_control_set_ptr_central->tf_segments_total_count){
+
+	    pad_and_decimate_filtered_pic(picture_control_set_ptr_central);
 
 #if DEBUG_TF
     {
@@ -1852,19 +1798,12 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
     }
 #endif
 
-#if MOVE_TF
 	    // signal that temp filt is done
         eb_post_semaphore(picture_control_set_ptr_central->temp_filt_done_semaphore);
+
 	}
+
 	eb_release_mutex(picture_control_set_ptr_central->temp_filt_mutex);
-#endif
-
-
-#if !MOVE_TF
-    for(int c=0; c<COLOR_CHANNELS; c++){
-        free(alt_ref_buffer[c]);
-    }
-#endif
 
     return ret;
 }

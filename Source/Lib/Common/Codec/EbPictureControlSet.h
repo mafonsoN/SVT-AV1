@@ -14390,7 +14390,7 @@ extern "C" {
         struct PictureParentControlSet      *overlay_ppcs_ptr;
         struct PictureParentControlSet      *alt_ref_ppcs_ptr;
 #endif
-#if MOVE_TF
+#if ALTREF_FILTERING_SUPPORT
 		uint8_t                               altref_strength;
 		int32_t                               pic_decision_reorder_queue_idx;
 		struct PictureParentControlSet       *temp_filt_pcs_list[10];

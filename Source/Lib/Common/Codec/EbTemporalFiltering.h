@@ -61,13 +61,7 @@
 
 #define OD_DIVU_DMAX (1024)
 
-#if MOVE_TF
-
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
     PictureParentControlSet *picture_control_set_ptr_central,
 	MotionEstimationContext_t *me_context_ptr,
 	int32_t segment_index);
-
-#else
-EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr);
-#endif

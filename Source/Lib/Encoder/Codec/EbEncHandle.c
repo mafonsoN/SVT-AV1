@@ -597,7 +597,7 @@ EbErrorType load_default_buffer_configuration_settings(
     sequence_control_set_ptr->rest_segment_column_count = MIN(rest_seg_w,6);
     sequence_control_set_ptr->rest_segment_row_count    = MIN(rest_seg_h,4);
 
-#if MOVE_TF
+#if ALTREF_FILTERING_SUPPORT
 	sequence_control_set_ptr->tf_segment_column_count = meSegW;//1;//
 	sequence_control_set_ptr->tf_segment_row_count =  meSegH;//1;//
 #endif

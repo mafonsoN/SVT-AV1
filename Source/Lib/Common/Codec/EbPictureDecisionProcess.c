@@ -3500,7 +3500,7 @@ void* picture_decision_kernel(void *input_ptr)
                 queueEntryPtr->picture_number = picture_control_set_ptr->picture_number;
             }
 
-#if MOVE_TF
+#if ALTREF_FILTERING_SUPPORT
 			picture_control_set_ptr->pic_decision_reorder_queue_idx = queueEntryIndex;
 #endif
 #if ALT_REF_OVERLAY
@@ -3546,88 +3546,7 @@ void* picture_decision_kernel(void *input_ptr)
                     }
                 }
             }
-#if !MOVE_TF
-#if ALTREF_FILTERING_SUPPORT
 
-            // ----------------- Alt-Refs --------------------
-
-            // central location of alt-ref filtering
-            alt_ref_central_loc = (uint64_t)((mini_gop_count + 1) * (1 << sequence_control_set_ptr->static_config.hierarchical_levels));
-
-            uint8_t altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
-            uint8_t num_past_pics = (uint8_t)(altref_nframes/2);
-
-            // These conditions need to be met for temporal filtering to conducted
-            if(picture_control_set_ptr->sequence_control_set_ptr->static_config.enable_altrefs == EB_TRUE &&
-               altref_nframes > 1 &&
-               alt_ref_created_flag == EB_FALSE) {
-
-                if(ParentPcsWindow[0]!=NULL && ParentPcsWindow[1]!=NULL){
-
-                    // get previous source pictures
-                    if (pics_saved < num_past_pics) {
-
-                        for (int pic_save = pics_saved; pic_save < num_past_pics; pic_save++) {
-
-                            uint64_t pic_to_save = alt_ref_central_loc - (num_past_pics - pic_save);
-
-                            if (ParentPcsWindow[0]->picture_number == pic_to_save) {
-                                list_picture_control_set_ptr[pic_save] = ParentPcsWindow[0];
-                                pics_saved++;
-
-                                // Set the default subpel settings
-                                list_picture_control_set_ptr[pic_save]->use_subpel_flag = 1;
-                            }
-
-                        }
-                    }
-
-                    // get central and futute source pictures
-                    if (pics_saved == num_past_pics) {
-
-                        int window_index = 1;
-                        for (int pic_save = pics_saved; pic_save < altref_nframes; pic_save++) {
-
-                            uint64_t pic_to_save = alt_ref_central_loc + (pic_save - num_past_pics);
-
-                            if (ParentPcsWindow[window_index]->picture_number == pic_to_save) {
-                                list_picture_control_set_ptr[pic_save] = ParentPcsWindow[window_index];
-                                window_index++;
-                                pics_saved++;
-
-                                // Set the default subpel settings
-                                list_picture_control_set_ptr[pic_save]->use_subpel_flag = 1;
-                            }
-
-                        }
-
-                        clock_t start_time;
-                        start_time = clock();
-
-                        // temporal filtering start
-                        EbErrorType ret = init_temporal_filtering(list_picture_control_set_ptr);
-
-                        if(ret!=EB_ErrorNone){
-                            printf("Error generating filtered picture");
-                        }
-
-                        clock_t elapsed_time = clock() - start_time;
-                        double time_taken = ((double) elapsed_time) / CLOCKS_PER_SEC; // in seconds
-
-                        printf("Producing the alt-ref picture at POC %d took %f seconds.\n", (int)alt_ref_central_loc, time_taken);
-
-                        alt_ref_created_flag = EB_TRUE;
-
-                    }
-
-                }
-
-            }
-
-            // ------------------- End of Alt-refs -------------------------
-
-#endif
-#endif
             picture_control_set_ptr = (PictureParentControlSet*)queueEntryPtr->parent_pcs_wrapper_ptr->object_ptr;
 
             picture_control_set_ptr->fade_out_from_black = 0;
@@ -4411,7 +4330,7 @@ void* picture_decision_kernel(void *input_ptr)
                             picture_control_set_ptr = cur_picture_control_set_ptr;
 #endif
 
-#if MOVE_TF
+#if ALTREF_FILTERING_SUPPORT
 							if ( sequence_control_set_ptr->enable_altrefs == EB_TRUE &&
 								 picture_control_set_ptr->slice_type != I_SLICE && picture_control_set_ptr->temporal_layer_index == 0) {
 
@@ -4482,7 +4401,7 @@ void* picture_decision_kernel(void *input_ptr)
 								
 								picture_control_set_ptr->temp_filt_prep_done = 0;
 
-#if 1
+
 								// Start Filtering in ME processes
 								{
 									uint32_t seg_idx;
@@ -4494,11 +4413,6 @@ void* picture_decision_kernel(void *input_ptr)
 									
 									picture_control_set_ptr->temp_filt_seg_acc = 0;
 									picture_control_set_ptr->altref_strength = sequence_control_set_ptr->static_config.altref_strength;
-
-#if 0  
-									// temporal filtering start
-									EbErrorType ret = init_temporal_filtering(picture_control_set_ptr->temp_filt_pcs_list, 0);
-#else
 
 									for (seg_idx = 0; seg_idx < picture_control_set_ptr->tf_segments_total_count; ++seg_idx) {
 										
@@ -4512,11 +4426,10 @@ void* picture_decision_kernel(void *input_ptr)
 										eb_post_full_object(outputResultsWrapperPtr);
 
 									}
-#endif
 
 									eb_block_on_semaphore(picture_control_set_ptr->temp_filt_done_semaphore);
 								}
-#endif
+
 								clock_t elapsed_time = clock() - start_time;
 								double time_taken = ((double)elapsed_time) / CLOCKS_PER_SEC; // in seconds
 
@@ -4885,7 +4798,7 @@ void* picture_decision_kernel(void *input_ptr)
                                     outputResultsPtr->picture_control_set_wrapper_ptr = encode_context_ptr->pre_assignment_buffer[pictureIndex];
 
                                     outputResultsPtr->segment_index = segment_index;
-#if MOVE_TF
+#if ALTREF_FILTERING_SUPPORT
 									outputResultsPtr->task_type = 0;
 #endif
                                     // Post the Full Results Object
