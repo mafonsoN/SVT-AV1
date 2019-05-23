@@ -370,9 +370,6 @@ void get_ME_distortion(MeContext *context_ptr,
         // sad
         me_32x32_subblock_sad[pu_index-1] = context_ptr->p_best_sad32x32[mv_index-1];
 
-#if 0
-        printf("[SAD on 32x32 block = %d]\n", context_ptr->p_best_sad32x32[mv_index-1]);
-#endif
     }
 
     // 16x16 distortion
@@ -383,9 +380,6 @@ void get_ME_distortion(MeContext *context_ptr,
         // sad
         me_16x16_subblock_sad[pu_index-5] = context_ptr->p_best_sad16x16[mv_index-5];
 
-#if 0
-        printf("[SAD on 16x16 block = %d]\n", me_16x16_subblock_sad[pu_index-5]);
-#endif
     }
 
 #endif
@@ -1107,16 +1101,9 @@ void compensate_block(MeContext* context_ptr,
                        &comp_block_stride,
                        asm_type);
 
-#if 0
-    save_Y_to_file("sub_block_Y_MC.yuv", comp_block,
-                   subblock_w, subblock_h,
-                       comp_block_stride, 0, 0);
-#endif
     copy_pixels(pred_ptr[0], BW, comp_block, comp_block_stride, subblock_w, subblock_h);
 
     // ----- compensate chroma ------
-
-#if MC_CHROMA
 
     // get motion vectors
     if (use_16x16_subblocks) {
@@ -1165,11 +1152,6 @@ void compensate_block(MeContext* context_ptr,
 
     copy_pixels(pred_ptr[1], BW_CH, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
 
-#if 0
-    save_Y_to_file("sub_block_U_MC.yuv", comp_block,
-                       subblock_w>>1, subblock_h>>1,
-                       comp_block_stride, 0, 0);
-#endif
     // compensate V
     uni_pred_averaging(pu_index, // pu_index
                        EB_TRUE,
@@ -1188,7 +1170,6 @@ void compensate_block(MeContext* context_ptr,
                        asm_type);
 
     copy_pixels(pred_ptr[2], BW_CH, comp_block, comp_block_stride, subblock_w>>1, subblock_h>>1);
-#endif
 
 }
 
@@ -1572,11 +1553,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                         asm_type);
 #endif
 
-#if MC_CHROMA==0
-                    copy_pixels(pred[C_U], BW_CH, src_frame_index[C_U] + blk_ch_src_offset, stride[C_U], BW_CH, BH_CH);
-                    copy_pixels(pred[C_V], BW_CH, src_frame_index[C_V] + blk_ch_src_offset, stride[C_V], BW_CH, BH_CH);
-#endif
-
                     // Retrieve distortion (SAD) on 32x32 and 16x16 sub-blocks
                     get_ME_distortion(context_ptr,
                             me_32x32_subblock_sad,
@@ -1638,8 +1614,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
                 }else{
 
-#if USE_SSE4_FW_32X32 || USE_C_FW_32x32
-
                     // split filtering function into 32x32 blocks
                     // TODO: implement a 64x64 SIMD version
                     for(int block_row = 0; block_row<2; block_row++){
@@ -1663,23 +1637,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
                         }
                     }
-
-#else
-                    // Apply the temporal filtering strategy
-                    apply_filtering(src_altref_index,
-                                    pred,
-                                    accum,
-                                    count,
-                                    stride,
-                                    stride_pred,
-                                    BW,
-                                    BH,
-                                    1,
-                                    1,
-                                    altref_strength,
-                                    blk_fw ); // depends on the error of the MC step
-#endif
-
                 }
             }
 
