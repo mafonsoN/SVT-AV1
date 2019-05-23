@@ -209,92 +209,18 @@ static void populate_list_with_value(int *list, int nelements, const int value){
 }
 
 // get block filter weights using a distance metric
-void get_blk_fw_using_dist(int const *me_32x32_subblock_sad, int const *me_16x16_subblock_sad, int *use_16x16_subblocks, int *blk_fw){
+void get_blk_fw_using_dist(int const *me_32x32_subblock_sad, int const *me_16x16_subblock_sad, EbBool use_16x16_subblocks_only, int *blk_fw){
 
     int blk_idx, idx_32x32;
 
     int me_sum_16x16_subblock_sad[4] = {0};
     int max_me_sad[4] = {INT_MIN, INT_MIN, INT_MIN, INT_MIN}, min_me_sad[4] = {INT_MAX, INT_MAX, INT_MAX, INT_MAX};
 
-#if USE_ONLY_16X16
+    if(use_16x16_subblocks_only) {
 
-    for(idx_32x32 = 0; idx_32x32 < 4; idx_32x32++) {
-
-            // split into 16x16 sub-blocks
-
-            use_16x16_subblocks[idx_32x32] = 1;
-
-            for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
-
-                if (subblocks_from32x32_to_16x16[blk_idx] == idx_32x32) {
-                    blk_fw[blk_idx] = me_16x16_subblock_sad[blk_idx] < THRES_LOW
-                                      ? 2
-                                      : me_16x16_subblock_sad[blk_idx] < THRES_HIGH ? 1 : 0;
-                }
-            }
-
-    }
-
-#else
-
-#if USE_ONLY_32X32
-
-    for(idx_32x32 = 0; idx_32x32 < 4; idx_32x32++) {
-
-            // split into 32x32 sub-blocks
-
-            use_16x16_subblocks[idx_32x32] = 0;
-
-            int weight = me_32x32_subblock_sad[idx_32x32] < (THRES_LOW << THR_SHIFT)
-                         ? 2
-                         : me_32x32_subblock_sad[idx_32x32] < (THRES_HIGH << THR_SHIFT) ? 1 : 0;
-
-            for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
-                if (subblocks_from32x32_to_16x16[blk_idx] == idx_32x32)
-                    blk_fw[blk_idx] = weight;
-            }
-
-    }
-
-#else
-
-    for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
-
-        idx_32x32 = subblocks_from32x32_to_16x16[blk_idx];
-
-        if (min_me_sad[idx_32x32] > me_16x16_subblock_sad[blk_idx])
-            min_me_sad[idx_32x32] = me_16x16_subblock_sad[blk_idx];
-        if (max_me_sad[idx_32x32] < me_16x16_subblock_sad[blk_idx])
-            max_me_sad[idx_32x32] = me_16x16_subblock_sad[blk_idx];
-
-        me_sum_16x16_subblock_sad[idx_32x32] += me_16x16_subblock_sad[blk_idx];
-    }
-
-    for(idx_32x32 = 0; idx_32x32 < 4; idx_32x32++) {
-
-        if (((me_32x32_subblock_sad[idx_32x32] * 15 < (me_sum_16x16_subblock_sad[idx_32x32] << 4)) &&
-             max_me_sad - min_me_sad < THRES_DIFF_HIGH) ||
-            ((me_32x32_subblock_sad[idx_32x32] * 14 < (me_sum_16x16_subblock_sad[idx_32x32] << 4)) &&
-             max_me_sad - min_me_sad < THRES_DIFF_LOW)) {
-
-            // split into 32x32 sub-blocks
-
-            use_16x16_subblocks[idx_32x32] = 0;
-
-            int weight = me_32x32_subblock_sad[idx_32x32] < (THRES_LOW << THR_SHIFT)
-                         ? 2
-                         : me_32x32_subblock_sad[idx_32x32] < (THRES_HIGH << THR_SHIFT) ? 1 : 0;
-
-            for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
-                if (subblocks_from32x32_to_16x16[blk_idx] == idx_32x32)
-                    blk_fw[blk_idx] = weight;
-            }
-
-        } else {
+        for (idx_32x32 = 0; idx_32x32 < 4; idx_32x32++) {
 
             // split into 16x16 sub-blocks
-
-            use_16x16_subblocks[idx_32x32] = 1;
 
             for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
 
@@ -306,31 +232,68 @@ void get_blk_fw_using_dist(int const *me_32x32_subblock_sad, int const *me_16x16
             }
 
         }
+    }else {
+
+        for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
+
+            idx_32x32 = subblocks_from32x32_to_16x16[blk_idx];
+
+            if (min_me_sad[idx_32x32] > me_16x16_subblock_sad[blk_idx])
+                min_me_sad[idx_32x32] = me_16x16_subblock_sad[blk_idx];
+            if (max_me_sad[idx_32x32] < me_16x16_subblock_sad[blk_idx])
+                max_me_sad[idx_32x32] = me_16x16_subblock_sad[blk_idx];
+
+            me_sum_16x16_subblock_sad[idx_32x32] += me_16x16_subblock_sad[blk_idx];
+        }
+
+        for (idx_32x32 = 0; idx_32x32 < 4; idx_32x32++) {
+
+            if (((me_32x32_subblock_sad[idx_32x32] * 15 < (me_sum_16x16_subblock_sad[idx_32x32] << 4)) &&
+                 max_me_sad - min_me_sad < THRES_DIFF_HIGH) ||
+                ((me_32x32_subblock_sad[idx_32x32] * 14 < (me_sum_16x16_subblock_sad[idx_32x32] << 4)) &&
+                 max_me_sad - min_me_sad < THRES_DIFF_LOW)) {
+
+                // split into 32x32 sub-blocks
+
+                int weight = me_32x32_subblock_sad[idx_32x32] < (THRES_LOW << THR_SHIFT)
+                             ? 2
+                             : me_32x32_subblock_sad[idx_32x32] < (THRES_HIGH << THR_SHIFT) ? 1 : 0;
+
+                for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
+                    if (subblocks_from32x32_to_16x16[blk_idx] == idx_32x32)
+                        blk_fw[blk_idx] = weight;
+                }
+
+            } else {
+
+                // split into 16x16 sub-blocks
+
+                for (blk_idx = 0; blk_idx < N_16X16_BLOCKS; blk_idx++) {
+
+                    if (subblocks_from32x32_to_16x16[blk_idx] == idx_32x32) {
+                        blk_fw[blk_idx] = me_16x16_subblock_sad[blk_idx] < THRES_LOW
+                                          ? 2
+                                          : me_16x16_subblock_sad[blk_idx] < THRES_HIGH ? 1 : 0;
+                    }
+                }
+            }
+        }
     }
-
-#endif
-
-#endif
 
 }
 
-// get distortion (SAD) from ME context
-void get_ME_distortion(MeContext *context_ptr,
-                        int* me_32x32_subblock_sad,
-                        int *me_16x16_subblock_sad,
-                        uint8_t* pred_Y,
-                        int stride_pred_Y,
-                        uint8_t* src_Y,
-                        int stride_src_Y){
+// compute variance for the MC block residuals
+void get_ME_distortion(int* me_32x32_subblock_sad,
+                       int *me_16x16_subblock_sad,
+                       uint8_t* pred_Y,
+                       int stride_pred_Y,
+                       uint8_t* src_Y,
+                       int stride_src_Y){
 
-    uint32_t mv_index;
     unsigned int sse;
-    unsigned int variance;
 
     uint8_t * pred_Y_ptr;
     uint8_t * src_Y_ptr;
-
-#if LIBAOM_VF
 
     for(uint32_t index_32x32 = 0; index_32x32 < 4; index_32x32++) {
 
@@ -359,30 +322,6 @@ void get_ME_distortion(MeContext *context_ptr,
         me_16x16_subblock_sad[index_16x16] = fn_ptr->vf(pred_Y_ptr, stride_pred_Y, src_Y_ptr, stride_src_Y, &sse );
 
     }
-
-#else
-
-    // Block 32x32 distortion
-    for(uint32_t pu_index = 1; pu_index <= 4; pu_index++){
-
-        mv_index = pu_index;
-
-        // sad
-        me_32x32_subblock_sad[pu_index-1] = context_ptr->p_best_sad32x32[mv_index-1];
-
-    }
-
-    // 16x16 distortion
-    for(uint32_t pu_index = 5; pu_index <= 20; pu_index++){
-
-        mv_index = tab16x16[pu_index - 5] + 5;
-
-        // sad
-        me_16x16_subblock_sad[pu_index-5] = context_ptr->p_best_sad16x16[mv_index-5];
-
-    }
-
-#endif
 
 }
 
@@ -1340,9 +1279,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     EbByte src_frame_index[COLOR_CHANNELS], src_altref_index[COLOR_CHANNELS];
     int i, j, k;
 
-    int blk_fw_hist[16] = {0};
-    int use_16x16_hist[2] = {0};
-
     PictureParentControlSet *picture_control_set_ptr_central;
     EbPictureBufferDesc *input_picture_ptr_central;
 
@@ -1522,11 +1458,10 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                         context_ptr,
                                         list_input_picture_ptr[index_center]); // source picture
 
-#if USE_ONLY_16X16
+                    EbBool use_16x16_subblocks_only = EB_TRUE; // TODO: hardcoded to use 16x16 subblocks only, however,
+                                                           // the support for the use of 32x32 subblocks as well is almost complete
+                                                           // experiments have shown low gains by adding this possibility
                     populate_list_with_value(use_16x16_subblocks,N_32X32_BLOCKS,1);
-#endif
-
-
 
 #if TF_MCP
 					tf_inter_prediction(						
@@ -1554,24 +1489,15 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 #endif
 
                     // Retrieve distortion (SAD) on 32x32 and 16x16 sub-blocks
-                    get_ME_distortion(context_ptr,
-                            me_32x32_subblock_sad,
-                            me_16x16_subblock_sad,
-                            pred[C_Y],
-                            stride_pred[C_Y],
-                            src_altref_index[C_Y],
-                            stride[C_Y]);
+                    get_ME_distortion(me_32x32_subblock_sad,
+                                      me_16x16_subblock_sad,
+                                      pred[C_Y],
+                                      stride_pred[C_Y],
+                                      src_altref_index[C_Y],
+                                      stride[C_Y]);
 
                     // Get sub-block filter weights depending on the SAD
-                    get_blk_fw_using_dist(me_32x32_subblock_sad, me_16x16_subblock_sad, use_16x16_subblocks, blk_fw);
-
-                    for (int ki = 0; ki < 16; ki++){
-                        blk_fw_hist[blk_fw[ki]] += 1;
-                    }
-
-                    for (int ki = 0; ki < 3; ki++){
-                        use_16x16_hist[use_16x16_subblocks[ki]] += 1;
-                    }
+                    get_blk_fw_using_dist(me_32x32_subblock_sad, me_16x16_subblock_sad, use_16x16_subblocks_only, blk_fw);
 
                 }
 
@@ -1718,14 +1644,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     }
 
 #endif
-
-    for (int ki = 0; ki < 3; ki++){
-       // printf("blk_fw_hist[%d] = %d\n", ki, blk_fw_hist[ki]);
-    }
-
-    for (int ki = 0; ki < 2; ki++){
-       // printf("use_16x16_hist[%d] = %d\n", ki, use_16x16_hist[ki]);
-    }
 
 #if  ! ME_CLEAN
     free(me_context_ptr);

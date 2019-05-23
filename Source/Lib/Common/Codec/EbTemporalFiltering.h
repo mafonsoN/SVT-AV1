@@ -52,21 +52,11 @@
 // ALT-REF debug-specific defines
 #define DEBUG_TF 0
 #define LIBAOM_FILTERING 0
-#define USE_ONLY_16X16 1
-#define USE_ONLY_32X32 0
-#define LIBAOM_VF 1
 
-#if LIBAOM_VF
 #define THRES_LOW 10000
 #define THRES_HIGH 20000
 #define THRES_DIFF_LOW 6000
 #define THRES_DIFF_HIGH 12000
-#else
-#define THRES_LOW 768 // mean SAD of 3
-#define THRES_HIGH 1280 // mean SAD of 5
-#define THRES_DIFF_LOW 300
-#define THRES_DIFF_HIGH 450
-#endif
 
 #define OD_DIVU_DMAX (1024)
 
