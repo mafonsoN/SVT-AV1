@@ -295,16 +295,6 @@ void create_ME_context_and_picture_control(MotionEstimationContext_t *context_pt
     context_ptr->me_context_ptr->alt_ref_reference_ptr = (EbPaReferenceObject*)picture_control_set_ptr_frame->pa_reference_picture_wrapper_ptr->object_ptr;
     context_ptr->me_context_ptr->me_alt_ref = EB_TRUE;
 
-#if ! ME_CLEAN
-    signal_derivation_me_kernel_oq(
-            picture_control_set_ptr_frame->sequence_control_set_ptr,
-#if FIX_ME_CFG
-		    picture_control_set_ptr_central,
-#else
-            picture_control_set_ptr_frame,
-#endif
-            context_ptr);
-#endif
     // set the buffers with the original, quarter and sixteenth pixels version of the source frame
     EbPaReferenceObject *src_object = (EbPaReferenceObject*)picture_control_set_ptr_central->pa_reference_picture_wrapper_ptr->object_ptr;
     EbPictureBufferDesc *padded_pic_ptr = src_object->input_padded_picture_ptr;
@@ -785,7 +775,6 @@ static void apply_filtering_central(EbByte *pred,
 
 }
 
-#if TF_MCP
 EbErrorType av1_inter_prediction(
 	PictureControlSet                    *picture_control_set_ptr,
 	uint32_t                             interp_filters,
@@ -900,7 +889,6 @@ void tf_inter_prediction(
 
 
 }
-#endif
 
 void compensate_block(MeContext* context_ptr,
                       EbByte *pred,
@@ -1192,10 +1180,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                             EbPictureBufferDesc **list_input_picture_ptr,
                                             uint8_t altref_strength,
                                             uint8_t altref_nframes,
-                                            uint8_t **alt_ref_buffer
-#if ME_CLEAN
-	                                       , MotionEstimationContext_t *me_context_ptr
-#endif
+                                            uint8_t **alt_ref_buffer,
+                                            MotionEstimationContext_t *me_context_ptr
 #if MOVE_TF
 	                                        , int32_t segment_index
 #endif
@@ -1242,7 +1228,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     }
 #endif
 
-#if !TF_MCP
+#if !AV1_MC
     // initialize chroma interpolated buffers and auxiliary buffers
     uint8_t *pos_b_buffer_ch[2];
     uint8_t *pos_h_buffer_ch[2];
@@ -1260,27 +1246,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     one_d_intermediate_results_buf_ch[1] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
 #endif
 
-#if ME_CLEAN
 	MeContext *context_ptr = me_context_ptr->me_context_ptr;
-#else
-    MotionEstimationContext_t *me_context_ptr;
-    // Call ME context initializer
-    me_context_ptr = (MotionEstimationContext_t*)malloc(sizeof(MotionEstimationContext_t));
-
-#if MEMORY_FOOTPRINT_OPT_ME_MV
-    me_context_ctor(&(me_context_ptr->me_context_ptr),
-#if REDUCE_ME_SEARCH_AREA
-                    input_picture_ptr_central->width,
-                    input_picture_ptr_central->height,
-#endif
-                    1, // nsq
-                    0); // mrp_mode
-#else
-    me_context_ctor(&(me_context_ptr->me_context_ptr));
-#endif
-
-    MeContext *context_ptr = me_context_ptr->me_context_ptr;
-#endif
 
 #if  MOVE_TF	
 	uint32_t  x_seg_idx;
@@ -1397,7 +1363,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                                                // experiments have shown low gains by adding this possibility
                     populate_list_with_value(use_16x16_subblocks,N_32X32_BLOCKS,1);
 
-#if TF_MCP
+                    // Perform MC using the information acquired using the ME step
+#if AV1_MC
 					tf_inter_prediction(						
 						picture_control_set_ptr_central,
 						context_ptr,
@@ -1408,7 +1375,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 						use_16x16_subblocks,
 						asm_type);
 #else
-                    // Perform MC using the information acquired using the ME step
                     uni_motion_compensation(context_ptr,
                                         list_input_picture_ptr[frame_index],
                                         pred,
@@ -1566,10 +1532,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
 #endif
 
-#if  ! ME_CLEAN
-    free(me_context_ptr);
-#endif
-#if !TF_MCP
+#if !AV1_MC
     free(pos_b_buffer_ch[0]);
     free(pos_h_buffer_ch[0]);
     free(pos_j_buffer_ch[0]);
@@ -1760,9 +1723,7 @@ int read_YUV_frame_from_file(uint8_t **alt_ref_buffer, int picture_number, int w
 #if MOVE_TF
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
 	                                PictureParentControlSet *picture_control_set_ptr_central,
-#if ME_CLEAN
                                     MotionEstimationContext_t *me_context_ptr,
-#endif
 	                                int32_t segment_index) {
 #else
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr) {
@@ -1849,12 +1810,8 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
 
 #if LIBAOM_FILTERING==0
     EbErrorType ret;
- #if MOVE_TF	
-  #if ME_CLEAN
+ #if MOVE_TF
 		ret = produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, picture_control_set_ptr_central->altref_strength, altref_nframes, alt_ref_buffer, (MotionEstimationContext_t *) me_context_ptr,segment_index);
-  #else
-	ret = produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, picture_control_set_ptr_central->altref_strength, altref_nframes, alt_ref_buffer, segment_index);
-  #endif
  #else
     ret = produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, altref_strength, altref_nframes, alt_ref_buffer);
  #endif

@@ -9292,12 +9292,6 @@ EbErrorType motion_estimate_lcu(
 
 #if M9_SUBPEL_SELECTION
 
-#if ALTREF_DISABLE_SUBPEL
-                if(context_ptr->me_alt_ref == EB_TRUE){
-                    context_ptr->fractional_search_model = 2;
-                }
-#endif
-
                 if (context_ptr->fractional_search_model == 0) {
                     enableHalfPel32x32 = EB_TRUE;
                     enableHalfPel16x16 = EB_TRUE;

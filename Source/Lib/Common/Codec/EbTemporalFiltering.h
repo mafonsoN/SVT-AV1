@@ -52,6 +52,7 @@
 // ALT-REF debug-specific defines
 #define DEBUG_TF 0
 #define LIBAOM_FILTERING 0
+#define AV1_MC 1
 
 #define THRES_LOW 10000
 #define THRES_HIGH 20000
@@ -64,9 +65,7 @@
 
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
     PictureParentControlSet *picture_control_set_ptr_central,
-#if ME_CLEAN
 	MotionEstimationContext_t *me_context_ptr,
-#endif
 	int32_t segment_index);
 
 #else

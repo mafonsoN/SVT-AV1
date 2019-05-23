@@ -585,15 +585,6 @@ void* motion_estimation_kernel(void *input_ptr)
         picture_control_set_ptr = (PictureParentControlSet*)inputResultsPtr->picture_control_set_wrapper_ptr->object_ptr;
         sequence_control_set_ptr = (SequenceControlSet*)picture_control_set_ptr->sequence_control_set_wrapper_ptr->object_ptr;
 
-
-		
-#if !ME_CLEAN
-#if MOVE_TF
-		if (inputResultsPtr->task_type == 0)
-		{
-			
-#endif
-#endif
         paReferenceObject = (EbPaReferenceObject*)picture_control_set_ptr->pa_reference_picture_wrapper_ptr->object_ptr;
         quarter_decimated_picture_ptr = (EbPictureBufferDesc*)paReferenceObject->quarter_decimated_picture_ptr;
         sixteenth_decimated_picture_ptr = (EbPictureBufferDesc*)paReferenceObject->sixteenth_decimated_picture_ptr;
@@ -602,17 +593,6 @@ void* motion_estimation_kernel(void *input_ptr)
 
         input_picture_ptr = picture_control_set_ptr->enhanced_picture_ptr;
 
-#if !ME_CLEAN
-        // Segments
-        segment_index = inputResultsPtr->segment_index;
-        picture_width_in_sb = (sequence_control_set_ptr->luma_width + sequence_control_set_ptr->sb_sz - 1) / sequence_control_set_ptr->sb_sz;
-        picture_height_in_sb = (sequence_control_set_ptr->luma_height + sequence_control_set_ptr->sb_sz - 1) / sequence_control_set_ptr->sb_sz;
-        SEGMENT_CONVERT_IDX_TO_XY(segment_index, xSegmentIndex, ySegmentIndex, picture_control_set_ptr->me_segments_column_count);
-        xLcuStartIndex = SEGMENT_START_IDX(xSegmentIndex, picture_width_in_sb, picture_control_set_ptr->me_segments_column_count);
-        xLcuEndIndex = SEGMENT_END_IDX(xSegmentIndex, picture_width_in_sb, picture_control_set_ptr->me_segments_column_count);
-        yLcuStartIndex = SEGMENT_START_IDX(ySegmentIndex, picture_height_in_sb, picture_control_set_ptr->me_segments_row_count);
-        yLcuEndIndex = SEGMENT_END_IDX(ySegmentIndex, picture_height_in_sb, picture_control_set_ptr->me_segments_row_count);
-#endif
         asm_type = sequence_control_set_ptr->encode_context_ptr->asm_type;
         // Increment the MD Rate Estimation array pointer to point to the right address based on the QP and slice type
         md_rate_estimation_array = (MdRateEstimationContext*)sequence_control_set_ptr->encode_context_ptr->md_rate_estimation_array;
@@ -651,8 +631,6 @@ void* motion_estimation_kernel(void *input_ptr)
             }
         }
 
-
-#if ME_CLEAN
 		if (inputResultsPtr->task_type == 0)
 		{
 
@@ -665,9 +643,6 @@ void* motion_estimation_kernel(void *input_ptr)
 			xLcuEndIndex = SEGMENT_END_IDX(xSegmentIndex, picture_width_in_sb, picture_control_set_ptr->me_segments_column_count);
 			yLcuStartIndex = SEGMENT_START_IDX(ySegmentIndex, picture_height_in_sb, picture_control_set_ptr->me_segments_row_count);
 			yLcuEndIndex = SEGMENT_END_IDX(ySegmentIndex, picture_height_in_sb, picture_control_set_ptr->me_segments_row_count);
-
-
-#endif
 
 			// *** MOTION ESTIMATION CODE ***
 			if (picture_control_set_ptr->slice_type != I_SLICE) {
@@ -754,7 +729,7 @@ void* motion_estimation_kernel(void *input_ptr)
 							}
 						}
 
-#if ME_CLEAN
+#if ALTREF_FILTERING_SUPPORT
 						context_ptr->me_context_ptr->me_alt_ref = EB_FALSE;						
 #endif
 
@@ -962,18 +937,9 @@ void* motion_estimation_kernel(void *input_ptr)
 		}
 		else {
 
-	      
-
-
 		    // temporal filtering start
-#if ME_CLEAN 
-		context_ptr->me_context_ptr->me_alt_ref = EB_TRUE;
-		EbErrorType ret = init_temporal_filtering(picture_control_set_ptr->temp_filt_pcs_list, picture_control_set_ptr, context_ptr, inputResultsPtr->segment_index);
-#else
-		    EbErrorType ret = init_temporal_filtering(picture_control_set_ptr->temp_filt_pcs_list, inputResultsPtr->segment_index);
-#endif	
-
-		     //printf("ME doing tmp filtering for %i \n", picture_control_set_ptr->picture_number);
+            context_ptr->me_context_ptr->me_alt_ref = EB_TRUE;
+            EbErrorType ret = init_temporal_filtering(picture_control_set_ptr->temp_filt_pcs_list, picture_control_set_ptr, context_ptr, inputResultsPtr->segment_index);
 			 
 			 // Release the Input Results
 			 eb_release_object(inputResultsWrapperPtr);

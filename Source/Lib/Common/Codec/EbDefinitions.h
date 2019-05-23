@@ -38,11 +38,7 @@ extern "C" {
 
 #if ALT_REF_SUPPORT
 #define ALTREF_FILTERING_SUPPORT          1 //Temporal filter
-#define ALTREF_DISABLE_SUBPEL             0 //Temporal filter : disable subpel
 #define MOVE_TF                           1 // Move Temp Filter to ME
-#define	ME_CLEAN                          1 // Clean up all ME signals to be used correctly in TF
-#define	FIX_ME_CFG                        1 // fix ME config in TF
-#define TF_MCP                            1 // use aom mcp for temporal filtering compensation.
 
 #define ALT_REF_OVERLAY                   1 // support for ALT_REF overlay frames.
 #define	ALT_REF_OVERLAY_MODE              1 // make overlay mode dependent. Active only for M0 for now
