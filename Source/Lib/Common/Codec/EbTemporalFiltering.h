@@ -50,8 +50,7 @@
 #define WEIGHT_MULTIPLIER 16
 
 // ALT-REF debug-specific defines
-#define DEBUG_TEMPORAL_FILTER 0
-#define DEBUG_MC 0
+#define DEBUG_TF 0
 #define VANILA_ME 0
 #define LIBAOM_FILTERING 0
 #define MC_CHROMA 1
