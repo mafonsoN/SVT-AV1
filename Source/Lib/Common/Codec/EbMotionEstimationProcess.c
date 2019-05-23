@@ -109,7 +109,7 @@ void* set_me_hme_params_oq(
 
 #if SCREEN_CONTENT_SETTINGS
     uint8_t sc_content_detected = picture_control_set_ptr->sc_content_detected;
-#if ALT_REF_SC
+#if ALTREF_FILTERING_SUPPORT
 	if (me_context_ptr->me_alt_ref == EB_TRUE)
 		sc_content_detected = 0;
 #endif
@@ -620,7 +620,7 @@ void* motion_estimation_kernel(void *input_ptr)
         // Reset MD rate Estimation table to initial values by copying from md_rate_estimation_array
         EB_MEMCPY(&(context_ptr->me_context_ptr->mvd_bits_array[0]), &(md_rate_estimation_array->mvd_bits[0]), sizeof(EbBitFraction)*NUMBER_OF_MVD_CASES);
         ///context_ptr->me_context_ptr->lambda = lambda_mode_decision_ld_sad_qp_scaling[picture_control_set_ptr->picture_qp];
-#if ALT_REF_SC 
+#if ALTREF_FILTERING_SUPPORT
 		context_ptr->me_context_ptr->me_alt_ref = inputResultsPtr->task_type == 1 ? EB_TRUE : EB_FALSE;
 #endif  
         // ME Kernel Signal(s) derivation

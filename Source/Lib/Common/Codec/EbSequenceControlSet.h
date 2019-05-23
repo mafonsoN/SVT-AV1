@@ -134,7 +134,7 @@ extern "C" {
 		uint32_t                                tf_segment_column_count;
 		uint32_t                                tf_segment_row_count;
 #endif
-#if ALTREF_MODE
+#if ALTREF_FILTERING_SUPPORT
 		uint8_t                                 enable_altrefs;
 #endif
         // Buffers

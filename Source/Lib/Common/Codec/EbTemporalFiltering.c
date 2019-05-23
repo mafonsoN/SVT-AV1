@@ -1505,12 +1505,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
             int byte = blk_y_offset;
             for (i = 0, k = 0; i < BH; i++) {
                 for (j = 0; j < BW; j++, k++) {
-#if DIV_FIX
                     alt_ref_buffer[C_Y][byte] = (uint8_t)OD_DIVU(accum[C_Y][k] + (count[C_Y][k] >> 1), count[C_Y][k]);
-#else
-                    alt_ref_buffer[C_Y][byte] = (uint8_t)((accum[C_Y][k] + (count[C_Y][k] >> 1))/count[C_Y][k]);
-#endif
-                    // move to next pixel
                     byte++;
                 }
                 byte += stride[C_Y] - BW;
@@ -1519,16 +1514,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
             byte = blk_ch_offset;
             for (i = 0, k = 0; i < blk_height_ch; i++) {
                 for (j = 0; j < blk_width_ch; j++, k++) {
-                    // U
-#if DIV_FIX
-					alt_ref_buffer[C_U][byte] = (uint8_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]);
-					alt_ref_buffer[C_V][byte] = (uint8_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]);
-#else
-                    alt_ref_buffer[C_U][byte] = (uint8_t)((accum[C_U][k] + (count[C_U][k] >> 1))/count[C_U][k]);
-                    // V
-                    alt_ref_buffer[C_V][byte] = (uint8_t)((accum[C_V][k] + (count[C_V][k] >> 1))/count[C_V][k]);
-#endif
-                    // move to next pixel
+                    alt_ref_buffer[C_U][byte] = (uint8_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]);
+                    alt_ref_buffer[C_V][byte] = (uint8_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]);
                     byte++;
                 }
                 byte += stride[C_U] - (BW_CH);

@@ -138,7 +138,8 @@ double aom_normalized_cross_correlation(const double *a, const double *b,
     }
     return c / (sqrt(a_len) * sqrt(b_len));
 }
-#if DIV_FIX
+
+#if ALTREF_FILTERING_SUPPORT
 #define OD_DIVU_DMAX (1024)
 uint32_t od_divu_small_consts[OD_DIVU_DMAX][2] = {
   { 0xFFFFFFFF, 0xFFFFFFFF }, { 0xFFFFFFFF, 0xFFFFFFFF },
