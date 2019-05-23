@@ -42,11 +42,9 @@ extern "C" {
 #define MOVE_TF                           1 // Move Temp Filter to ME
 #define	ME_CLEAN                          1 // Clean up all ME signals to be used correctly in TF
 #define	FIX_ME_CFG                        1 // fix ME config in TF
-#define	MOVE_CHROMA_PAD                   1 // move chroma padding to the prep phase
 #define TF_MCP                            1 // use aom mcp for temporal filtering compensation.
 #define DIV_FIX                           1 // fix div in TF
 #define	FIX_SHORT                         1 // fix crash when filtering window is short
-#define	INPLACE_FILT                      1 // in place filtering.
 #define	ALTREF_MODE                       1 // make altref mode dependent
 #define	ALT_REF_SC                        1 // use regular search region for screen content
 

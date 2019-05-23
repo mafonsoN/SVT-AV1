@@ -1207,30 +1207,6 @@ EbErrorType picture_parent_control_set_ctor(
 	EB_CREATESEMAPHORE(EbHandle, object_ptr->temp_filt_done_semaphore, sizeof(EbHandle), EB_SEMAPHORE, 0, 1);
 	EB_CREATEMUTEX(EbHandle, object_ptr->temp_filt_mutex, sizeof(EbHandle), EB_MUTEX);
 	EB_CREATEMUTEX(EbHandle, object_ptr->debug_mutex, sizeof(EbHandle), EB_MUTEX);
-#if !INPLACE_FILT
-	{
-	    //TODO: get it from input SRM. 
-		EbPictureBufferDescInitData desc_init_data;
-		desc_init_data.max_width = initDataPtr->picture_width;
-		desc_init_data.max_height = initDataPtr->picture_height;
-		desc_init_data.bit_depth = 8;
-		desc_init_data.buffer_enable_mask = PICTURE_BUFFER_DESC_FULL_MASK;
-		desc_init_data.color_format = EB_YUV420;
-		desc_init_data.left_padding = initDataPtr->left_padding;
-		desc_init_data.right_padding = desc_init_data.left_padding;
-		desc_init_data.top_padding = desc_init_data.left_padding;
-		desc_init_data.bot_padding = desc_init_data.left_padding;
-		desc_init_data.split_mode = EB_FALSE;
-
-		EbErrorType return_error = eb_picture_buffer_desc_ctor(
-			(EbPtr*)&(object_ptr->new_enhanced_picture_ptr),
-			(EbPtr)&desc_init_data);
-		if (return_error == EB_ErrorInsufficientResources) {
-			printf("ERRR allocating mem \n");
-			return EB_ErrorInsufficientResources;
-		}
-	}
-#endif
 #endif
     EB_MALLOC(Av1Common*, object_ptr->av1_cm, sizeof(Av1Common), EB_N_PTR);
 

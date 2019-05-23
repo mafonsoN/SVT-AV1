@@ -14399,10 +14399,7 @@ extern "C" {
 		EbHandle debug_mutex;
 
 		uint8_t  temp_filt_prep_done;
-		uint16_t temp_filt_seg_acc;		
-#if !INPLACE_FILT
-		EbPictureBufferDesc                  *new_enhanced_picture_ptr;
-#endif
+		uint16_t temp_filt_seg_acc;
 
 		int16_t                               tf_segments_total_count;
 		uint8_t                               tf_segments_column_count;
