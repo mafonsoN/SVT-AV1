@@ -25,6 +25,11 @@
 
 #define ALTREF_MAX_NFRAMES 10
 
+// ALT-REF debug-specific defines
+#define DEBUG_TF 0
+#define LIBAOM_FILTERING 0
+#define AV1_MC 1
+
 #define COLOR_CHANNELS 3
 #define C_Y 0
 #define C_U 1
@@ -48,11 +53,6 @@
 
 #define INIT_WEIGHT 2
 #define WEIGHT_MULTIPLIER 16
-
-// ALT-REF debug-specific defines
-#define DEBUG_TF 0
-#define LIBAOM_FILTERING 0
-#define AV1_MC 1
 
 #define THRES_LOW 10000
 #define THRES_HIGH 20000

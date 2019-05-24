@@ -776,116 +776,116 @@ static void apply_filtering_central(EbByte *pred,
 }
 
 EbErrorType av1_inter_prediction(
-	PictureControlSet                    *picture_control_set_ptr,
-	uint32_t                             interp_filters,
-	CodingUnit                           *cu_ptr,
-	uint8_t                              ref_frame_type,
-	MvUnit                               *mv_unit,
-	uint8_t                              use_intrabc,
-	uint16_t                             pu_origin_x,
-	uint16_t                             pu_origin_y,
-	uint8_t                              bwidth,
-	uint8_t                              bheight,
-	EbPictureBufferDesc                  *ref_pic_list0,
-	EbPictureBufferDesc                  *ref_pic_list1,
-	EbPictureBufferDesc                  *prediction_ptr,
-	uint16_t                             dst_origin_x,
-	uint16_t                             dst_origin_y,
-	EbBool                               perform_chroma,
-	EbAsm                                asm_type);
+    PictureControlSet                    *picture_control_set_ptr,
+    uint32_t                             interp_filters,
+    CodingUnit                           *cu_ptr,
+    uint8_t                              ref_frame_type,
+    MvUnit                               *mv_unit,
+    uint8_t                              use_intrabc,
+    uint16_t                             pu_origin_x,
+    uint16_t                             pu_origin_y,
+    uint8_t                              bwidth,
+    uint8_t                              bheight,
+    EbPictureBufferDesc                  *ref_pic_list0,
+    EbPictureBufferDesc                  *ref_pic_list1,
+    EbPictureBufferDesc                  *prediction_ptr,
+    uint16_t                             dst_origin_x,
+    uint16_t                             dst_origin_y,
+    EbBool                               perform_chroma,
+    EbAsm                                asm_type);
 
 uint32_t get_mds_idx(uint32_t  orgx, uint32_t  orgy, uint32_t  size, uint32_t use_128x128);
 
 void tf_inter_prediction(
-	PictureParentControlSet   *picture_control_set_ptr,
-	MeContext* context_ptr,
-	EbPictureBufferDesc *pic_ptr_ref,
-	EbByte *pred,
-	uint32_t sb_origin_x,
-	uint32_t sb_origin_y,
-	int* use_16x16_subblocks,
-	EbAsm asm_type)
+    PictureParentControlSet   *picture_control_set_ptr,
+    MeContext* context_ptr,
+    EbPictureBufferDesc *pic_ptr_ref,
+    EbByte *pred,
+    uint32_t sb_origin_x,
+    uint32_t sb_origin_y,
+    int* use_16x16_subblocks,
+    EbAsm asm_type)
 {
-	const InterpFilters interp_filters =
-		av1_make_interp_filters(MULTITAP_SHARP, MULTITAP_SHARP);
+    const InterpFilters interp_filters =
+        av1_make_interp_filters(MULTITAP_SHARP, MULTITAP_SHARP);
 
-	CodingUnit       cu_ptr;
-	MacroBlockD      av1xd;
-	cu_ptr.av1xd = &av1xd;
-	MvUnit   mv_unit;
-	mv_unit.pred_direction = UNI_PRED_LIST_0;
+    CodingUnit       cu_ptr;
+    MacroBlockD      av1xd;
+    cu_ptr.av1xd = &av1xd;
+    MvUnit   mv_unit;
+    mv_unit.pred_direction = UNI_PRED_LIST_0;
 
-	EbPictureBufferDesc      prediction_ptr;
-	prediction_ptr.origin_x = 0;
-	prediction_ptr.origin_y = 0;
-	prediction_ptr.buffer_y = pred[0];
-	prediction_ptr.stride_y = BW;
-	prediction_ptr.buffer_cb = pred[1];
-	prediction_ptr.stride_cb = BW_CH;
-	prediction_ptr.buffer_cr = pred[2];
-	prediction_ptr.stride_cr = BW_CH;	
+    EbPictureBufferDesc      prediction_ptr;
+    prediction_ptr.origin_x = 0;
+    prediction_ptr.origin_y = 0;
+    prediction_ptr.buffer_y = pred[0];
+    prediction_ptr.stride_y = BW;
+    prediction_ptr.buffer_cb = pred[1];
+    prediction_ptr.stride_cb = BW_CH;
+    prediction_ptr.buffer_cr = pred[2];
+    prediction_ptr.stride_cr = BW_CH;
 
-	for (uint32_t idx_32x32 = 0; idx_32x32 < 4; idx_32x32++) {		
+    for (uint32_t idx_32x32 = 0; idx_32x32 < 4; idx_32x32++) {
 
-		if (use_16x16_subblocks[idx_32x32] == 0) {
-		
-		}
-		else {
-			
-	        uint32_t	bsize = 16;
+        if (use_16x16_subblocks[idx_32x32] == 0) {
 
-			for (uint32_t idx_16x16 = 0; idx_16x16 < 4; idx_16x16++) {
+        }
+        else {
 
-				uint32_t pu_index = index_16x16_from_subindexes[idx_32x32][idx_16x16];			
+            uint32_t	bsize = 16;
 
-				uint32_t idx_y = subblock_xy_16x16[pu_index][0];
-				uint32_t idx_x = subblock_xy_16x16[pu_index][1];
-				uint16_t local_origin_x = idx_x * bsize;
-				uint16_t local_origin_y = idx_y * bsize;
-				uint16_t pu_origin_x = sb_origin_x + local_origin_x;
-				uint16_t pu_origin_y = sb_origin_y + local_origin_y;
-				uint32_t mirow = pu_origin_y >> MI_SIZE_LOG2;
-				uint32_t micol = pu_origin_x >> MI_SIZE_LOG2;
-				cu_ptr.mds_idx = get_mds_idx(local_origin_x, local_origin_y, bsize, picture_control_set_ptr->sequence_control_set_ptr->sb_size == BLOCK_128X128);
+            for (uint32_t idx_16x16 = 0; idx_16x16 < 4; idx_16x16++) {
 
-				const int32_t bw = mi_size_wide[BLOCK_16X16];
-				const int32_t bh = mi_size_high[BLOCK_16X16];
-				cu_ptr.av1xd->mb_to_top_edge = -((mirow * MI_SIZE) * 8);
-				cu_ptr.av1xd->mb_to_bottom_edge = ((picture_control_set_ptr->av1_cm->mi_rows - bw - mirow) * MI_SIZE) * 8;
-				cu_ptr.av1xd->mb_to_left_edge = -((micol * MI_SIZE) * 8);
-				cu_ptr.av1xd->mb_to_right_edge = ((picture_control_set_ptr->av1_cm->mi_cols - bh - micol) * MI_SIZE) * 8;
+                uint32_t pu_index = index_16x16_from_subindexes[idx_32x32][idx_16x16];
 
-				uint32_t mv_index = tab16x16[pu_index];
-				mv_unit.mv->x = _MVXT(context_ptr->p_best_mv16x16[mv_index]);
-				mv_unit.mv->y = _MVYT(context_ptr->p_best_mv16x16[mv_index]);
-				//AV1 MVs are always in 1/8th pel precision. 
-				mv_unit.mv->x = mv_unit.mv->x << 1;
-				mv_unit.mv->y = mv_unit.mv->y << 1;
+                uint32_t idx_y = subblock_xy_16x16[pu_index][0];
+                uint32_t idx_x = subblock_xy_16x16[pu_index][1];
+                uint16_t local_origin_x = idx_x * bsize;
+                uint16_t local_origin_y = idx_y * bsize;
+                uint16_t pu_origin_x = sb_origin_x + local_origin_x;
+                uint16_t pu_origin_y = sb_origin_y + local_origin_y;
+                uint32_t mirow = pu_origin_y >> MI_SIZE_LOG2;
+                uint32_t micol = pu_origin_x >> MI_SIZE_LOG2;
+                cu_ptr.mds_idx = get_mds_idx(local_origin_x, local_origin_y, bsize, picture_control_set_ptr->sequence_control_set_ptr->sb_size == BLOCK_128X128);
 
-				av1_inter_prediction(
-					NULL,  //picture_control_set_ptr,
-					(uint32_t)interp_filters,
-					&cu_ptr,
-					0,//ref_frame_type,
-					&mv_unit,
-					0,//use_intrabc,
-					pu_origin_x,
-					pu_origin_y,
-					bsize,
-					bsize,
-					pic_ptr_ref,
-					NULL,//ref_pic_list1,
-					&prediction_ptr,
-					local_origin_x,
-					local_origin_y,
-					1,//perform_chroma,
-					asm_type);
+                const int32_t bw = mi_size_wide[BLOCK_16X16];
+                const int32_t bh = mi_size_high[BLOCK_16X16];
+                cu_ptr.av1xd->mb_to_top_edge = -((mirow * MI_SIZE) * 8);
+                cu_ptr.av1xd->mb_to_bottom_edge = ((picture_control_set_ptr->av1_cm->mi_rows - bw - mirow) * MI_SIZE) * 8;
+                cu_ptr.av1xd->mb_to_left_edge = -((micol * MI_SIZE) * 8);
+                cu_ptr.av1xd->mb_to_right_edge = ((picture_control_set_ptr->av1_cm->mi_cols - bh - micol) * MI_SIZE) * 8;
 
-			}
+                uint32_t mv_index = tab16x16[pu_index];
+                mv_unit.mv->x = _MVXT(context_ptr->p_best_mv16x16[mv_index]);
+                mv_unit.mv->y = _MVYT(context_ptr->p_best_mv16x16[mv_index]);
+                //AV1 MVs are always in 1/8th pel precision.
+                mv_unit.mv->x = mv_unit.mv->x << 1;
+                mv_unit.mv->y = mv_unit.mv->y << 1;
 
-		}
+                av1_inter_prediction(
+                    NULL,  //picture_control_set_ptr,
+                    (uint32_t)interp_filters,
+                    &cu_ptr,
+                    0,//ref_frame_type,
+                    &mv_unit,
+                    0,//use_intrabc,
+                    pu_origin_x,
+                    pu_origin_y,
+                    bsize,
+                    bsize,
+                    pic_ptr_ref,
+                    NULL,//ref_pic_list1,
+                    &prediction_ptr,
+                    local_origin_x,
+                    local_origin_y,
+                    1,//perform_chroma,
+                    asm_type);
 
-	}
+            }
+
+        }
+
+    }
 
 
 }
@@ -1204,7 +1204,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     EbPictureBufferDesc *input_picture_ptr_central;
 
     // index of the center frame
-	index_center = (uint8_t)(list_picture_control_set_ptr[0]->sequence_control_set_ptr->static_config.altref_nframes / 2);
+    index_center = (uint8_t)(list_picture_control_set_ptr[0]->sequence_control_set_ptr->static_config.altref_nframes / 2);
 
     picture_control_set_ptr_central = list_picture_control_set_ptr[index_center];
     input_picture_ptr_central = list_input_picture_ptr[index_center];
@@ -1243,26 +1243,26 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     one_d_intermediate_results_buf_ch[1] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
 #endif
 
-	MeContext *context_ptr = me_context_ptr->me_context_ptr;
+    MeContext *context_ptr = me_context_ptr->me_context_ptr;
 
-	uint32_t  x_seg_idx;
-	uint32_t  y_seg_idx;
-	uint32_t picture_width_in_b64 = blk_cols;
-	uint32_t picture_height_in_b64 = blk_rows;
-	SEGMENT_CONVERT_IDX_TO_XY(segment_index, x_seg_idx, y_seg_idx, picture_control_set_ptr_central->tf_segments_column_count);
-	uint32_t x_b64_start_idx = SEGMENT_START_IDX(x_seg_idx, picture_width_in_b64,  picture_control_set_ptr_central->tf_segments_column_count);
-	uint32_t x_b64_end_idx   = SEGMENT_END_IDX  (x_seg_idx, picture_width_in_b64,  picture_control_set_ptr_central->tf_segments_column_count);
-	uint32_t y_b64_start_idx = SEGMENT_START_IDX(y_seg_idx, picture_height_in_b64, picture_control_set_ptr_central->tf_segments_row_count);
-	uint32_t y_b64_end_idx   = SEGMENT_END_IDX  (y_seg_idx, picture_height_in_b64, picture_control_set_ptr_central->tf_segments_row_count);
+    uint32_t  x_seg_idx;
+    uint32_t  y_seg_idx;
+    uint32_t picture_width_in_b64 = blk_cols;
+    uint32_t picture_height_in_b64 = blk_rows;
+    SEGMENT_CONVERT_IDX_TO_XY(segment_index, x_seg_idx, y_seg_idx, picture_control_set_ptr_central->tf_segments_column_count);
+    uint32_t x_b64_start_idx = SEGMENT_START_IDX(x_seg_idx, picture_width_in_b64,  picture_control_set_ptr_central->tf_segments_column_count);
+    uint32_t x_b64_end_idx   = SEGMENT_END_IDX  (x_seg_idx, picture_width_in_b64,  picture_control_set_ptr_central->tf_segments_column_count);
+    uint32_t y_b64_start_idx = SEGMENT_START_IDX(y_seg_idx, picture_height_in_b64, picture_control_set_ptr_central->tf_segments_row_count);
+    uint32_t y_b64_end_idx   = SEGMENT_END_IDX  (y_seg_idx, picture_height_in_b64, picture_control_set_ptr_central->tf_segments_row_count);
 
-	for (blk_row = y_b64_start_idx; blk_row < y_b64_end_idx; blk_row++) {
-		for (blk_col = x_b64_start_idx; blk_col < x_b64_end_idx; blk_col++) {
+    for (blk_row = y_b64_start_idx; blk_row < y_b64_end_idx; blk_row++) {
+        for (blk_col = x_b64_start_idx; blk_col < x_b64_end_idx; blk_col++) {
 
-			blk_y_offset      = (blk_col * BW) + (blk_row * BH) * stride[C_Y];
-			blk_y_src_offset  = (blk_col * BW) + (blk_row * BH) * stride[C_Y];
-			
-			blk_ch_offset      = (blk_col * blk_width_ch) + (blk_row * blk_height_ch) * stride[C_U];
-			blk_ch_src_offset  = (blk_col * blk_width_ch) + (blk_row * blk_height_ch) * stride[C_U];
+            blk_y_offset      = (blk_col * BW) + (blk_row * BH) * stride[C_Y];
+            blk_y_src_offset  = (blk_col * BW) + (blk_row * BH) * stride[C_Y];
+
+            blk_ch_offset      = (blk_col * blk_width_ch) + (blk_row * blk_height_ch) * stride[C_U];
+            blk_ch_src_offset  = (blk_col * blk_width_ch) + (blk_row * blk_height_ch) * stride[C_U];
 
             // reset accumulator and count
             memset(accumulator, 0, BLK_PELS * COLOR_CHANNELS * sizeof(accumulator[0]));
@@ -1350,15 +1350,15 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
                     // Perform MC using the information acquired using the ME step
 #if AV1_MC
-					tf_inter_prediction(						
-						picture_control_set_ptr_central,
-						context_ptr,
-						list_input_picture_ptr[frame_index],
-						pred,
-						(uint32_t)blk_col*BW,
-						(uint32_t)blk_row*BH,
-						use_16x16_subblocks,
-						asm_type);
+                    tf_inter_prediction(
+                        picture_control_set_ptr_central,
+                        context_ptr,
+                        list_input_picture_ptr[frame_index],
+                        pred,
+                        (uint32_t)blk_col*BW,
+                        (uint32_t)blk_row*BH,
+                        use_16x16_subblocks,
+                        asm_type);
 #else
                     uni_motion_compensation(context_ptr,
                                         list_input_picture_ptr[frame_index],
@@ -1508,11 +1508,11 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     free(pos_h_buffer_ch[0]);
     free(pos_j_buffer_ch[0]);
     
-	free(pos_b_buffer_ch[1]);
+    free(pos_b_buffer_ch[1]);
     free(pos_h_buffer_ch[1]);
     free(pos_j_buffer_ch[1]); //TODO: to fix this
     
-	free(one_d_intermediate_results_buf_ch[0]);
+    free(one_d_intermediate_results_buf_ch[0]);
     free(one_d_intermediate_results_buf_ch[1]);
 #endif
 
@@ -1692,32 +1692,32 @@ int read_YUV_frame_from_file(uint8_t **alt_ref_buffer, int picture_number, int w
 }
 
 EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
-	                                PictureParentControlSet *picture_control_set_ptr_central,
+                                    PictureParentControlSet *picture_control_set_ptr_central,
                                     MotionEstimationContext_t *me_context_ptr,
-	                                int32_t segment_index) {
+                                    int32_t segment_index) {
 
     uint8_t altref_strength, altref_nframes, index_center;
     EbPictureBufferDesc *input_picture_ptr;
     uint8_t *alt_ref_buffer[COLOR_CHANNELS];
 
     // number of frames to filter
-	altref_nframes = picture_control_set_ptr_central->altref_nframes;
+    altref_nframes = picture_control_set_ptr_central->altref_nframes;
 
-	// index of the central source frame
-	index_center = (uint8_t)(picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_nframes / 2);
+    // index of the central source frame
+    index_center = (uint8_t)(picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_nframes / 2);
 
     // source central frame picture buffer
     input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
 
-	//only one performs any picture based prep
-	eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
-	if (picture_control_set_ptr_central->temp_filt_prep_done == 0){
-	
-		//printf("PIC %i , filter strength done by seg :%i\n ", picture_control_set_ptr_central->picture_number,segment_index);
-		picture_control_set_ptr_central->temp_filt_prep_done = 1;
+    //only one performs any picture based prep
+    eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
+    if (picture_control_set_ptr_central->temp_filt_prep_done == 0){
 
-		// adjust filter parameter based on the estimated noise of the picture
-		adjust_filter_params(input_picture_ptr, &picture_control_set_ptr_central->altref_strength, &altref_nframes);
+        //printf("PIC %i , filter strength done by seg :%i\n ", picture_control_set_ptr_central->picture_number,segment_index);
+        picture_control_set_ptr_central->temp_filt_prep_done = 1;
+
+        // adjust filter parameter based on the estimated noise of the picture
+        adjust_filter_params(input_picture_ptr, &picture_control_set_ptr_central->altref_strength, &altref_nframes);
 
         // Pad chroma reference samples - once only per picture
         for (int i = 0; i < altref_nframes; i++) {
@@ -1741,8 +1741,8 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
             }
         }
 
-	}
-	eb_release_mutex(picture_control_set_ptr_central->temp_filt_mutex);
+    }
+    eb_release_mutex(picture_control_set_ptr_central->temp_filt_mutex);
 
     // populate source frames picture buffer list
     EbPictureBufferDesc *list_input_picture_ptr[ALTREF_MAX_NFRAMES] = { NULL };
@@ -1750,17 +1750,17 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
         list_input_picture_ptr[i] = list_picture_control_set_ptr[i]->enhanced_picture_ptr;
     }
 
-    alt_ref_buffer[0] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y +
-                        picture_control_set_ptr_central->enhanced_picture_ptr->origin_x +
-                        picture_control_set_ptr_central->enhanced_picture_ptr->origin_y*picture_control_set_ptr_central->enhanced_picture_ptr->stride_y;
-    alt_ref_buffer[1] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_cb +
-                        picture_control_set_ptr_central->enhanced_picture_ptr->origin_x / 2 +
-                        (picture_control_set_ptr_central->enhanced_picture_ptr->origin_y / 2)*picture_control_set_ptr_central->enhanced_picture_ptr->stride_cb;
-    alt_ref_buffer[2] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_cr +
-                        picture_control_set_ptr_central->enhanced_picture_ptr->origin_x / 2 +
-                        (picture_control_set_ptr_central->enhanced_picture_ptr->origin_y / 2)*picture_control_set_ptr_central->enhanced_picture_ptr->stride_cr;
+    alt_ref_buffer[C_Y] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y +
+                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_x +
+                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_y*picture_control_set_ptr_central->enhanced_picture_ptr->stride_y;
+    alt_ref_buffer[C_U] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_cb +
+                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_x / 2 +
+                          (picture_control_set_ptr_central->enhanced_picture_ptr->origin_y / 2)*picture_control_set_ptr_central->enhanced_picture_ptr->stride_cb;
+    alt_ref_buffer[C_V] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_cr +
+                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_x / 2 +
+                          (picture_control_set_ptr_central->enhanced_picture_ptr->origin_y / 2)*picture_control_set_ptr_central->enhanced_picture_ptr->stride_cr;
 
-#if LIBAOM_FILTERING==0
+#if !LIBAOM_FILTERING
     EbErrorType ret;
     ret = produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, picture_control_set_ptr_central->altref_strength, altref_nframes, alt_ref_buffer, (MotionEstimationContext_t *) me_context_ptr,segment_index);
 #else
@@ -1771,12 +1771,12 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
                             list_input_picture_ptr[index_center]->stride_y);
 #endif
 
-	eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
-	picture_control_set_ptr_central->temp_filt_seg_acc++;
+    eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
+    picture_control_set_ptr_central->temp_filt_seg_acc++;
 
-	if (picture_control_set_ptr_central->temp_filt_seg_acc == picture_control_set_ptr_central->tf_segments_total_count){
+    if (picture_control_set_ptr_central->temp_filt_seg_acc == picture_control_set_ptr_central->tf_segments_total_count){
 
-	    pad_and_decimate_filtered_pic(picture_control_set_ptr_central);
+        pad_and_decimate_filtered_pic(picture_control_set_ptr_central);
 
 #if DEBUG_TF
     {
@@ -1798,12 +1798,12 @@ EbErrorType init_temporal_filtering(PictureParentControlSet **list_picture_contr
     }
 #endif
 
-	    // signal that temp filt is done
+        // signal that temp filt is done
         eb_post_semaphore(picture_control_set_ptr_central->temp_filt_done_semaphore);
 
-	}
+    }
 
-	eb_release_mutex(picture_control_set_ptr_central->temp_filt_mutex);
+    eb_release_mutex(picture_control_set_ptr_central->temp_filt_mutex);
 
     return ret;
 }

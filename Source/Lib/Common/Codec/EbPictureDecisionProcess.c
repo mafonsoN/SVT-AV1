@@ -3451,18 +3451,6 @@ void* picture_decision_kernel(void *input_ptr)
     // Debug
     uint64_t                           loopCount = 0;
 
-#if ALTREF_FILTERING_SUPPORT
-
-    // ----- Alt-Refs variables
-    PictureParentControlSet *list_picture_control_set_ptr[ALTREF_MAX_NFRAMES];
-    uint64_t mini_gop_count = 0;
-    uint8_t pics_saved = 0;
-    uint64_t alt_ref_central_loc = 0;
-    EbBool alt_ref_created_flag = EB_FALSE;
-    // -----
-
-#endif
-
     for (;;) {
 
         // Get Input Full Object
@@ -3501,7 +3489,7 @@ void* picture_decision_kernel(void *input_ptr)
             }
 
 #if ALTREF_FILTERING_SUPPORT
-			picture_control_set_ptr->pic_decision_reorder_queue_idx = queueEntryIndex;
+            picture_control_set_ptr->pic_decision_reorder_queue_idx = queueEntryIndex;
 #endif
 #if ALT_REF_OVERLAY
         }
@@ -3691,18 +3679,6 @@ void* picture_decision_kernel(void *input_ptr)
                     GenerateMiniGopRps(
                         context_ptr,
                         encode_context_ptr);
-
-#if ALTREF_FILTERING_SUPPORT
-
-                    // ---- Alt-refs ---- set state for next mini-gop
-                    // TODO: testing purposes only - stategy to define which frames are alt-refs is required
-                    if(picture_control_set_ptr->picture_number > 0){
-                        pics_saved = 0;
-                        mini_gop_count++;
-                        alt_ref_created_flag = EB_FALSE;
-                    }
-
-#endif
 
                     // Loop over Mini GOPs
 
@@ -4331,111 +4307,111 @@ void* picture_decision_kernel(void *input_ptr)
 #endif
 
 #if ALTREF_FILTERING_SUPPORT
-							if ( sequence_control_set_ptr->enable_altrefs == EB_TRUE &&
-								 picture_control_set_ptr->slice_type != I_SLICE && picture_control_set_ptr->temporal_layer_index == 0) {
+                            if ( sequence_control_set_ptr->enable_altrefs == EB_TRUE &&
+                                 picture_control_set_ptr->slice_type != I_SLICE && picture_control_set_ptr->temporal_layer_index == 0) {
 
                                 int altref_nframes = picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes;
                                 int num_past_pics = altref_nframes / 2;
                                 int num_future_pics = altref_nframes - num_past_pics - 1;
                                 ASSERT(num_future_pics >= 0);
-								printf("TF-POC %i   ", picture_control_set_ptr->picture_number);
-								
-								//initilize list
-								for (int pic_itr = 0; pic_itr < ALTREF_MAX_NFRAMES; pic_itr++)
-									picture_control_set_ptr->temp_filt_pcs_list[pic_itr] = NULL;
+                                printf("TF-POC %i   ", picture_control_set_ptr->picture_number);
 
-								//get previous+current pictures from the the pre-assign buffer
-								for (int pic_itr = 0; pic_itr <= num_past_pics; pic_itr++) {
+                                //initilize list
+                                for (int pic_itr = 0; pic_itr < ALTREF_MAX_NFRAMES; pic_itr++)
+                                    picture_control_set_ptr->temp_filt_pcs_list[pic_itr] = NULL;
 
-									PictureParentControlSet* pcs_itr = (PictureParentControlSet*)encode_context_ptr->pre_assignment_buffer[pictureIndex - num_past_pics + pic_itr]->object_ptr;
-									picture_control_set_ptr->temp_filt_pcs_list[pic_itr] = pcs_itr;
+                                //get previous+current pictures from the the pre-assign buffer
+                                for (int pic_itr = 0; pic_itr <= num_past_pics; pic_itr++) {
 
-									// Set the default subpel settings
-									//list_picture_control_set_ptr[pic_itr]->use_subpel_flag = 1;
-								}
+                                    PictureParentControlSet* pcs_itr = (PictureParentControlSet*)encode_context_ptr->pre_assignment_buffer[pictureIndex - num_past_pics + pic_itr]->object_ptr;
+                                    picture_control_set_ptr->temp_filt_pcs_list[pic_itr] = pcs_itr;
 
-								uint32_t actual_future_pics = 0;
-								int pic_i;
-								//search reord-queue to get the future pictures
-								for (pic_i = 0; pic_i < num_future_pics; pic_i++) {
-									int32_t q_index = QUEUE_GET_NEXT_SPOT(picture_control_set_ptr->pic_decision_reorder_queue_idx, pic_i + 1);
-									if (encode_context_ptr->picture_decision_reorder_queue[q_index]->parent_pcs_wrapper_ptr != NULL) {
-										PictureParentControlSet* pcs_itr = (PictureParentControlSet *)encode_context_ptr->picture_decision_reorder_queue[q_index]->parent_pcs_wrapper_ptr->object_ptr;
-										picture_control_set_ptr->temp_filt_pcs_list[pic_i + num_past_pics + 1] = pcs_itr;
-										actual_future_pics++;
-									}
-									else {
-										break;
-									}
+                                    // Set the default subpel settings
+                                    //list_picture_control_set_ptr[pic_itr]->use_subpel_flag = 1;
+                                }
 
-								}
+                                uint32_t actual_future_pics = 0;
+                                int pic_i;
+                                //search reord-queue to get the future pictures
+                                for (pic_i = 0; pic_i < num_future_pics; pic_i++) {
+                                    int32_t q_index = QUEUE_GET_NEXT_SPOT(picture_control_set_ptr->pic_decision_reorder_queue_idx, pic_i + 1);
+                                    if (encode_context_ptr->picture_decision_reorder_queue[q_index]->parent_pcs_wrapper_ptr != NULL) {
+                                        PictureParentControlSet* pcs_itr = (PictureParentControlSet *)encode_context_ptr->picture_decision_reorder_queue[q_index]->parent_pcs_wrapper_ptr->object_ptr;
+                                        picture_control_set_ptr->temp_filt_pcs_list[pic_i + num_past_pics + 1] = pcs_itr;
+                                        actual_future_pics++;
+                                    }
+                                    else {
+                                        break;
+                                    }
 
-								//search in pre-ass if still short
-								if (pic_i < num_future_pics) {
-									actual_future_pics = 0;
-									for (int pic_i_future = 0; pic_i_future < num_future_pics; pic_i_future++) {
-										for (int pic_i_pa = 0; pic_i_pa < encode_context_ptr->pre_assignment_buffer_count; pic_i_pa++) {
-											PictureParentControlSet* pcs_itr = (PictureParentControlSet*)encode_context_ptr->pre_assignment_buffer[pic_i_pa]->object_ptr;
-											if (pcs_itr->picture_number == picture_control_set_ptr->picture_number + pic_i_future + 1) {
-												picture_control_set_ptr->temp_filt_pcs_list[pic_i_future + num_past_pics + 1] = pcs_itr;
-												actual_future_pics++;
-												break; //exist the pre-ass loop, go search the next
-											}
-										}
-									}
-								}
+                                }
 
-								//set the actual_number of final pics
-								altref_nframes = num_past_pics + 1 + actual_future_pics;
+                                //search in pre-ass if still short
+                                if (pic_i < num_future_pics) {
+                                    actual_future_pics = 0;
+                                    for (int pic_i_future = 0; pic_i_future < num_future_pics; pic_i_future++) {
+                                        for (int pic_i_pa = 0; pic_i_pa < encode_context_ptr->pre_assignment_buffer_count; pic_i_pa++) {
+                                            PictureParentControlSet* pcs_itr = (PictureParentControlSet*)encode_context_ptr->pre_assignment_buffer[pic_i_pa]->object_ptr;
+                                            if (pcs_itr->picture_number == picture_control_set_ptr->picture_number + pic_i_future + 1) {
+                                                picture_control_set_ptr->temp_filt_pcs_list[pic_i_future + num_past_pics + 1] = pcs_itr;
+                                                actual_future_pics++;
+                                                break; //exist the pre-ass loop, go search the next
+                                            }
+                                        }
+                                    }
+                                }
 
-								if(altref_nframes< picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes)
-									printf("TF %i  using only % frames/%i   \n", picture_control_set_ptr->picture_number, altref_nframes, picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes);
-								/*for (int tt = 0; tt < altref_nframes; tt++)
-								{
-									printf("%i   ", picture_control_set_ptr->temp_filt_pcs_list[tt]->picture_number);
-								}*/
-								picture_control_set_ptr->altref_nframes = altref_nframes;
+                                //set the actual_number of final pics
+                                altref_nframes = num_past_pics + 1 + actual_future_pics;
 
-								clock_t start_time;
-								start_time = clock();								
-								
-								picture_control_set_ptr->temp_filt_prep_done = 0;
+                                if(altref_nframes< picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes)
+                                    printf("TF %i  using only % frames/%i   \n", picture_control_set_ptr->picture_number, altref_nframes, picture_control_set_ptr->sequence_control_set_ptr->static_config.altref_nframes);
+                                /*for (int tt = 0; tt < altref_nframes; tt++)
+                                {
+                                    printf("%i   ", picture_control_set_ptr->temp_filt_pcs_list[tt]->picture_number);
+                                }*/
+                                picture_control_set_ptr->altref_nframes = altref_nframes;
+
+                                clock_t start_time;
+                                start_time = clock();
+
+                                picture_control_set_ptr->temp_filt_prep_done = 0;
 
 
-								// Start Filtering in ME processes
-								{
-									uint32_t seg_idx;
+                                // Start Filtering in ME processes
+                                {
+                                    uint32_t seg_idx;
 
-									// Initialize Segments
-									picture_control_set_ptr->tf_segments_column_count = sequence_control_set_ptr->tf_segment_column_count;
-									picture_control_set_ptr->tf_segments_row_count    = sequence_control_set_ptr->tf_segment_row_count;
-									picture_control_set_ptr->tf_segments_total_count = (uint16_t)(picture_control_set_ptr->tf_segments_column_count  * picture_control_set_ptr->tf_segments_row_count);									
-									
-									picture_control_set_ptr->temp_filt_seg_acc = 0;
-									picture_control_set_ptr->altref_strength = sequence_control_set_ptr->static_config.altref_strength;
+                                    // Initialize Segments
+                                    picture_control_set_ptr->tf_segments_column_count = sequence_control_set_ptr->tf_segment_column_count;
+                                    picture_control_set_ptr->tf_segments_row_count    = sequence_control_set_ptr->tf_segment_row_count;
+                                    picture_control_set_ptr->tf_segments_total_count = (uint16_t)(picture_control_set_ptr->tf_segments_column_count  * picture_control_set_ptr->tf_segments_row_count);
 
-									for (seg_idx = 0; seg_idx < picture_control_set_ptr->tf_segments_total_count; ++seg_idx) {
-										
-										eb_get_empty_object(
-											context_ptr->picture_decision_results_output_fifo_ptr,
-											&outputResultsWrapperPtr);
-										outputResultsPtr = (PictureDecisionResults*)outputResultsWrapperPtr->object_ptr;
-										outputResultsPtr->picture_control_set_wrapper_ptr = encode_context_ptr->pre_assignment_buffer[pictureIndex];
-										outputResultsPtr->segment_index = seg_idx;
-										outputResultsPtr->task_type = 1;									
-										eb_post_full_object(outputResultsWrapperPtr);
+                                    picture_control_set_ptr->temp_filt_seg_acc = 0;
+                                    picture_control_set_ptr->altref_strength = sequence_control_set_ptr->static_config.altref_strength;
 
-									}
+                                    for (seg_idx = 0; seg_idx < picture_control_set_ptr->tf_segments_total_count; ++seg_idx) {
 
-									eb_block_on_semaphore(picture_control_set_ptr->temp_filt_done_semaphore);
-								}
+                                        eb_get_empty_object(
+                                            context_ptr->picture_decision_results_output_fifo_ptr,
+                                            &outputResultsWrapperPtr);
+                                        outputResultsPtr = (PictureDecisionResults*)outputResultsWrapperPtr->object_ptr;
+                                        outputResultsPtr->picture_control_set_wrapper_ptr = encode_context_ptr->pre_assignment_buffer[pictureIndex];
+                                        outputResultsPtr->segment_index = seg_idx;
+                                        outputResultsPtr->task_type = 1;
+                                        eb_post_full_object(outputResultsWrapperPtr);
 
-								clock_t elapsed_time = clock() - start_time;
-								double time_taken = ((double)elapsed_time) / CLOCKS_PER_SEC; // in seconds
+                                    }
 
-								printf("Producing the alt-ref frame at POC %d took %f seconds.\n", picture_control_set_ptr->picture_number, time_taken);
+                                    eb_block_on_semaphore(picture_control_set_ptr->temp_filt_done_semaphore);
+                                }
 
-							}
+                                clock_t elapsed_time = clock() - start_time;
+                                double time_taken = ((double)elapsed_time) / CLOCKS_PER_SEC; // in seconds
+
+                                printf("Producing the alt-ref frame at POC %d took %f seconds.\n", picture_control_set_ptr->picture_number, time_taken);
+
+                            }
 #endif
 
 
@@ -4795,11 +4771,11 @@ void* picture_decision_kernel(void *input_ptr)
                                         outputResultsPtr->picture_control_set_wrapper_ptr = picture_control_set_ptr->p_pcs_wrapper_ptr;
                                     else
 #endif
-                                    outputResultsPtr->picture_control_set_wrapper_ptr = encode_context_ptr->pre_assignment_buffer[pictureIndex];
+                                        outputResultsPtr->picture_control_set_wrapper_ptr = encode_context_ptr->pre_assignment_buffer[pictureIndex];
 
                                     outputResultsPtr->segment_index = segment_index;
 #if ALTREF_FILTERING_SUPPORT
-									outputResultsPtr->task_type = 0;
+                                    outputResultsPtr->task_type = 0;
 #endif
                                     // Post the Full Results Object
                                     eb_post_full_object(outputResultsWrapperPtr);
