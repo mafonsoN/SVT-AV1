@@ -1612,13 +1612,13 @@ void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_
                                     PictureParentControlSet *picture_control_set_ptr_central,
                                     MotionEstimationContext_t *me_context_ptr,
                                     int32_t segment_index) {
-    uint8_t altref_strength, altref_nframes, index_center;
+    uint8_t *altref_strength_ptr, *altref_nframes_ptr, index_center;
     EbPictureBufferDesc *input_picture_ptr;
     uint8_t *alt_ref_buffer[COLOR_CHANNELS];
 
     // number of frames to filter
-    altref_nframes = picture_control_set_ptr_central->altref_nframes;
-    altref_strength = picture_control_set_ptr_central->altref_strength;
+    altref_nframes_ptr = &(picture_control_set_ptr_central->altref_nframes);
+    altref_strength_ptr = &(picture_control_set_ptr_central->altref_strength);
 
     // index of the central source frame
     index_center = (uint8_t)(picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_nframes / 2);
@@ -1633,10 +1633,10 @@ void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_
         picture_control_set_ptr_central->temp_filt_prep_done = 1;
 
         // adjust filter parameter based on the estimated noise of the picture
-        adjust_filter_params(input_picture_ptr, &altref_strength, &altref_nframes);
+        adjust_filter_params(input_picture_ptr, altref_strength_ptr, altref_nframes_ptr);
 
         // Pad chroma reference samples - once only per picture
-        for (int i = 0; i < altref_nframes; i++) {
+        for (int i = 0; i < *altref_nframes_ptr; i++) {
             if (i != index_center) {
                 EbPictureBufferDesc *pic_ptr_ref = list_picture_control_set_ptr[i]->enhanced_picture_ptr;
 
@@ -1660,8 +1660,10 @@ void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_
 
     // populate source frames picture buffer list
     EbPictureBufferDesc *list_input_picture_ptr[ALTREF_MAX_NFRAMES] = { NULL };
-    for(int i=0; i<altref_nframes; i++)
+
+    for(int i = 0; i < *altref_nframes_ptr; i++)
         list_input_picture_ptr[i] = list_picture_control_set_ptr[i]->enhanced_picture_ptr;
+
     alt_ref_buffer[C_Y] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y +
                           picture_control_set_ptr_central->enhanced_picture_ptr->origin_x +
                           picture_control_set_ptr_central->enhanced_picture_ptr->origin_y*picture_control_set_ptr_central->enhanced_picture_ptr->stride_y;
@@ -1673,7 +1675,7 @@ void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_
                           (picture_control_set_ptr_central->enhanced_picture_ptr->origin_y / 2)*picture_control_set_ptr_central->enhanced_picture_ptr->stride_cr;
 
 #if !LIBAOM_FILTERING
-    produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, picture_control_set_ptr_central->altref_strength, altref_nframes, alt_ref_buffer, (MotionEstimationContext_t *) me_context_ptr,segment_index);
+    produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, *altref_strength_ptr, *altref_nframes_ptr, alt_ref_buffer, (MotionEstimationContext_t *) me_context_ptr,segment_index);
 #else
     int ret = read_YUV_frame_from_file(alt_ref_buffer,
                             (int)picture_control_set_ptr_central->picture_number,
