@@ -1538,15 +1538,16 @@ static void adjust_filter_params(EbPictureBufferDesc *input_picture_ptr,
     else
         strength = 0;
 
+#if 1
+    printf("[DEBUG] noise level: %g, strength = %d, adj_strength = %d, nframes = %d, adjusted nframes = %d\n", noiselevel, *altref_strength, strength, *altref_nframes, nframes);
+#endif
+
     // TODO: apply further refinements to the number of frames to filter and strength
     // according to 1st pass statistics
 
     *altref_nframes = (uint8_t)nframes;
     *altref_strength = (uint8_t)strength;
 
-#if DEBUG_TF
-    printf("[DEBUG] noise level: %g, strength = %d, adj_strength = %d\n", noiselevel, strength, adj_strength);
-#endif
 }
 
 int pad_and_decimate_filtered_pic(PictureParentControlSet *picture_control_set_ptr_central){
