@@ -1562,42 +1562,6 @@ int pad_and_decimate_filtered_pic(PictureParentControlSet *picture_control_set_p
     return 0;
 }
 
-#if LIBAOM_FILTERING
-int read_YUV_frame_from_file(uint8_t **alt_ref_buffer, int picture_number, int width, int height, int stride){
-    char filename[30] = "filtered_frame_libaom_";
-    char pic_num_str[4];
-    snprintf(pic_num_str, 4, "%d", picture_number);
-    strcat(filename, pic_num_str);
-    strcat(filename, ".yuv");
-
-    FILE *fid = NULL;
-
-    // save current source picture to a YUV file
-    if ((fid = fopen(filename, "rb")) == NULL) {
-        printf("Unable to open file %s for reading.\n", filename);
-    }else {
-        uint8_t* pic_point = alt_ref_buffer[C_Y];
-        for (int h = 0; h < height; h++) {
-            fread(pic_point, sizeof(uint8_t), (size_t)width, fid);
-            pic_point = pic_point + stride;
-        }
-        pic_point = alt_ref_buffer[C_U];
-        for (int h = 0; h < height >> 1; h++) {
-            fread(pic_point, sizeof(uint8_t), (size_t)width >> 1, fid);
-            pic_point = pic_point + (stride>>1);
-        }
-        pic_point = alt_ref_buffer[C_V];
-        for (int h = 0; h < height >> 1; h++) {
-            fread(pic_point, sizeof(uint8_t), (size_t)width >> 1, fid);
-            pic_point = pic_point + (stride>>1);
-        }
-        fclose(fid);
-    }
-
-    return 0;
-}
-#endif
-
 void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
                                     PictureParentControlSet *picture_control_set_ptr_central,
                                     MotionEstimationContext_t *me_context_ptr,
@@ -1619,7 +1583,7 @@ void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_
     //only one performs any picture based prep
     eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
     if (picture_control_set_ptr_central->temp_filt_prep_done == 0){
-        //printf("PIC %i , filter strength done by seg :%i\n ", picture_control_set_ptr_central->picture_number,segment_index);
+
         picture_control_set_ptr_central->temp_filt_prep_done = 1;
 
         // adjust filter parameter based on the estimated noise of the picture
@@ -1664,15 +1628,7 @@ void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_
                           picture_control_set_ptr_central->enhanced_picture_ptr->origin_x / 2 +
                           (picture_control_set_ptr_central->enhanced_picture_ptr->origin_y / 2)*picture_control_set_ptr_central->enhanced_picture_ptr->stride_cr;
 
-#if !LIBAOM_FILTERING
     produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, *altref_strength_ptr, *altref_nframes_ptr, alt_ref_buffer, (MotionEstimationContext_t *) me_context_ptr,segment_index);
-#else
-    int ret = read_YUV_frame_from_file(alt_ref_buffer,
-                            (int)picture_control_set_ptr_central->picture_number,
-                            list_input_picture_ptr[index_center]->width,
-                            list_input_picture_ptr[index_center]->height,
-                            list_input_picture_ptr[index_center]->stride_y);
-#endif
 
     eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
     picture_control_set_ptr_central->temp_filt_seg_acc++;

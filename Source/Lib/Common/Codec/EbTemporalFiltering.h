@@ -31,7 +31,6 @@
 
 // ALT-REF debug-specific defines
 #define DEBUG_TF 0
-#define LIBAOM_FILTERING 0
 #define AV1_MC 1
 
 #define COLOR_CHANNELS 3
