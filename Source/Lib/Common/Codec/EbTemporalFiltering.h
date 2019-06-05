@@ -27,7 +27,7 @@
 #include "EbDefinitions.h"
 #include "EbBitstreamUnit.h"
 
-#define ALTREF_MAX_NFRAMES 10
+#define ALTREF_MAX_NFRAMES 15
 
 // ALT-REF debug-specific defines
 #define DEBUG_TF 0
