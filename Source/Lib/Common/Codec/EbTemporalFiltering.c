@@ -1528,7 +1528,7 @@ static void adjust_filter_params(EbPictureBufferDesc *input_picture_ptr,
     else
         strength = 0;
 
-#if 1
+#if DEBUG_TF
     printf("[DEBUG] noise level: %g, strength = %d, adj_strength = %d\n", noiselevel, *altref_strength, strength);
 #endif
 
