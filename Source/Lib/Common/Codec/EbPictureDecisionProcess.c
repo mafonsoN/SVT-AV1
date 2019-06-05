@@ -4122,9 +4122,9 @@ void* picture_decision_kernel(void *input_ptr)
                                     picture_control_set_ptr->temp_filt_pcs_list[pic_itr] = pcs_itr;
                                 }
 
-                                uint32_t actual_future_pics;
-                                uint32_t actual_future_pics_source1 = 0;
-                                uint32_t actual_future_pics_source2 = 0;
+                                int actual_future_pics = 0;
+                                int actual_past_pics = 0;
+
                                 int pic_i;
                                 //search reord-queue to get the future pictures
                                 for (pic_i = 0; pic_i < num_future_pics; pic_i++) {
@@ -4132,7 +4132,6 @@ void* picture_decision_kernel(void *input_ptr)
                                     if (encode_context_ptr->picture_decision_reorder_queue[q_index]->parent_pcs_wrapper_ptr != NULL) {
                                         PictureParentControlSet* pcs_itr = (PictureParentControlSet *)encode_context_ptr->picture_decision_reorder_queue[q_index]->parent_pcs_wrapper_ptr->object_ptr;
                                         picture_control_set_ptr->temp_filt_pcs_list[pic_i + num_past_pics + 1] = pcs_itr;
-                                        actual_future_pics_source1 = (uint32_t)pic_i + 1;
                                     }
                                     else
                                         break;
@@ -4145,23 +4144,38 @@ void* picture_decision_kernel(void *input_ptr)
                                             PictureParentControlSet* pcs_itr = (PictureParentControlSet*)encode_context_ptr->pre_assignment_buffer[pic_i_pa]->object_ptr;
                                             if (pcs_itr->picture_number == picture_control_set_ptr->picture_number + pic_i_future + 1) {
                                                 picture_control_set_ptr->temp_filt_pcs_list[pic_i_future + num_past_pics + 1] = pcs_itr;
-                                                actual_future_pics_source2 = (uint32_t)pic_i_future + 1;
                                                 break; //exist the pre-ass loop, go search the next
                                             }
                                         }
                                     }
                                 }
 
-                                // get max of the two future pic counts
-                                if(actual_future_pics_source1 > actual_future_pics_source2)
-                                    actual_future_pics = actual_future_pics_source1;
-                                else
-                                    actual_future_pics = actual_future_pics_source2;
+                                //get actual number of future pictures stored
+                                for(pic_i=0; pic_i<num_future_pics; pic_i++){
 
-                                //set the actual_number of final pics
-                                altref_nframes = (uint8_t)(num_past_pics + 1 + actual_future_pics);
+                                    if(picture_control_set_ptr->temp_filt_pcs_list[pic_i + num_past_pics + 1] != NULL)
+                                        actual_future_pics++;
+
+                                }
+
+                                actual_past_pics = actual_future_pics;
+                                actual_past_pics += (altref_nframes + 1) & 0x1;
+
+                                //get the final number of pictures to use for the temporal filtering
+                                altref_nframes = (uint8_t)(actual_past_pics + 1 + actual_future_pics);
 
                                 picture_control_set_ptr->altref_nframes = (uint8_t)altref_nframes;
+
+                                // adjust the temporal filtering pcs buffer to remove unused past pictures
+                                if(actual_past_pics != num_past_pics) {
+
+                                    pic_i = 0;
+                                    while (picture_control_set_ptr->temp_filt_pcs_list[pic_i] != NULL){
+                                        picture_control_set_ptr->temp_filt_pcs_list[pic_i] = picture_control_set_ptr->temp_filt_pcs_list[pic_i + num_past_pics - actual_past_pics];
+                                        pic_i++;
+                                    }
+
+                                }
 
                                 picture_control_set_ptr->temp_filt_prep_done = 0;
 

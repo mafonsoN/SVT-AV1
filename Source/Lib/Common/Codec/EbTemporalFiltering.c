@@ -1136,7 +1136,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     EbPictureBufferDesc *input_picture_ptr_central;
 
     // index of the center frame
-    index_center = (uint8_t)(list_picture_control_set_ptr[0]->sequence_control_set_ptr->static_config.altref_nframes / 2);
+    index_center = (uint8_t)(altref_nframes / 2);
 
     picture_control_set_ptr_central = list_picture_control_set_ptr[index_center];
     input_picture_ptr_central = list_input_picture_ptr[index_center];
@@ -1488,21 +1488,11 @@ static double estimate_noise(EbByte src, uint16_t width, uint16_t height,
 
 // Apply buffer limits and context specific adjustments to arnr filter.
 static void adjust_filter_params(EbPictureBufferDesc *input_picture_ptr,
-                        uint8_t *altref_strength,
-                        uint8_t *altref_nframes) {
+                                 uint8_t *altref_strength) {
+
     EbByte src;
     double noiselevel;
-    int nframes = *altref_nframes;
     int strength = *altref_strength, adj_strength=strength;
-    int frames_fwd = (nframes - 1) >> 1;
-    int frames_bwd;
-
-    frames_bwd = frames_fwd;
-    // if forward frames is a even number, use one more bwd frame than forward frame
-    frames_bwd += (nframes + 1) & 0x1;
-
-    // Set the baseline active filter size.
-    nframes = frames_bwd + 1 + frames_fwd;
 
     // adjust the starting point of buffer_y of the starting pixel values of the source picture
     src = input_picture_ptr->buffer_y +
@@ -1539,13 +1529,12 @@ static void adjust_filter_params(EbPictureBufferDesc *input_picture_ptr,
         strength = 0;
 
 #if 1
-    printf("[DEBUG] noise level: %g, strength = %d, adj_strength = %d, nframes = %d, adjusted nframes = %d\n", noiselevel, *altref_strength, strength, *altref_nframes, nframes);
+    printf("[DEBUG] noise level: %g, strength = %d, adj_strength = %d\n", noiselevel, *altref_strength, strength);
 #endif
 
-    // TODO: apply further refinements to the number of frames to filter and strength
+    // TODO: apply further refinements to the filter parameters
     // according to 1st pass statistics
 
-    *altref_nframes = (uint8_t)nframes;
     *altref_strength = (uint8_t)strength;
 
 }
@@ -1622,7 +1611,7 @@ void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_
     altref_strength_ptr = &(picture_control_set_ptr_central->altref_strength);
 
     // index of the central source frame
-    index_center = (uint8_t)(picture_control_set_ptr_central->sequence_control_set_ptr->static_config.altref_nframes / 2);
+    index_center = (uint8_t)(*altref_nframes_ptr / 2);
 
     // source central frame picture buffer
     input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
@@ -1634,7 +1623,7 @@ void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_
         picture_control_set_ptr_central->temp_filt_prep_done = 1;
 
         // adjust filter parameter based on the estimated noise of the picture
-        adjust_filter_params(input_picture_ptr, altref_strength_ptr, altref_nframes_ptr);
+        adjust_filter_params(input_picture_ptr, altref_strength_ptr);
 
         // Pad chroma reference samples - once only per picture
         for (int i = 0; i < *altref_nframes_ptr; i++) {
