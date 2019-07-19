@@ -4590,7 +4590,7 @@ EbErrorType av1_intra_prediction_cl(
     uint8_t    leftNeighArray[64 * 2 + 1];
     PredictionMode mode;
 #if SEARCH_UV_MODE
-    // Hsan: plane should be derived @ an earlier stage (e.g. @ the call of perform_fast_loop())
+    // Hsan: plane should be derived @ an earlier stage (e.g. @ the call of md_stage_0())
     int32_t start_plane = (md_context_ptr->uv_search_path) ? 1 : 0;
     int32_t end_plane = (md_context_ptr->blk_geom->has_uv && md_context_ptr->chroma_level <= CHROMA_MODE_1) ? (int)MAX_MB_PLANE : 1;
 

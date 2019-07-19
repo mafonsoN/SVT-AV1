@@ -48,8 +48,8 @@ extern "C" {
 #define FIRST_FULL_LOOP_TX_SEARCH_OFF          1
 #define FIRST_FULL_LOOP_TX_SEARCH_OFF_INTER    0
 #define STRENGHTHEN_MD_STAGE_3                 1
-#define CLASS_0_NFL_MD_STAGE_3                 1
-#define CLASS_123_NFL_MD_STAGE_2_3             1
+#define CLASS_0_NFL_MD_STAGE_3                 1 // CIN03
+#define CLASS_123_NFL_MD_STAGE_2_3             1 // CIN13,CIN23,CIN33
 #define CLASS_0_NFL_MD_STAGE_2                 0
 
 #define PRE_BILINEAR_CLEAN_UP                  1
@@ -353,7 +353,7 @@ extern "C" {
 #define MRP_DISABLE_ADDED_CAND_M1                        0
 
 #define EIGTH_PEL_MV                                    0
-#define DISABLE_NSQ_TABLE_FOR_M0                        1 // On wil disable the nsq_table ordering algrithm. This is a temporarily adoption that will be disable once we comeup with a better ordreing mecanisme when MRP i ON.
+#define DISABLE_NSQ_TABLE_FOR_M0                        1 // On wil disable the nsq_table ordering algrithm for sc content. This is a temporarily adoption that will be disable once we comeup with a better ordreing mecanisme when MRP i ON.
 #define IMPROVED_SUBPEL_SEARCH                          1
 
 

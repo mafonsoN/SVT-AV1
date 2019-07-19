@@ -33,8 +33,11 @@
 #include "EbCodingLoop.h"
 
 #define TH_NFL_BIAS             7
-
+#if MD_CLASS
+EbErrorType generate_md_stage_0_cand(
+#else
 EbErrorType ProductGenerateMdCandidatesCu(
+#endif
     LargestCodingUnit             *sb_ptr,
     ModeDecisionContext           *context_ptr,
     SsMeContext                  *ss_mecontext,
@@ -1775,7 +1778,7 @@ void ProductMdFastPuPrediction(
         candidateBuffer->candidate_ptr->interp_filters = av1_make_interp_filters(BILINEAR, BILINEAR);
     else
         candidateBuffer->candidate_ptr->interp_filters = 0;
-#else
+#else 
     candidateBuffer->candidate_ptr->interp_filters = 0;
 #endif
     ProductPredictionFunTable[candidateBuffer->candidate_ptr->use_intrabc ? INTER_MODE : modeType](
@@ -1908,8 +1911,11 @@ void fast_loop_core(
 void generate_intra_reference_samples(
     const Av1Common         *cm,
     ModeDecisionContext   *md_context_ptr);
-
+#if MDLEVELS
+void md_stage_0(
+#else
 void perform_fast_loop(
+#endif
 #if MD_CLASS
 #if !PRE_BILINEAR_CLEAN_UP
     CAND_CLASS                        target_class,
@@ -2024,9 +2030,7 @@ void perform_fast_loop(
 
         ModeDecisionCandidateBuffer *candidateBuffer = candidateBufferPtrArrayBase[highestCostIndex];
         ModeDecisionCandidate       *candidate_ptr = candidateBuffer->candidate_ptr = &fast_candidate_array[fastLoopCandidateIndex];
-#if !REFACTOR_FAST_LOOP
         EbPictureBufferDesc         *prediction_ptr = candidateBuffer->prediction_ptr;
-#endif
 #if ATB_SUPPORT
         // Initialize tx_depth
         candidateBuffer->candidate_ptr->tx_depth = 0;
@@ -2224,6 +2228,7 @@ void set_md_stage_counts(
         memset(context_ptr->bypass_stage2, EB_TRUE, CAND_CLASS_TOTAL * sizeof(uint32_t));
 
     // Set # of md_stage_1 candidates
+    uint32_t  count_cand = 16;
 #if CLASS_0_NFL_MD_STAGE_2
     context_ptr->fast1_cand_count[CAND_CLASS_0] = (picture_control_set_ptr->parent_pcs_ptr->is_used_as_reference_flag) ? 16 : 6;
 #else
@@ -2380,23 +2385,23 @@ void set_md_stage_counts(
 
 }
 #endif
-void fast_loop_stage1(
+void md_stage_1(	
 #if !PRE_BILINEAR_CLEAN_UP
-    CAND_CLASS                         target_class,
+	CAND_CLASS                         target_class,
 #endif
-    PictureControlSet                 *picture_control_set_ptr,
-    ModeDecisionContext               *context_ptr,
-    ModeDecisionCandidateBuffer      **candidateBufferPtrArrayBase,
-    uint32_t                           num_of_candidates,
-    EbPictureBufferDesc               *input_picture_ptr,
-    uint32_t                           inputOriginIndex,
-    uint32_t                           inputCbOriginIndex,
-    uint32_t                           inputCrOriginIndex,
-    CodingUnit                        *cu_ptr,
-    uint32_t                           cuOriginIndex,
-    uint32_t                           cuChromaOriginIndex,
-    EbBool                             use_ssd,
-    EbAsm                              asm_type)
+	PictureControlSet                 *picture_control_set_ptr,
+	ModeDecisionContext               *context_ptr,
+	ModeDecisionCandidateBuffer      **candidateBufferPtrArrayBase,
+	uint32_t                           num_of_candidates,
+	EbPictureBufferDesc               *input_picture_ptr,
+	uint32_t                           inputOriginIndex,
+	uint32_t                           inputCbOriginIndex,
+	uint32_t                           inputCrOriginIndex,
+	CodingUnit                        *cu_ptr,
+	uint32_t                           cuOriginIndex,
+	uint32_t                           cuChromaOriginIndex,	
+	EbBool                             use_ssd,
+	EbAsm                              asm_type)
 {
     for (uint32_t cand_idx = 0; cand_idx < num_of_candidates; ++cand_idx)
     {
@@ -2443,8 +2448,7 @@ void fast_loop_stage1(
 }
 
 void inter_class_decision(
-    //struct ModeDecisionContext   *context_ptr
-)
+    struct ModeDecisionContext   *context_ptr)
 {
 
 }
@@ -2494,7 +2498,7 @@ void sort_stage0_fast_candidates(
     struct ModeDecisionContext   *context_ptr,
     uint32_t                      input_buffer_start_idx,
     uint32_t                      input_buffer_count,  //how many cand buffers to sort. one of the buffer can have max cost.
-    //uint32_t                      output_buffer_count, //this should be = input_buffer_count(if there is no temp buffer) or = input_buffer_count-1(if there is temp buffer)
+    uint32_t                      output_buffer_count, //this should be = input_buffer_count(if there is no temp buffer) or = input_buffer_count-1(if there is temp buffer)
     uint32_t                     *cand_buff_indices
 )
 {
@@ -2759,7 +2763,7 @@ int32_t derive_luma_inter_dist(
     candidate_ptr->ref_frame_index_l1 = list_idx == 1 ? ref_idx : -1;
 #if BILINEAR_PREDICTIVE_ME
     candidateBuffer->candidate_ptr->interp_filters = av1_make_interp_filters(BILINEAR, BILINEAR);
-#else
+#else 
     candidate_ptr->interp_filters = 0;
 #endif
     // Prediction
@@ -2802,7 +2806,7 @@ void predictive_me_full_pel_search(
     ModeDecisionCandidate        *fast_candidate_array,
     EbPictureBufferDesc          *input_picture_ptr,
     uint32_t                      inputOriginIndex,
-    //uint32_t                      cuOriginIndex,
+    uint32_t                      cuOriginIndex,
     EbBool                        use_ssd,
     uint8_t                       list_idx,
     int8_t                        ref_idx,
@@ -2828,6 +2832,8 @@ void predictive_me_full_pel_search(
     for (int32_t refinement_pos_x = search_position_start_x; refinement_pos_x <= search_position_end_x; ++refinement_pos_x) {
         for (int32_t refinement_pos_y = search_position_start_y; refinement_pos_y <= search_position_end_y; ++refinement_pos_y) {
 
+            ModeDecisionCandidate *candidate_ptr = candidateBuffer->candidate_ptr;
+            EbPictureBufferDesc   *prediction_ptr = candidateBuffer->prediction_ptr;
             EbByte ref_ptr = ref_pic->buffer_y + ref_pic->origin_x + (context_ptr->cu_origin_x + (mvx / 8) + (refinement_pos_x * 1)) + (context_ptr->cu_origin_y + (mvy / 8) + ref_pic->origin_y + (refinement_pos_y * 1)) * ref_pic->stride_y;
 
             // Distortion
@@ -2922,7 +2928,7 @@ void predictive_me_sub_pel_search(
             candidate_ptr->ref_frame_index_l1 = list_idx == 1 ? ref_idx : -1;
 #if BILINEAR_PREDICTIVE_ME
             candidateBuffer->candidate_ptr->interp_filters = av1_make_interp_filters(BILINEAR, BILINEAR);
-#else
+#else 
             candidate_ptr->interp_filters = 0;
 #endif
             // Prediction
@@ -2978,9 +2984,11 @@ void predictive_me_search(
     uint32_t                      inputOriginIndex,
     uint32_t                      cuOriginIndex,
     EbAsm                         asm_type) {
-#if ME_MVP_DEVIATION
+
     const SequenceControlSet *sequence_control_set_ptr = (SequenceControlSet*)picture_control_set_ptr->sequence_control_set_wrapper_ptr->object_ptr;
-#endif
+    const uint32_t             lcuAddr = context_ptr->sb_ptr->index;
+    ModeDecisionCandidate      *candidateArray = context_ptr->fast_candidate_array;
+    IntMv  bestPredmv[2] = { {0}, {0} };
     EbBool use_ssd = EB_TRUE;
 
     // Reset valid_refined_mv
@@ -2993,6 +3001,7 @@ void predictive_me_search(
     for (uint32_t refIt = 0; refIt < picture_control_set_ptr->parent_pcs_ptr->tot_ref_frame_types; ++refIt) {
         MvReferenceFrame ref_pair = picture_control_set_ptr->parent_pcs_ptr->ref_frame_type_arr[refIt];
 
+        ModeDecisionCandidate    *candidateArray = context_ptr->fast_candidate_array;
         MacroBlockD  *xd = context_ptr->cu_ptr->av1xd;
         uint8_t drli, maxDrlIndex;
         IntMv    nearestmv[2], nearmv[2], ref_mv[2];
@@ -3111,7 +3120,7 @@ void predictive_me_search(
                     fast_candidate_array,
                     input_picture_ptr,
                     inputOriginIndex,
-                    //cuOriginIndex,
+                    cuOriginIndex,
                     use_ssd,
                     list_idx,
                     ref_idx,
@@ -4146,15 +4155,7 @@ static void tx_search_update_recon_sample_neighbor_array(
     return;
 }
 
-uint8_t get_end_tx_depth(
-#if !STRENGHTHEN_MD_STAGE_3
-    ModeDecisionContext *context_ptr,
-    uint8_t atb_mode,
-    ModeDecisionCandidate *candidate_ptr,
-#endif
-    BlockSize bsize,
-    uint8_t btype
-) {
+uint8_t get_end_tx_depth(ModeDecisionContext *context_ptr, uint8_t atb_mode, ModeDecisionCandidate *candidate_ptr, BlockSize bsize, uint8_t btype) {
     uint8_t tx_depth = 0;
 
 #if STRENGHTHEN_MD_STAGE_3
@@ -4291,7 +4292,7 @@ static INLINE int txfm_partition_context(TXFM_CONTEXT *above_ctx,
     assert(category != TXFM_PARTITION_CONTEXTS);
     return category * 3 + above + left;
 }
-#if !ATB_SUPPORT
+
 static INLINE int av1_get_txb_size_index(BlockSize bsize, int blk_row,
     int blk_col) {
     TxSize txs = max_txsize_rect_lookup[bsize];
@@ -4306,7 +4307,6 @@ static INLINE int av1_get_txb_size_index(BlockSize bsize, int blk_row,
     assert(index < INTER_TX_SIZE_BUF_LEN);
     return index;
 }
-#endif
 
 static uint64_t cost_tx_size_vartx(MacroBlockD *xd, const MbModeInfo *mbmi,
     TxSize tx_size, int depth, int blk_row,
@@ -4503,7 +4503,6 @@ static uint64_t cost_selected_tx_size(
     }
     return bits;
 }
-#if !SHUT_TX_SIZE_RATE
 static uint64_t tx_size_bits(
     MdRateEstimationContext  *md_rate_estimation_ptr,
     MacroBlockD         *xd,
@@ -4540,6 +4539,7 @@ static uint64_t tx_size_bits(
 
     return bits;
 }
+
 static INLINE void set_mi_row_col(
     PictureControlSet       *picture_control_set_ptr,
     MacroBlockD             *xd,
@@ -4591,7 +4591,6 @@ static INLINE void set_mi_row_col(
     if (xd->n8_w > xd->n8_h)
         if (mi_row & (xd->n8_w - 1)) xd->is_sec_rect = 1;
 }
-#endif
 #if !SHUT_TX_SIZE_RATE
 uint64_t estimate_tx_size_bits(
     PictureControlSet       *pcsPtr,
@@ -4657,9 +4656,7 @@ void perform_intra_tx_partitioning(
     PictureControlSet            *picture_control_set_ptr,
 #if ABILITY_TO_SKIP_TX_SEARCH_ATB
     uint32_t                      best_fastLoop_candidate_index,
-#if 0
     uint64_t                      ref_fast_cost,
-#endif
 #endif
     uint8_t                       end_tx_depth,
     uint32_t                      qp,
@@ -4941,9 +4938,7 @@ void perform_intra_tx_partitioning(
 #endif
                     picture_control_set_ptr,
                     candidateBuffer,
-#if !FIXED_128x128_CONTEXT_UPDATE
                     context_ptr->cu_ptr,
-#endif
                     txb_1d_offset,
                     0,
                     context_ptr->coeff_est_entropy_coder_ptr,
@@ -5110,9 +5105,7 @@ void perform_intra_tx_partitioning(
 #endif
                 picture_control_set_ptr,
                 candidateBuffer,
-#if !FIXED_128x128_CONTEXT_UPDATE
                 context_ptr->cu_ptr,
-#endif
                 txb_1d_offset,
                 0,
                 context_ptr->coeff_est_entropy_coder_ptr,
@@ -5442,9 +5435,7 @@ void perform_intra_tx_partitioning(
 #endif
                 picture_control_set_ptr,
                 candidateBuffer,
-#if !FIXED_128x128_CONTEXT_UPDATE
                 context_ptr->cu_ptr,
-#endif
                 txb_1d_offset,
                 0,
                 context_ptr->coeff_est_entropy_coder_ptr,
@@ -5797,23 +5788,11 @@ void md_stage_2(
             // end_tx_depth set to zero for blocks which go beyond the picture boundaries
             if ((context_ptr->sb_origin_x + context_ptr->blk_geom->origin_x + context_ptr->blk_geom->bwidth < picture_control_set_ptr->parent_pcs_ptr->sequence_control_set_ptr->seq_header.max_frame_width &&
                 context_ptr->sb_origin_y + context_ptr->blk_geom->origin_y + context_ptr->blk_geom->bheight < picture_control_set_ptr->parent_pcs_ptr->sequence_control_set_ptr->seq_header.max_frame_height))
-                end_tx_depth = get_end_tx_depth(
-#if !STRENGHTHEN_MD_STAGE_3
-                    context_ptr,
-                    picture_control_set_ptr->parent_pcs_ptr->atb_mode,
-                    candidate_ptr,
-#endif
-                    context_ptr->blk_geom->bsize, candidateBuffer->candidate_ptr->type);
+                end_tx_depth = get_end_tx_depth(context_ptr, picture_control_set_ptr->parent_pcs_ptr->atb_mode, candidate_ptr, context_ptr->blk_geom->bsize, candidateBuffer->candidate_ptr->type);
             else
                 end_tx_depth = 0;
 #else
-        uint8_t end_tx_depth = get_end_tx_depth(
-#if !STRENGHTHEN_MD_STAGE_3
-            context_ptr,
-            picture_control_set_ptr->parent_pcs_ptr->atb_mode,
-            candidate_ptr,
-#endif
-            context_ptr->blk_geom->bsize, candidateBuffer->candidate_ptr->type);
+        uint8_t end_tx_depth = get_end_tx_depth(context_ptr, picture_control_set_ptr->parent_pcs_ptr->atb_mode, candidate_ptr, context_ptr->blk_geom->bsize, candidateBuffer->candidate_ptr->type);
 #endif
 #if TBX_SPLIT_CAP
         end_tx_depth = picture_control_set_ptr->parent_pcs_ptr->enable_skip_atb && skip_atb ? 0 : end_tx_depth;
@@ -5832,9 +5811,7 @@ void md_stage_2(
                 picture_control_set_ptr,
 #if ABILITY_TO_SKIP_TX_SEARCH_ATB
                 best_fastLoop_candidate_index,
-#if 0
                 ref_fast_cost,
-#endif
 #endif
                 end_tx_depth,
                 context_ptr->cu_ptr->qp,
@@ -6368,23 +6345,11 @@ void AV1PerformFullLoop(
         // end_tx_depth set to zero for blocks which go beyond the picture boundaries
         if ((context_ptr->sb_origin_x + context_ptr->blk_geom->origin_x + context_ptr->blk_geom->bwidth < picture_control_set_ptr->parent_pcs_ptr->sequence_control_set_ptr->seq_header.max_frame_width &&
             context_ptr->sb_origin_y + context_ptr->blk_geom->origin_y + context_ptr->blk_geom->bheight < picture_control_set_ptr->parent_pcs_ptr->sequence_control_set_ptr->seq_header.max_frame_height))
-            end_tx_depth = get_end_tx_depth(
-#if !STRENGHTHEN_MD_STAGE_3
-                context_ptr,
-                picture_control_set_ptr->parent_pcs_ptr->atb_mode,
-                candidate_ptr,
-#endif
-                context_ptr->blk_geom->bsize, candidateBuffer->candidate_ptr->type);
+            end_tx_depth = get_end_tx_depth(context_ptr, picture_control_set_ptr->parent_pcs_ptr->atb_mode, candidate_ptr, context_ptr->blk_geom->bsize, candidateBuffer->candidate_ptr->type);
         else
             end_tx_depth = 0;
 #else
-        uint8_t end_tx_depth = get_end_tx_depth(
-#if !STRENGHTHEN_MD_STAGE_3
-            context_ptr,
-            picture_control_set_ptr->parent_pcs_ptr->atb_mode,
-            candidate_ptr,
-#endif
-            context_ptr->blk_geom->bsize, candidateBuffer->candidate_ptr->type);
+        uint8_t end_tx_depth = get_end_tx_depth(context_ptr, picture_control_set_ptr->parent_pcs_ptr->atb_mode, candidate_ptr, context_ptr->blk_geom->bsize, candidateBuffer->candidate_ptr->type);
 #endif
 #if TBX_SPLIT_CAP
         end_tx_depth = picture_control_set_ptr->parent_pcs_ptr->enable_skip_atb && skip_atb ? 0 : end_tx_depth;
@@ -6403,9 +6368,7 @@ void AV1PerformFullLoop(
                 picture_control_set_ptr,
 #if ABILITY_TO_SKIP_TX_SEARCH_ATB
                 best_fastLoop_candidate_index,
-#if 0
                 ref_fast_cost,
-#endif
 #endif
                 end_tx_depth,
                 context_ptr->cu_ptr->qp,
@@ -7972,7 +7935,7 @@ void md_encode_block(
         picture_control_set_ptr->parent_pcs_ptr->nsq_search_level >= NSQ_SEARCH_LEVEL1 &&
         picture_control_set_ptr->parent_pcs_ptr->nsq_search_level < NSQ_SEARCH_FULL) ? EB_TRUE : EB_FALSE;
 #if DISABLE_NSQ_TABLE_FOR_M0
-    is_nsq_table_used = picture_control_set_ptr->enc_mode == ENC_M0 ? EB_FALSE : is_nsq_table_used;
+    is_nsq_table_used = (picture_control_set_ptr->enc_mode == ENC_M0 && picture_control_set_ptr->parent_pcs_ptr->sc_content_detected) ? EB_FALSE : is_nsq_table_used;
 #endif
 #endif
     if (is_nsq_table_used) {
@@ -8122,7 +8085,11 @@ void md_encode_block(
                 cuOriginIndex,
                 asm_type);
 #endif
+#if MD_CLASS
+        generate_md_stage_0_cand(
+#else
         ProductGenerateMdCandidatesCu(
+#endif
             context_ptr->sb_ptr,
             context_ptr,
             ss_mecontext,
@@ -8291,7 +8258,7 @@ void md_encode_block(
 #if PRE_BILINEAR_CLEAN_UP
                 context_ptr->target_class = cand_class_it;
 #endif
-                perform_fast_loop(
+                md_stage_0(
 #if !PRE_BILINEAR_CLEAN_UP
                     cand_class_it,
 #endif
@@ -8320,7 +8287,7 @@ void md_encode_block(
                     context_ptr,
                     buffer_start_idx,
                     buffer_count_for_curr_class, //how many cand buffers to sort. one of the buffers can have max cost.
-                    //context_ptr->fast1_cand_count[cand_class_it],
+                    context_ptr->fast1_cand_count[cand_class_it],
                     context_ptr->cand_buff_indices[cand_class_it]);
 
                 buffer_start_idx += buffer_count_for_curr_class;//for next iteration.
@@ -8346,7 +8313,7 @@ void md_encode_block(
         }
 #endif
         //after completing stage0, we might shorten cand count for some classes.
-        inter_class_decision(/*context_ptr*/);
+        inter_class_decision(context_ptr);
 
         context_ptr->md_stage = MD_STAGE_1;
 
@@ -8375,7 +8342,7 @@ void md_encode_block(
 #if PRE_BILINEAR_CLEAN_UP
                 context_ptr->target_class = cand_class_it;
 #endif
-                fast_loop_stage1(
+                md_stage_1(
 #if !PRE_BILINEAR_CLEAN_UP
                     cand_class_it,
 #endif
