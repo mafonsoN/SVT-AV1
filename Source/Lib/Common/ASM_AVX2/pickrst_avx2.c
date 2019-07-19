@@ -16,6 +16,7 @@
 #include "EbPictureOperators_AVX2.h"
 #include "EbRestoration.h"
 #include "EbRestorationPick.h"
+#include "EbUtility.h"
 #include "pickrst_avx2.h"
 #include "transpose_sse2.h"
 #include "transpose_avx2.h"
@@ -3340,9 +3341,6 @@ static INLINE void compute_stats_win7_avx2(
         }
     } while (++i < wiener_win);
 }
-
-void *aom_memalign(size_t align, size_t size);
-void aom_free(void *memblk);
 
 void av1_compute_stats_avx2(int32_t wiener_win, const uint8_t *dgd,
                             const uint8_t *src, int32_t h_start, int32_t h_end,
