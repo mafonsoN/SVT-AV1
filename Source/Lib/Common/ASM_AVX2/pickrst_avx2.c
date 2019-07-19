@@ -3423,12 +3423,6 @@ void av1_compute_stats_highbd_avx2(int32_t wiener_win, const uint8_t *dgd8,
     int16_t s[3 * RESTORATION_UNITSIZE_MAX * RESTORATION_UNITSIZE_MAX];
     int32_t k;
 
-    uint8_t bit_depth_divider = 1;
-    if (bit_depth == AOM_BITS_12)
-        bit_depth_divider = 16;
-    else if (bit_depth == AOM_BITS_10)
-        bit_depth_divider = 4;
-
     assert(!(height % 2));
 
     sub_avg_block_highbd_avx2(src + v_start * src_stride + h_start,
