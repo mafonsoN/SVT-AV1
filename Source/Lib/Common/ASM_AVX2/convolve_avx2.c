@@ -351,7 +351,7 @@ void av1_convolve_x_sr_avx2(const uint8_t *src, int32_t src_stride,
     const __m128i round_0_shift = _mm_cvtsi32_si128(conv_params->round_0 - 1);
     const __m256i round_const = _mm256_set1_epi16((1 << bits) >> 1);
     const __m128i round_shift = _mm_cvtsi32_si128(bits);
-    int32_t i, is_horiz_4tap = 0;
+    int32_t i = 0;
     (void)filter_params_y;
     (void)subpel_y_qn;
 
@@ -2084,22 +2084,20 @@ void aom_lowbd_blend_a64_d16_mask_avx2(
 
 #endif
 
-
-#if COMP_AVX // TO be addded as  wedge_utils_avx2.c
-
-static INLINE void xx_store_128(void *const a, const __m128i v) {
-  _mm_store_si128((__m128i *)a, v);
-}
-
-
-// Negate under mask
-static INLINE __m128i negm_epi16(__m128i v_v_w, __m128i v_mask_w) {
-  return _mm_sub_epi16(_mm_xor_si128(v_v_w, v_mask_w), v_mask_w);
-}
-
-
-
-#endif
+//
+//#if COMP_AVX // TO be added as  wedge_utils_avx2.c
+//
+//static INLINE void xx_store_128(void *const a, const __m128i v) {
+//  _mm_store_si128((__m128i *)a, v);
+//}
+//
+//
+//// Negate under mask
+//static INLINE __m128i negm_epi16(__m128i v_v_w, __m128i v_mask_w) {
+//  return _mm_sub_epi16(_mm_xor_si128(v_v_w, v_mask_w), v_mask_w);
+//}
+//
+//#endif
 
 #if COMP_AVX // sum_squares_sse2.c
 

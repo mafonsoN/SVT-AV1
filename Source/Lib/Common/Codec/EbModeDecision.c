@@ -3551,7 +3551,7 @@ extern aom_variance_fn_ptr_t mefn_ptr[BlockSizeS_ALL];
 
 #if PREDICTIVE_ME // inject them
 void inject_predictive_me_candidates(
-    const SequenceControlSet   *sequence_control_set_ptr,
+    /*const SequenceControlSet   *sequence_control_set_ptr,*/
     struct ModeDecisionContext *context_ptr,
     PictureControlSet          *picture_control_set_ptr,
     EbBool                      isCompoundEnabled,
@@ -4066,7 +4066,7 @@ void  inject_inter_candidates(
                 uint32_t y_to_search = context_ptr->blk_geom->origin_y - (geom_offset_y + ((context_ptr->blk_geom->origin_y & 0x7) ? 4 : 0));
 #endif
                 // Search the me_info_index of the parent block
-                uint32_t me_info_index;
+                uint32_t me_info_index = 0;
 
 #if ME_MVP_DEVIATION
                 for (uint32_t block_index = 0; block_index < picture_control_set_ptr->parent_pcs_ptr->max_number_of_pus_per_sb; block_index++) {
@@ -4711,7 +4711,7 @@ void  inject_inter_candidates(
 #if PREDICTIVE_ME // inject them
             if (context_ptr->predictive_me_injection)
                 inject_predictive_me_candidates(
-                    sequence_control_set_ptr,
+                    /*equence_control_set_ptr,*/
                     context_ptr,
                     picture_control_set_ptr,
                     isCompoundEnabled,
@@ -5673,7 +5673,9 @@ void  intra_bc_search(
     PictureControlSet            *pcs,
     ModeDecisionContext          *context_ptr,
     const SequenceControlSet     *scs,
+#if !PREDICTIVE_ME
     LargestCodingUnit            *sb_ptr,
+#endif
     CodingUnit                   *cu_ptr,
     MV                             *dv_cand,
     uint8_t                        *num_dv_cand)
@@ -5861,7 +5863,9 @@ void  inject_intra_bc_candidates(
         picture_control_set_ptr,
         context_ptr,
         sequence_control_set_ptr,
+#if !PREDICTIVE_ME
         sb_ptr,
+#endif
         cu_ptr,
         dv_cand,
         &num_dv_cand);

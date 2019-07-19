@@ -4310,13 +4310,13 @@ static void half_pel_refinement_block(
     uint32_t ineteger_mv) {
     int32_t search_region_index;
     uint64_t distortion_left_position = 0;
-    uint64_t distortion_right_position = 0;
     uint64_t distortion_top_position = 0;
-    uint64_t distortion_bottom_position = 0;
     uint64_t distortion_topleft_position = 0;
     uint64_t distortion_topright_position = 0;
+#if HP_REF_OPT
     uint64_t distortion_bottomleft_position = 0;
     uint64_t distortion_bottomright_position = 0;
+#endif
     int16_t half_mv_x[8];
     int16_t half_mv_y[8];
     int16_t x_best_mv;
@@ -5305,8 +5305,8 @@ static void half_pel_refinement_block(
  *   performs Half Pel refinement for the 85 PUs
  *******************************************/
 void half_pel_refinement_sb(
-    SequenceControlSet
-        *sequence_control_set_ptr,  // input parameter, Sequence control set Ptr
+    //SequenceControlSet
+    //    *sequence_control_set_ptr,  // input parameter, Sequence control set Ptr
     PictureParentControlSet *picture_control_set_ptr,
     MeContext *context_ptr,  // input/output parameter, ME context Ptr, used to
                              // get/update ME results
@@ -5904,7 +5904,7 @@ static void open_loop_me_half_pel_search_sblock(
     uint32_t search_area_height, EbAsm asm_type) {
 
     half_pel_refinement_sb(
-        sequence_control_set_ptr,
+        //sequence_control_set_ptr,
         picture_control_set_ptr,
         context_ptr,
 #if M0_HIGH_PRECISION_INTERPOLATION
@@ -5962,7 +5962,7 @@ static void open_loop_me_half_pel_search_sblock(
             uint16_t inetger_mv2 = (((uint16_t)mvx << 2));
             uint32_t inetger_mv = inetger_mv1 | inetger_mv2;
             half_pel_refinement_sb(
-                sequence_control_set_ptr,
+                //sequence_control_set_ptr,
                 picture_control_set_ptr,
                 context_ptr,
 #if M0_HIGH_PRECISION_INTERPOLATION
@@ -6007,8 +6007,9 @@ static void open_loop_me_half_pel_search_sblock(
  * open_loop_me_quarter_pel_search_sblock
  *******************************************/
 static void open_loop_me_quarter_pel_search_sblock(
-    SequenceControlSet *sequence_control_set_ptr,
-    PictureParentControlSet *picture_control_set_ptr, MeContext *context_ptr,
+    //SequenceControlSet *sequence_control_set_ptr,
+    PictureParentControlSet *picture_control_set_ptr,
+    MeContext *context_ptr,
     uint32_t list_index, uint32_t ref_pic_index, int16_t x_search_area_origin,
     int16_t y_search_area_origin, uint32_t search_area_width,
     uint32_t search_area_height, EbAsm asm_type) {
@@ -15641,7 +15642,7 @@ EbErrorType motion_estimate_lcu(
                                        ->p_sb_best_mv[listIndex][ref_pic_index],
                                    MAX_ME_PU_COUNT * sizeof(uint32_t));
                             open_loop_me_quarter_pel_search_sblock(
-                                sequence_control_set_ptr,
+                                //sequence_control_set_ptr,
                                 picture_control_set_ptr,
                                 context_ptr,
                                 listIndex,

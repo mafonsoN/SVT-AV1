@@ -74,7 +74,9 @@ extern "C" {
 #endif
         PictureControlSet                  *picture_control_set_ptr,
         struct ModeDecisionCandidateBuffer *candidate_buffer_ptr,
+#if !FIXED_128x128_CONTEXT_UPDATE
         CodingUnit                         *cu_ptr,
+#endif
         uint32_t                            tu_origin_index,
         uint32_t                            tu_chroma_origin_index,
         EntropyCoder                       *entropy_coder_ptr,

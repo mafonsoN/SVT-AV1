@@ -344,7 +344,7 @@ const EbAv1LambdaAssignFunc av1_lambda_assignment_function_table[4] = {
 void reset_mode_decision(
     ModeDecisionContext   *context_ptr,
     PictureControlSet     *picture_control_set_ptr,
-    SequenceControlSet    *sequence_control_set_ptr,
+    /*SequenceControlSet    *sequence_control_set_ptr,*/
     uint32_t                   segment_index)
 {
 #if !ENABLE_CDF_UPDATE
@@ -461,9 +461,13 @@ void reset_mode_decision(
  ******************************************************/
 void mode_decision_configure_lcu(
     ModeDecisionContext   *context_ptr,
+#if !QPM
     LargestCodingUnit     *sb_ptr,
+#endif
     PictureControlSet     *picture_control_set_ptr,
+#if !QPM
     SequenceControlSet    *sequence_control_set_ptr,
+#endif
     uint8_t                    picture_qp,
     uint8_t                    sb_qp){
     (void)picture_control_set_ptr;

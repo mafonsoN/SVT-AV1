@@ -1567,9 +1567,9 @@ void interpolate_search_region_AVC_chroma(
         uint32_t         geom_offset_y);
 #if IMPROVED_SUBPEL_SEARCH
     void half_pel_refinement_sb(
-        SequenceControlSet
-            *sequence_control_set_ptr,  // input parameter, Sequence control set
-                                        // Ptr
+        //SequenceControlSet
+        //    *sequence_control_set_ptr,  // input parameter, Sequence control set
+        //                                // Ptr
         PictureParentControlSet *picture_control_set_ptr,
         MeContext *context_ptr,  // input/output parameter, ME context Ptr, used
                                  // to get/update ME results

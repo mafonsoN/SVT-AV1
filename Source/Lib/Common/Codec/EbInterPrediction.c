@@ -1508,7 +1508,7 @@ void av1_make_masked_inter_predictor(
     DECLARE_ALIGNED(32, uint8_t,
     tmp_buf[INTER_PRED_BYTES_PER_PIXEL * MAX_SB_SQUARE]);
 #undef INTER_PRED_BYTES_PER_PIXEL
-    uint8_t *tmp_dst =  tmp_buf;
+    //uint8_t *tmp_dst =  tmp_buf;
     const int tmp_buf_stride = MAX_SB_SIZE;
 
     CONV_BUF_TYPE *org_dst = conv_params->dst;//save the ref0 prediction pointer
@@ -1769,7 +1769,7 @@ static void model_rd_with_curvfit(
     //const AV1_COMP *const cpi,
     //const MACROBLOCK *const x,
     PictureControlSet      *picture_control_set_ptr,
-    BLOCK_SIZE plane_bsize, int plane,
+    BLOCK_SIZE plane_bsize, /* int plane ,*/
     int64_t sse, int num_samples, int *rate,
     int64_t *dist,
     uint32_t rdmult
@@ -1946,7 +1946,7 @@ static void /*int64_t*/ pick_wedge(
 
     //model_rd_sse_fn[MODELRD_TYPE_MASKED_COMPOUND](cpi, x, bsize, 0, sse, N,
      //                                             &rate, &dist);
-    model_rd_with_curvfit(picture_control_set_ptr,bsize, 0, sse, N,    &rate, &dist, context_ptr->full_lambda);
+    model_rd_with_curvfit(picture_control_set_ptr,bsize, /*0,*/ sse, N,    &rate, &dist, context_ptr->full_lambda);
     // int rate2;
     // int64_t dist2;
     // model_rd_with_curvfit(cpi, x, bsize, 0, sse, N, &rate2, &dist2);
@@ -2087,14 +2087,13 @@ static int64_t pick_wedge_fixed_sign(
   int8_t wedge_types = (1 << get_wedge_bits_lookup(bsize));
   const uint8_t *mask;
   uint64_t sse;
-  const int hbd = 0;// is_cur_buf_hbd(xd);
   const int bd_round = 0;//hbd ? (xd->bd - 8) * 2 : 0;
   for (wedge_index = 0; wedge_index < wedge_types; ++wedge_index) {
     mask = av1_get_contiguous_soft_mask(wedge_index, wedge_sign, bsize);
     sse = av1_wedge_sse_from_residuals(residual1, diff10, mask, N);
     sse = ROUND_POWER_OF_TWO(sse, bd_round);
 
-    model_rd_with_curvfit(picture_control_set_ptr,bsize, 0, sse, N,    &rate, &dist, context_ptr->full_lambda);
+    model_rd_with_curvfit(picture_control_set_ptr,bsize, /*0,*/ sse, N,    &rate, &dist, context_ptr->full_lambda);
    // model_rd_sse_fn[MODELRD_TYPE_MASKED_COMPOUND](cpi, x, bsize, 0, sse, N, &rate, &dist);
 
    // rate += x->wedge_idx_cost[bsize][wedge_index];
@@ -2197,7 +2196,7 @@ static void  pick_interinter_seg(
 #endif
         sse = ROUND_POWER_OF_TWO(sse, 0 /*bd_round*/);
 
-        model_rd_with_curvfit(picture_control_set_ptr,bsize, 0, sse, N,    &rate, &dist, context_ptr->full_lambda);
+        model_rd_with_curvfit(picture_control_set_ptr,bsize, /*0,*/ sse, N,    &rate, &dist, context_ptr->full_lambda);
 
         const int64_t rd0 = RDCOST(context_ptr->full_lambda /*x->rdmult*/, rate, dist);
 
@@ -2242,7 +2241,7 @@ void search_compound_diff_wedge(
     ModeDecisionCandidate                *candidate_ptr    )
 {
 
-#if PRE_BILINEAR_CLEAN_UP // compound 
+#if PRE_BILINEAR_CLEAN_UP // compound
 #if BILINEAR_INJECTION
     candidate_ptr->interp_filters = av1_make_interp_filters(BILINEAR, BILINEAR);
 #else
@@ -2301,7 +2300,7 @@ void search_compound_diff_wedge(
         //we call the regular inter prediction path here(no compound)
         av1_inter_prediction(
             picture_control_set_ptr,
-#if PRE_BILINEAR_CLEAN_UP // compound 
+#if PRE_BILINEAR_CLEAN_UP // compound
             candidate_ptr->interp_filters,
 #else
             0,//fixed interpolation filter for compound search
@@ -2331,11 +2330,11 @@ void search_compound_diff_wedge(
         //ref1 prediction
         mv_unit.pred_direction = UNI_PRED_LIST_1;
         pred_desc.buffer_y = context_ptr->pred1;
-       
+
         //we call the regular inter prediction path here(no compound)
         av1_inter_prediction(
             picture_control_set_ptr,
-#if PRE_BILINEAR_CLEAN_UP // compound 
+#if PRE_BILINEAR_CLEAN_UP // compound
             candidate_ptr->interp_filters,
 #else
             0,//fixed interpolation filter for compound search
@@ -2442,7 +2441,6 @@ static void model_rd_for_sb_with_curvfit(
     // Note our transform coeffs are 8 times an orthogonal transform.
     // Hence quantizer step is also 8 times. To get effective quantizer
     // we need to divide by 8 before sending to modeling function.
-    const int ref = 0;//CHKN  xd->mi[0]->ref_frame[0];
 
     int64_t rate_sum = 0;
     int64_t dist_sum = 0;
@@ -2476,7 +2474,7 @@ static void model_rd_for_sb_with_curvfit(
         }
 
         sse = ROUND_POWER_OF_TWO(sse, shift * 2);
-        model_rd_with_curvfit(picture_control_set_ptr /*cpi, x*/, plane_bsize, plane, sse, bw * bh, &rate,        &dist, context_ptr->full_lambda);
+        model_rd_with_curvfit(picture_control_set_ptr /*cpi, x*/, plane_bsize, /*plane,*/ sse, bw * bh, &rate,        &dist, context_ptr->full_lambda);
 
         //if (plane == 0) x->pred_sse[ref] = (unsigned int)AOMMIN(sse, UINT_MAX);
 

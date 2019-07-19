@@ -334,7 +334,7 @@ void av1_jnt_convolve_x_avx2(const uint8_t *src, int32_t src_stride,
     CONV_BUF_TYPE *dst = conv_params->dst;
     int32_t dst_stride = conv_params->dst_stride;
     const int32_t bd = 8;
-    int32_t i, j, is_horiz_4tap = 0;
+    int32_t i, j = 0;
     const int32_t bits = FILTER_BITS - conv_params->round_1;
     const __m256i wt = unpack_weights_avx2(conv_params);
     const int32_t do_average = conv_params->do_average;
@@ -543,7 +543,7 @@ void av1_jnt_convolve_y_avx2(const uint8_t *src, int32_t src_stride,
     CONV_BUF_TYPE *dst = conv_params->dst;
     int32_t dst_stride = conv_params->dst_stride;
     const int32_t bd = 8;
-    int32_t i, j, is_vert_4tap = 0;
+    int32_t i, j = 0;
     // +1 to compensate for dividing the filter coeffs by 2
     const int32_t left_shift = FILTER_BITS - conv_params->round_0 + 1;
     const __m256i round_const =
@@ -1125,7 +1125,7 @@ void av1_jnt_convolve_2d_avx2(const uint8_t *src, int32_t src_stride,
     DECLARE_ALIGNED(32, int16_t, im_block[(MAX_SB_SIZE + MAX_FILTER_TAP) * 8]);
 
     int32_t im_stride = 8;
-    int32_t i, is_horiz_4tap = 0, is_vert_4tap = 0;
+    int32_t i = 0;
     const __m256i wt = unpack_weights_avx2(conv_params);
     const int32_t do_average = conv_params->do_average;
     const int32_t use_jnt_comp_avg = conv_params->use_jnt_comp_avg;
@@ -1161,7 +1161,6 @@ void av1_jnt_convolve_2d_avx2(const uint8_t *src, int32_t src_stride,
         const int32_t fo_vert = filter_params_y->taps / 2 - 1;
         const int32_t fo_horiz = 0;
         const uint8_t *const src_ptr = src - fo_vert * src_stride - fo_horiz;
-        const int16_t *const t_block = im_block + 0 * im_stride;
 
         prepare_coeffs_lowbd_2tap(filter_params_x, subpel_x_qn, coeffs_h);
 
