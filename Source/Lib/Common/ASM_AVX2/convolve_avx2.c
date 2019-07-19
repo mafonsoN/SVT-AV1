@@ -2084,22 +2084,20 @@ void aom_lowbd_blend_a64_d16_mask_avx2(
 
 #endif
 
-
-#if COMP_AVX // TO be added as  wedge_utils_avx2.c
-
-static INLINE void xx_store_128(void *const a, const __m128i v) {
-  _mm_store_si128((__m128i *)a, v);
-}
-
-
-// Negate under mask
-static INLINE __m128i negm_epi16(__m128i v_v_w, __m128i v_mask_w) {
-  return _mm_sub_epi16(_mm_xor_si128(v_v_w, v_mask_w), v_mask_w);
-}
-
-
-
-#endif
+//
+//#if COMP_AVX // TO be added as  wedge_utils_avx2.c
+//
+//static INLINE void xx_store_128(void *const a, const __m128i v) {
+//  _mm_store_si128((__m128i *)a, v);
+//}
+//
+//
+//// Negate under mask
+//static INLINE __m128i negm_epi16(__m128i v_v_w, __m128i v_mask_w) {
+//  return _mm_sub_epi16(_mm_xor_si128(v_v_w, v_mask_w), v_mask_w);
+//}
+//
+//#endif
 
 #if COMP_AVX // sum_squares_sse2.c
 
