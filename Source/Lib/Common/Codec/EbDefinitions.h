@@ -353,7 +353,7 @@ extern "C" {
 #define MRP_DISABLE_ADDED_CAND_M1                        0
 
 #define EIGTH_PEL_MV                                    0
-#define DISABLE_NSQ_TABLE_FOR_M0                        1 // On wil disable the nsq_table ordering algrithm. This is a temporarily adoption that will be disable once we comeup with a better ordreing mecanisme when MRP i ON.
+#define DISABLE_NSQ_TABLE_FOR_M0                        1 // On wil disable the nsq_table ordering algrithm for sc content. This is a temporarily adoption that will be disable once we comeup with a better ordreing mecanisme when MRP i ON.
 #define IMPROVED_SUBPEL_SEARCH                          1
 
 
