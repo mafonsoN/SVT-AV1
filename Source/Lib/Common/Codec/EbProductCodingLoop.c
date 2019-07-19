@@ -1778,7 +1778,7 @@ void ProductMdFastPuPrediction(
         candidateBuffer->candidate_ptr->interp_filters = av1_make_interp_filters(BILINEAR, BILINEAR);
     else
         candidateBuffer->candidate_ptr->interp_filters = 0;
-#else 
+#else
     candidateBuffer->candidate_ptr->interp_filters = 0;
 #endif
     ProductPredictionFunTable[candidateBuffer->candidate_ptr->use_intrabc ? INTER_MODE : modeType](
@@ -2385,23 +2385,23 @@ void set_md_stage_counts(
 
 }
 #endif
-void md_stage_1(	
+void md_stage_1(
 #if !PRE_BILINEAR_CLEAN_UP
-	CAND_CLASS                         target_class,
+    CAND_CLASS                         target_class,
 #endif
-	PictureControlSet                 *picture_control_set_ptr,
-	ModeDecisionContext               *context_ptr,
-	ModeDecisionCandidateBuffer      **candidateBufferPtrArrayBase,
-	uint32_t                           num_of_candidates,
-	EbPictureBufferDesc               *input_picture_ptr,
-	uint32_t                           inputOriginIndex,
-	uint32_t                           inputCbOriginIndex,
-	uint32_t                           inputCrOriginIndex,
-	CodingUnit                        *cu_ptr,
-	uint32_t                           cuOriginIndex,
-	uint32_t                           cuChromaOriginIndex,	
-	EbBool                             use_ssd,
-	EbAsm                              asm_type)
+    PictureControlSet                 *picture_control_set_ptr,
+    ModeDecisionContext               *context_ptr,
+    ModeDecisionCandidateBuffer      **candidateBufferPtrArrayBase,
+    uint32_t                           num_of_candidates,
+    EbPictureBufferDesc               *input_picture_ptr,
+    uint32_t                           inputOriginIndex,
+    uint32_t                           inputCbOriginIndex,
+    uint32_t                           inputCrOriginIndex,
+    CodingUnit                        *cu_ptr,
+    uint32_t                           cuOriginIndex,
+    uint32_t                           cuChromaOriginIndex,
+    EbBool                             use_ssd,
+    EbAsm                              asm_type)
 {
     for (uint32_t cand_idx = 0; cand_idx < num_of_candidates; ++cand_idx)
     {
@@ -2763,7 +2763,7 @@ int32_t derive_luma_inter_dist(
     candidate_ptr->ref_frame_index_l1 = list_idx == 1 ? ref_idx : -1;
 #if BILINEAR_PREDICTIVE_ME
     candidateBuffer->candidate_ptr->interp_filters = av1_make_interp_filters(BILINEAR, BILINEAR);
-#else 
+#else
     candidate_ptr->interp_filters = 0;
 #endif
     // Prediction
@@ -2928,7 +2928,7 @@ void predictive_me_sub_pel_search(
             candidate_ptr->ref_frame_index_l1 = list_idx == 1 ? ref_idx : -1;
 #if BILINEAR_PREDICTIVE_ME
             candidateBuffer->candidate_ptr->interp_filters = av1_make_interp_filters(BILINEAR, BILINEAR);
-#else 
+#else
             candidate_ptr->interp_filters = 0;
 #endif
             // Prediction
