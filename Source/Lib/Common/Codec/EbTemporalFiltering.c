@@ -823,7 +823,7 @@ EbErrorType av1_inter_prediction(
     EbBool                               perform_chroma,
     EbAsm                                asm_type);
 
-uint32_t get_mds_idx(uint32_t  orgx, uint32_t  orgy, uint32_t  size, uint32_t use_128x128);
+uint32_t get_mds_idx(uint32_t  orgx, uint32_t  orgy, int32_t  size, uint32_t use_128x128);
 
 void tf_inter_prediction(
     PictureParentControlSet   *picture_control_set_ptr,
@@ -861,7 +861,7 @@ void tf_inter_prediction(
 
     for (uint32_t idx_32x32 = 0; idx_32x32 < 4; idx_32x32++) {
         if (use_16x16_subblocks[idx_32x32] != 0) {
-            uint32_t    bsize = 16;
+            int32_t    bsize = 16;
 
             for (uint32_t idx_16x16 = 0; idx_16x16 < 4; idx_16x16++) {
                 uint32_t pu_index = index_16x16_from_subindexes[idx_32x32][idx_16x16];

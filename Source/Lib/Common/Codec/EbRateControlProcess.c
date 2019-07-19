@@ -3663,7 +3663,6 @@ static void sb_qp_derivation(
             if (sequence_control_set_ptr->seq_header.sb_size == BLOCK_128X128) {
                 uint32_t me_sb_x = (sb_ptr->origin_x / me_sb_size);
                 uint32_t me_sb_y = (sb_ptr->origin_y / me_sb_size);
-                uint32_t me_sb_addr = me_sb_x + me_sb_y * me_pic_width_in_sb;
                 uint32_t me_sb_addr_0 = me_sb_x + me_sb_y * me_pic_width_in_sb;
                 uint32_t me_sb_addr_1 = (me_sb_x + 1) < me_pic_width_in_sb ? (me_sb_x + 1) + ((me_sb_y + 0) * me_pic_width_in_sb) : me_sb_addr_0;
                 uint32_t me_sb_addr_2 = (me_sb_y + 1) < me_pic_height_in_sb ? (me_sb_x + 0) + ((me_sb_y + 1) * me_pic_width_in_sb) : me_sb_addr_0;

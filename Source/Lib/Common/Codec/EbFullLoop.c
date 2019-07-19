@@ -2580,7 +2580,9 @@ void product_full_loop(
 #endif
             picture_control_set_ptr,
             candidateBuffer,
+#if !FIXED_128x128_CONTEXT_UPDATE
             context_ptr->cu_ptr,
+#endif
             txb_1d_offset,
             0,
             context_ptr->coeff_est_entropy_coder_ptr,
@@ -2990,7 +2992,9 @@ void product_full_loop_tx_search(
 #endif
                 picture_control_set_ptr,
                 candidateBuffer,
+#if !FIXED_128x128_CONTEXT_UPDATE
                 context_ptr->cu_ptr,
+#endif
                 tu_origin_index,
                 0,
                 context_ptr->coeff_est_entropy_coder_ptr,
@@ -3259,7 +3263,9 @@ void encode_pass_tx_search(
 #endif
             picture_control_set_ptr,
             candidateBuffer,
+#if !FIXED_128x128_CONTEXT_UPDATE
             context_ptr->cu_ptr,
+#endif
             coeff1dOffset,
             0,
             coeff_est_entropy_coder_ptr,
@@ -3502,7 +3508,9 @@ void encode_pass_tx_search_hbd(
 #endif
             picture_control_set_ptr,
             candidateBuffer,
+#if !FIXED_128x128_CONTEXT_UPDATE
             context_ptr->cu_ptr,
+#endif
             coeff1dOffset,
             0,
             coeff_est_entropy_coder_ptr,
@@ -4203,7 +4211,9 @@ void cu_full_distortion_fast_tu_mode_r(
 #endif
                 picture_control_set_ptr,
                 candidateBuffer,
+#if !FIXED_128x128_CONTEXT_UPDATE
                 context_ptr->cu_ptr,
+#endif
                 tu_origin_index,
                 tu_chroma_origin_index,
                 context_ptr->coeff_est_entropy_coder_ptr,
