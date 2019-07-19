@@ -353,9 +353,12 @@ static void reset_ec_tile(
  * EncDec Configure LCU
  ******************************************************/
 static void EntropyCodingConfigureLcu(
+#if !QPM
     EntropyCodingContext  *context_ptr,
     LargestCodingUnit     *sb_ptr,
-    PictureControlSet     *picture_control_set_ptr)
+    PictureControlSet     *picture_control_set_ptr
+#endif
+)
 {
 #if ADD_DELTA_QP_SUPPORT
 #if !QPM
@@ -602,9 +605,12 @@ void* entropy_coding_kernel(void *input_ptr)
                         av1_reset_loop_restoration(picture_control_set_ptr);
                     // Configure the LCU
                     EntropyCodingConfigureLcu(
+#if !QPM
                         context_ptr,
                         sb_ptr,
-                        picture_control_set_ptr);
+                        picture_control_set_ptr
+#endif
+                    );
 #if RC
                     sb_ptr->total_bits = 0;
                     uint32_t prev_pos = sb_index ? picture_control_set_ptr->entropy_coder_ptr->ec_writer.ec.offs : 0;//residual_bc.pos
@@ -756,9 +762,12 @@ void* entropy_coding_kernel(void *input_ptr)
 #endif
                              // Configure the LCU
                              EntropyCodingConfigureLcu(
+#if !QPM
                                  context_ptr,
                                  sb_ptr,
-                                 picture_control_set_ptr);
+                                 picture_control_set_ptr
+#endif
+                             );
 #if RC
                              sb_ptr->total_bits = 0;
                              uint32_t prev_pos = sb_index ? picture_control_set_ptr->entropy_coder_ptr->ec_writer.ec.offs : 0;//residual_bc.pos

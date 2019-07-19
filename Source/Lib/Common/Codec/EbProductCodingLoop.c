@@ -1775,7 +1775,7 @@ void ProductMdFastPuPrediction(
         candidateBuffer->candidate_ptr->interp_filters = av1_make_interp_filters(BILINEAR, BILINEAR);
     else
         candidateBuffer->candidate_ptr->interp_filters = 0;
-#else 
+#else
     candidateBuffer->candidate_ptr->interp_filters = 0;
 #endif
     ProductPredictionFunTable[candidateBuffer->candidate_ptr->use_intrabc ? INTER_MODE : modeType](
@@ -2024,7 +2024,9 @@ void perform_fast_loop(
 
         ModeDecisionCandidateBuffer *candidateBuffer = candidateBufferPtrArrayBase[highestCostIndex];
         ModeDecisionCandidate       *candidate_ptr = candidateBuffer->candidate_ptr = &fast_candidate_array[fastLoopCandidateIndex];
+#if !REFACTOR_FAST_LOOP
         EbPictureBufferDesc         *prediction_ptr = candidateBuffer->prediction_ptr;
+#endif
 #if ATB_SUPPORT
         // Initialize tx_depth
         candidateBuffer->candidate_ptr->tx_depth = 0;
@@ -2222,7 +2224,6 @@ void set_md_stage_counts(
         memset(context_ptr->bypass_stage2, EB_TRUE, CAND_CLASS_TOTAL * sizeof(uint32_t));
 
     // Set # of md_stage_1 candidates
-    uint32_t  count_cand = 16;
 #if CLASS_0_NFL_MD_STAGE_2
     context_ptr->fast1_cand_count[CAND_CLASS_0] = (picture_control_set_ptr->parent_pcs_ptr->is_used_as_reference_flag) ? 16 : 6;
 #else
@@ -2379,23 +2380,23 @@ void set_md_stage_counts(
 
 }
 #endif
-void fast_loop_stage1(	
+void fast_loop_stage1(
 #if !PRE_BILINEAR_CLEAN_UP
-	CAND_CLASS                         target_class,
+    CAND_CLASS                         target_class,
 #endif
-	PictureControlSet                 *picture_control_set_ptr,
-	ModeDecisionContext               *context_ptr,
-	ModeDecisionCandidateBuffer      **candidateBufferPtrArrayBase,
-	uint32_t                           num_of_candidates,
-	EbPictureBufferDesc               *input_picture_ptr,
-	uint32_t                           inputOriginIndex,
-	uint32_t                           inputCbOriginIndex,
-	uint32_t                           inputCrOriginIndex,
-	CodingUnit                        *cu_ptr,
-	uint32_t                           cuOriginIndex,
-	uint32_t                           cuChromaOriginIndex,	
-	EbBool                             use_ssd,
-	EbAsm                              asm_type)
+    PictureControlSet                 *picture_control_set_ptr,
+    ModeDecisionContext               *context_ptr,
+    ModeDecisionCandidateBuffer      **candidateBufferPtrArrayBase,
+    uint32_t                           num_of_candidates,
+    EbPictureBufferDesc               *input_picture_ptr,
+    uint32_t                           inputOriginIndex,
+    uint32_t                           inputCbOriginIndex,
+    uint32_t                           inputCrOriginIndex,
+    CodingUnit                        *cu_ptr,
+    uint32_t                           cuOriginIndex,
+    uint32_t                           cuChromaOriginIndex,
+    EbBool                             use_ssd,
+    EbAsm                              asm_type)
 {
     for (uint32_t cand_idx = 0; cand_idx < num_of_candidates; ++cand_idx)
     {
@@ -2757,7 +2758,7 @@ int32_t derive_luma_inter_dist(
     candidate_ptr->ref_frame_index_l1 = list_idx == 1 ? ref_idx : -1;
 #if BILINEAR_PREDICTIVE_ME
     candidateBuffer->candidate_ptr->interp_filters = av1_make_interp_filters(BILINEAR, BILINEAR);
-#else 
+#else
     candidate_ptr->interp_filters = 0;
 #endif
     // Prediction
@@ -2922,7 +2923,7 @@ void predictive_me_sub_pel_search(
             candidate_ptr->ref_frame_index_l1 = list_idx == 1 ? ref_idx : -1;
 #if BILINEAR_PREDICTIVE_ME
             candidateBuffer->candidate_ptr->interp_filters = av1_make_interp_filters(BILINEAR, BILINEAR);
-#else 
+#else
             candidate_ptr->interp_filters = 0;
 #endif
             // Prediction
