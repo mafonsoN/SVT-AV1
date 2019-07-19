@@ -14404,7 +14404,7 @@ EbErrorType motion_estimate_lcu(
         picture_control_set_ptr->nsq_search_level >= NSQ_SEARCH_LEVEL1 &&
         picture_control_set_ptr->nsq_search_level < NSQ_SEARCH_FULL) ? EB_TRUE : EB_FALSE;
 #if DISABLE_NSQ_TABLE_FOR_M0
-    is_nsq_table_used = picture_control_set_ptr->enc_mode == ENC_M0 ? EB_FALSE : is_nsq_table_used;
+    is_nsq_table_used = (picture_control_set_ptr->enc_mode == ENC_M0 && picture_control_set_ptr->sc_content_detected) ? EB_FALSE : is_nsq_table_used;
 #endif
 #endif
 #if !MRP_ME
