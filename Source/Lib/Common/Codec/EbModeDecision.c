@@ -6259,16 +6259,12 @@ void ProductInitMdCandInjection(
     return;
 }
 #endif
-#if MD_CLASS
-EbErrorType generate_md_stage_0_cand(
-#else
 /***************************************
 * ProductGenerateMdCandidatesCu
 *   Creates list of initial modes to
 *   perform fast cost search on.
 ***************************************/
 EbErrorType ProductGenerateMdCandidatesCu(
-#endif
     LargestCodingUnit                 *sb_ptr,
     ModeDecisionContext             *context_ptr,
     SsMeContext                    *ss_mecontext,

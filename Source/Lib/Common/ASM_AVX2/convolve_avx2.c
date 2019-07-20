@@ -2097,6 +2097,8 @@ void aom_lowbd_blend_a64_d16_mask_avx2(
 //  return _mm_sub_epi16(_mm_xor_si128(v_v_w, v_mask_w), v_mask_w);
 //}
 //
+//
+//
 //#endif
 
 #if COMP_AVX // sum_squares_sse2.c

@@ -48,8 +48,8 @@ extern "C" {
 #define FIRST_FULL_LOOP_TX_SEARCH_OFF          1
 #define FIRST_FULL_LOOP_TX_SEARCH_OFF_INTER    0
 #define STRENGHTHEN_MD_STAGE_3                 1
-#define CLASS_0_NFL_MD_STAGE_3                 1 // CIN03
-#define CLASS_123_NFL_MD_STAGE_2_3             1 // CIN13,CIN23,CIN33
+#define CLASS_0_NFL_MD_STAGE_3                 1
+#define CLASS_123_NFL_MD_STAGE_2_3             1
 #define CLASS_0_NFL_MD_STAGE_2                 0
 
 #define PRE_BILINEAR_CLEAN_UP                  1
