@@ -35,6 +35,12 @@
 extern "C" {
 #endif
 
+#define M1_CHROMA               0
+#define M1_HALF_QUARTER_PEL     0
+#define M1_LOOP_FILTER          0
+#define M1_INTRA_PRED           0
+#define M1_MRP_CONFIG           0
+
 #define M0_HME_ME_TUNING                1
 #define PREDICTIVE_ME                   1 // Perform ME search around MVP
 #define QPM                             1 // Use SB QP Mod

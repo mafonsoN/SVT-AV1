@@ -1330,7 +1330,11 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
     else
 #endif
 #if SEARCH_UV_BASE
+#if M1_CHROMA
+    if(0)
+#else
     if (picture_control_set_ptr->enc_mode == ENC_M0 && picture_control_set_ptr->temporal_layer_index == 0)
+#endif
 #else
     if (picture_control_set_ptr->enc_mode == ENC_M0)
 #endif

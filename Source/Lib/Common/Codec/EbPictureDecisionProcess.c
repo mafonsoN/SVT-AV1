@@ -1190,7 +1190,11 @@ EbErrorType signal_derivation_multi_processes_oq(
 
 #endif
 #if LOOP_FILTER_FIX
+#if M1_LOOP_FILTER
+        if (0)
+#else
         if (picture_control_set_ptr->enc_mode == ENC_M0)
+#endif
             picture_control_set_ptr->loop_filter_mode = 3;
         else if (picture_control_set_ptr->enc_mode <= ENC_M5)
             picture_control_set_ptr->loop_filter_mode = picture_control_set_ptr->is_used_as_reference_flag ? 3 : 0;
@@ -1530,8 +1534,14 @@ EbErrorType signal_derivation_multi_processes_oq(
     else
 
 #endif
+#if !M1_INTRA_PRED
         if (picture_control_set_ptr->enc_mode == ENC_M0)
+#else
+        if (0)
+
+#endif
             picture_control_set_ptr->intra_pred_mode = 0;
+
         else if (picture_control_set_ptr->enc_mode  <= ENC_M1)
             if (picture_control_set_ptr->temporal_layer_index == 0)
                 picture_control_set_ptr->intra_pred_mode = 1;

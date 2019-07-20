@@ -274,8 +274,12 @@ EbErrorType signal_derivation_me_kernel_oq(
         context_ptr->me_context_ptr->quarter_pel_mode =
             EX_QP_MODE;
     }
+#if M1_HALF_QUARTER_PEL
+    else if (0) {
+#else
     else if (picture_control_set_ptr->enc_mode ==
         ENC_M0) {
+#endif
         context_ptr->me_context_ptr->half_pel_mode =
             EX_HP_MODE;
         context_ptr->me_context_ptr->quarter_pel_mode =
@@ -494,8 +498,12 @@ EbErrorType tf_signal_derivation_me_kernel_oq(
         context_ptr->me_context_ptr->quarter_pel_mode =
             EX_QP_MODE;
     }
+#if M1_HALF_QUARTER_PEL
+    else if (0) {
+#else
     else if (picture_control_set_ptr->enc_mode ==
         ENC_M0) {
+#endif
         context_ptr->me_context_ptr->half_pel_mode =
             EX_HP_MODE;
         context_ptr->me_context_ptr->quarter_pel_mode =
