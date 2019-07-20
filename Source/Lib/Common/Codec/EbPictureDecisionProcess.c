@@ -1648,7 +1648,11 @@ EbErrorType signal_derivation_multi_processes_oq(
         // Set frame end cdf update mode      Settings
         // 0                                     OFF
         // 1                                     ON
+#if SC_CDF
+        picture_control_set_ptr->frame_end_cdf_update_mode = 0;
+#else
         picture_control_set_ptr->frame_end_cdf_update_mode = 1;
+#endif
 #endif
 
 #if TBX_SPLIT_CAP

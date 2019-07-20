@@ -276,8 +276,13 @@ EbErrorType signal_derivation_me_kernel_oq(
     }
     else if (picture_control_set_ptr->enc_mode ==
         ENC_M0) {
+#if SC_SUBPEL
+        context_ptr->me_context_ptr->half_pel_mode =
+            REFINMENT_HP_MODE;
+#else
         context_ptr->me_context_ptr->half_pel_mode =
             EX_HP_MODE;
+#endif
         context_ptr->me_context_ptr->quarter_pel_mode =
             REFINMENT_QP_MODE;
     }

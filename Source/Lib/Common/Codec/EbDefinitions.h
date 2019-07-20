@@ -35,11 +35,25 @@
 extern "C" {
 #endif
 
+#define SC_NSQ_TABLE    1
+#define SC_QPM          1
+#define SC_CDF          1 
+#define SC_PME          1
+#define SC_SUBPEL       1 
+
+#define SC_COMP_0       0
+#define SC_COMP_1       0
+
+
 #define M1_CAND                         0
 
 #define M0_HME_ME_TUNING                1
 #define PREDICTIVE_ME                   1 // Perform ME search around MVP
+#if SC_QPM
+#define QPM                             0 // Use SB QP Mod
+#else
 #define QPM                             1 // Use SB QP Mod
+#endif
 #define ME_MVP_DEVIATION                0 // Skip Predictive ME Search if significant ME-to-MVP difference
 #define USE_M0_HME_ME_SETTINGS          0 // To enable when running ME related experiments in context of non-M0
 

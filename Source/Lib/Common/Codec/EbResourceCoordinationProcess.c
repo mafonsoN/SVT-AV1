@@ -709,7 +709,13 @@ void* resource_coordination_kernel(void *input_ptr)
             // 1                 ON: compond mode search: 4 modes
             // 2                 ON: full
 #if FULL_COMPOUND_BDRATE
+#if SC_COMP_0
+            sequence_control_set_ptr->compound_mode = 0;
+#elif  SC_COMP_1
+            sequence_control_set_ptr->compound_mode = 1;
+#else
             sequence_control_set_ptr->compound_mode = 2;
+#endif
 #else
             sequence_control_set_ptr->compound_mode = 1;
 #endif
