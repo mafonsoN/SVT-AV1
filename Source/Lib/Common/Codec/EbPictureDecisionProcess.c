@@ -905,7 +905,11 @@ EbErrorType signal_derivation_multi_processes_oq(
         else
 
 #endif
+#if M3_DEPTH
+        if (0)
+#else
         if (picture_control_set_ptr->enc_mode <= ENC_M2)
+#endif
 #if ADP_BQ
             if (picture_control_set_ptr->slice_type == I_SLICE)
                 picture_control_set_ptr->pic_depth_mode = PIC_ALL_DEPTH_MODE;
@@ -1007,7 +1011,11 @@ EbErrorType signal_derivation_multi_processes_oq(
                     picture_control_set_ptr->nsq_search_level = NSQ_SEARCH_OFF;
 
 #endif
+#if M2_NSQ_LEVEL
+        else if (0)
+#else
         else if (picture_control_set_ptr->enc_mode <= ENC_M1)
+#endif
             picture_control_set_ptr->nsq_search_level = NSQ_SEARCH_LEVEL6;
         else if (picture_control_set_ptr->enc_mode <= ENC_M2)
             if (picture_control_set_ptr->is_used_as_reference_flag)
@@ -1016,6 +1024,10 @@ EbErrorType signal_derivation_multi_processes_oq(
                 picture_control_set_ptr->nsq_search_level = NSQ_SEARCH_LEVEL3;
         else
             picture_control_set_ptr->nsq_search_level = NSQ_SEARCH_OFF;
+
+#if M3_NSQ_LEVEL
+        picture_control_set_ptr->nsq_search_level = NSQ_SEARCH_OFF;
+#endif
 #else
     if (MR_MODE) // NSQ
         picture_control_set_ptr->nsq_search_level = NSQ_SEARCH_FULL;
@@ -1112,7 +1124,11 @@ EbErrorType signal_derivation_multi_processes_oq(
                 picture_control_set_ptr->interpolation_search_level = IT_SEARCH_OFF;
 #endif
 #endif
+#if M2_IT_SEARCH
+        else if (0)
+#else
         else if (picture_control_set_ptr->enc_mode <= ENC_M1)
+#endif
             picture_control_set_ptr->interpolation_search_level = IT_SEARCH_FAST_LOOP_UV_BLIND;
         else if (picture_control_set_ptr->enc_mode <= ENC_M3)
             if (picture_control_set_ptr->is_used_as_reference_flag)
@@ -1161,7 +1177,11 @@ EbErrorType signal_derivation_multi_processes_oq(
             picture_control_set_ptr->allow_intrabc =  0;
 
         //IBC Modes:   0:Slow   1:Fast   2:Faster
+#if M3_IBC
+        if (0)
+#else
         if (picture_control_set_ptr->enc_mode <= ENC_M2)
+#endif
             picture_control_set_ptr->ibc_mode = 0;
         else
             picture_control_set_ptr->ibc_mode = 1;
@@ -1390,7 +1410,11 @@ EbErrorType signal_derivation_multi_processes_oq(
     else{
         if (picture_control_set_ptr->tx_search_level == TX_SEARCH_ENC_DEC)
             picture_control_set_ptr->tx_weight = MAX_MODE_COST;
+#if M2_TX_WEIGHT
+        else if (0)
+#else
         else if (!MR_MODE && picture_control_set_ptr->enc_mode <= ENC_M1)
+#endif
             picture_control_set_ptr->tx_weight = FC_SKIP_TX_SR_TH025;
         else if (!MR_MODE){
             if (picture_control_set_ptr->is_used_as_reference_flag)
@@ -1541,8 +1565,11 @@ EbErrorType signal_derivation_multi_processes_oq(
 
 #endif
             picture_control_set_ptr->intra_pred_mode = 0;
-
+#if M2_INTRA_PRED
+        else if (0)
+#else
         else if (picture_control_set_ptr->enc_mode  <= ENC_M1)
+#endif
             if (picture_control_set_ptr->temporal_layer_index == 0)
                 picture_control_set_ptr->intra_pred_mode = 1;
             else
@@ -1641,7 +1668,9 @@ EbErrorType signal_derivation_multi_processes_oq(
             picture_control_set_ptr->atb_mode = 0;
 
 #endif
-
+#if M1_CAND
+        picture_control_set_ptr->atb_mode = 0;
+#endif
 
 #if COMP_MODE
         // Set Wedge mode      Settings

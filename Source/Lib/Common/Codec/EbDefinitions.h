@@ -35,11 +35,23 @@
 extern "C" {
 #endif
 
+#define M1_CAND                         1
+
 #define M1_CHROMA               0
 #define M1_HALF_QUARTER_PEL     0
 #define M1_LOOP_FILTER          0
 #define M1_INTRA_PRED           0
 #define M1_MRP_CONFIG           0
+#define M2_NFL                  0
+#define M2_UNI_3x3              0
+#define M2_ME_SEARCH_METHOD     0
+#define M2_NSQ_LEVEL            0
+#define M2_IT_SEARCH            0
+#define M2_TX_WEIGHT            0
+#define M2_INTRA_PRED           0
+#define M3_DEPTH                0
+#define M3_NSQ_LEVEL            0
+#define M3_IBC                  0
 
 #define M0_HME_ME_TUNING                1
 #define PREDICTIVE_ME                   1 // Perform ME search around MVP
@@ -59,7 +71,11 @@ extern "C" {
 #define CLASS_0_NFL_MD_STAGE_2                 0
 
 #define PRE_BILINEAR_CLEAN_UP                  1 
+#if M1_CAND
+#define BILINEAR_FAST_LOOP                     1
+#else
 #define BILINEAR_FAST_LOOP                     0
+#endif
 #define BILINEAR_PREDICTIVE_ME                 0
 #define BILINEAR_INJECTION                     0
 
@@ -385,7 +401,11 @@ typedef enum CAND_CLASS {
 #define  REFACTOR_FAST_LOOP           1 // Lossless
 #define  FAST_LOOP_OPT                1 // Use fast loop stages to speed up encoder
 #define  COMP_OPT                     1 // cut some compound injection/modes
+#if M1_CAND
+#define  FULL_COMPOUND_BDRATE         0 // enable to run compound in full mode for best bd rate
+#else
 #define  FULL_COMPOUND_BDRATE         1 // enable to run compound in full mode for best bd rate
+#endif
 
 #define  BDR_MODE                     0 // enable to run for best bd rate
 #if BDR_MODE

@@ -1247,7 +1247,11 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
                 context_ptr->nfl_level = 7;
     else
 #endif
+#if M2_NFL
+        if (0)
+#else
     if (picture_control_set_ptr->enc_mode <= ENC_M1)
+#endif
         if (picture_control_set_ptr->parent_pcs_ptr->is_used_as_reference_flag)
             context_ptr->nfl_level = (sequence_control_set_ptr->input_resolution <= INPUT_SIZE_576p_RANGE_OR_LOWER) ? 0 : 1;
         else
@@ -1456,7 +1460,11 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
 
 #if NEW_NEAREST_NEW_INJECTION
     if (picture_control_set_ptr->enc_mode == ENC_M0)
+#if M1_CAND
+        context_ptr->new_nearest_near_comb_injection = 0;
+#else
         context_ptr->new_nearest_near_comb_injection = 1;
+#endif
     else
         context_ptr->new_nearest_near_comb_injection = 0;
 #endif
@@ -1520,7 +1528,11 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
             context_ptr->unipred3x3_injection = 0;
     else
 #endif
+#if  M2_UNI_3x3
+        if (0)
+#else
     if (picture_control_set_ptr->enc_mode <= ENC_M1)
+#endif
         context_ptr->unipred3x3_injection = 1;
     else if (picture_control_set_ptr->enc_mode <= ENC_M4)
         context_ptr->unipred3x3_injection = 2;
@@ -1550,7 +1562,11 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
     else
 #endif
     if (picture_control_set_ptr->enc_mode <= ENC_M1)
+#if M1_CAND
+        context_ptr->bipred3x3_injection = 0;
+#else
         context_ptr->bipred3x3_injection = 1;
+#endif
     else if (picture_control_set_ptr->enc_mode <= ENC_M4)
         context_ptr->bipred3x3_injection = 2;
     else
