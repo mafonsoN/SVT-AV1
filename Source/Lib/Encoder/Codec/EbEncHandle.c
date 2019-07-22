@@ -2301,7 +2301,11 @@ void SetParamBasedOnInput(SequenceControlSet *sequence_control_set_ptr)
     // Set down-sampling method     Settings
     // 0                            0: filtering
     // 1                            1: decimation
+#if M1_DWN_SMPL
+    if (0)
+#else
     if (sequence_control_set_ptr->static_config.enc_mode == ENC_M0)
+#endif
         sequence_control_set_ptr->down_sampling_method_me_search = ME_FILTERED_DOWNSAMPLED;
     else
         sequence_control_set_ptr->down_sampling_method_me_search = ME_DECIMATED_DOWNSAMPLED;

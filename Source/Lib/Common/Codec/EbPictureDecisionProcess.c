@@ -1142,6 +1142,10 @@ EbErrorType signal_derivation_multi_processes_oq(
                 picture_control_set_ptr->interpolation_search_level = IT_SEARCH_OFF;
         else
             picture_control_set_ptr->interpolation_search_level = IT_SEARCH_OFF;
+
+#if INTERPOLARTION_OFF
+        picture_control_set_ptr->interpolation_search_level = IT_SEARCH_OFF;
+#endif
 #else
     if (MR_MODE) // Interpolation
         picture_control_set_ptr->interpolation_search_level = IT_SEARCH_FAST_LOOP;

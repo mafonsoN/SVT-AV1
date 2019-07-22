@@ -56,6 +56,18 @@ extern "C" {
 #define M3_NSQ_LEVEL            0
 #define M3_IBC                  0
 
+
+#define M1_nx4_4xn              0
+#define M1_PRED_ME              0
+#define M1_TRELLIS              0
+#define BILINEAR_PREDICTIVE_ME  0
+#define COMPOUND_OFF            0
+#define INTERPOLARTION_OFF      0
+#define MD_STAGE_102_104        0
+#define CFL_MODE                0 //(DISABLE_CFL)
+#define M1_DWN_SMPL             0
+
+
 #define M0_HME_ME_TUNING                1
 #define PREDICTIVE_ME                   1 // Perform ME search around MVP
 #define QPM                             1 // Use SB QP Mod
@@ -79,7 +91,7 @@ extern "C" {
 #else
 #define BILINEAR_FAST_LOOP                     0
 #endif
-#define BILINEAR_PREDICTIVE_ME                 0
+
 #define BILINEAR_INJECTION                     0
 
 #define FIRST_FULL_LOOP_INTERPOLATION_SEARCH   0

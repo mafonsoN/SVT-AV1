@@ -1469,7 +1469,11 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
         context_ptr->new_nearest_near_comb_injection = 0;
 #endif
 #if ENHANCED_Nx4_4xN_NEW_MV
+#if M1_nx4_4xn
+    if (0)
+#else
     if (picture_control_set_ptr->enc_mode == ENC_M0)
+#endif
         context_ptr->nx4_4xn_parent_mv_injection = 1;
     else
         context_ptr->nx4_4xn_parent_mv_injection = 0;
@@ -1586,7 +1590,11 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
     // 1                    ON
     if (picture_control_set_ptr->slice_type != I_SLICE)
         // Hsan: kept ON for sc_content_detected as ~5% gain for minecraft clip
+#if M1_PRED_ME
+        if (0)
+#else
         if (picture_control_set_ptr->enc_mode == ENC_M0)
+#endif
             context_ptr->predictive_me_injection = 1;
         else
             context_ptr->predictive_me_injection = 0;
@@ -1664,7 +1672,11 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
 #endif
 #endif
     // Derive Trellis Quant Coeff Optimization Flag
+#if M1_TRELLIS
+     if (0)
+#else
     if (picture_control_set_ptr->enc_mode == ENC_M0)
+#endif
         context_ptr->trellis_quant_coeff_optimization = EB_TRUE;
     else
         context_ptr->trellis_quant_coeff_optimization = EB_FALSE;

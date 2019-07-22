@@ -3441,9 +3441,13 @@ EB_EXTERN void av1_encode_pass(
                 uint32_t  coded_area_org_uv = context_ptr->coded_area_sb_uv;
 
                 // Derive disable_cfl_flag as evaluate_cfl_ep = f(disable_cfl_flag)
+#if CFL_MODE
+                EbBool disable_cfl_flag = EB_TRUE;
+#else
                 EbBool disable_cfl_flag = (context_ptr->blk_geom->sq_size > 32 ||
                     context_ptr->blk_geom->bwidth == 4 ||
                     context_ptr->blk_geom->bheight == 4) ? EB_TRUE : EB_FALSE;
+#endif
                 // Evaluate cfl @ EP if applicable, and not done @ MD
                 context_ptr->evaluate_cfl_ep = (disable_cfl_flag == EB_FALSE && context_ptr->md_context->chroma_level == CHROMA_MODE_2);
 #if QPM

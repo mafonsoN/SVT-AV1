@@ -711,7 +711,11 @@ void* resource_coordination_kernel(void *input_ptr)
 #if FULL_COMPOUND_BDRATE
             sequence_control_set_ptr->compound_mode = 2;
 #else
+#if COMPOUND_OFF
+            sequence_control_set_ptr->compound_mode = 0;
+#else
             sequence_control_set_ptr->compound_mode = 1;
+#endif
 #endif
 
             //sequence_control_set_ptr->order_hint_info_st.enable_order_hint = 1;

@@ -5459,7 +5459,11 @@ void  inject_intra_candidates_ois(
     uint32_t                    can_total_cnt = 0;
     ModeDecisionCandidate    *candidate_array = context_ptr->fast_candidate_array;
 #if CFL_FIX
+#if CFL_MODE
+    EbBool disable_cfl_flag = EB_TRUE;
+#else
     EbBool                      disable_cfl_flag = (MAX(context_ptr->blk_geom->bheight, context_ptr->blk_geom->bwidth) > 32) ? EB_TRUE : EB_FALSE;
+#endif
 #else
     EbBool                      disable_cfl_flag = (context_ptr->blk_geom->sq_size > 32 ||
                                                     context_ptr->blk_geom->bwidth == 4  ||
@@ -5941,7 +5945,11 @@ void  inject_intra_candidates(
     uint8_t                     angleDeltaCandidateCount = use_angle_delta ? 7 : 1;
     ModeDecisionCandidate    *candidateArray = context_ptr->fast_candidate_array;
 #if CFL_FIX
+#if CFL_MODE
+    EbBool disable_cfl_flag = EB_TRUE;
+#else
     EbBool                      disable_cfl_flag = (MAX(context_ptr->blk_geom->bheight, context_ptr->blk_geom->bwidth) > 32) ? EB_TRUE : EB_FALSE;
+#endif
 #else
     EbBool                      disable_cfl_flag = (context_ptr->blk_geom->sq_size > 32 ||
                                                     context_ptr->blk_geom->bwidth == 4  ||
