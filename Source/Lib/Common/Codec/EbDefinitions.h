@@ -390,7 +390,9 @@ extern "C" {
 #define MRP_DISABLE_ADDED_CAND_M1                        0
 
 #define EIGTH_PEL_MV                                    0
+#if !MR_MODE
 #define DISABLE_NSQ_TABLE_FOR_M0                        1 // On wil disable the nsq_table ordering algrithm for sc content. This is a temporarily adoption that will be disable once we comeup with a better ordreing mecanisme when MRP i ON.
+#endif
 #define IMPROVED_SUBPEL_SEARCH                          1
 
 
@@ -421,8 +423,11 @@ typedef enum CAND_CLASS {
 #else
 #define  FULL_COMPOUND_BDRATE         1 // enable to run compound in full mode for best bd rate
 #endif
-
+#if MR_MODE
+#define  BDR_MODE                     1 // enable to run for best bd rate
+#else
 #define  BDR_MODE                     0 // enable to run for best bd rate
+#endif
 #if BDR_MODE
 #define  MD_STAGE_3_NFL_BDRATE        1 // 10 NFL @ md_stage_3
 #endif
