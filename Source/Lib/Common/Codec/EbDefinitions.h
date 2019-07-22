@@ -36,18 +36,21 @@ extern "C" {
 #endif
 
 #define M1_CAND                         1
+#define M2_CAND                         1
+#if M2_CAND
+#define M1_MRP_CONFIG           1
+#define M2_NSQ_LEVEL            1
+#define M2_IT_SEARCH            1
+#define M2_TX_WEIGHT            1
+#define M2_UNI_3x3              1
+#endif
 
 #define M1_CHROMA               0
 #define M1_HALF_QUARTER_PEL     0
 #define M1_LOOP_FILTER          0
 #define M1_INTRA_PRED           0
-#define M1_MRP_CONFIG           0
 #define M2_NFL                  0
-#define M2_UNI_3x3              0
 #define M2_ME_SEARCH_METHOD     0
-#define M2_NSQ_LEVEL            0
-#define M2_IT_SEARCH            0
-#define M2_TX_WEIGHT            0
 #define M2_INTRA_PRED           0
 #define M3_DEPTH                0
 #define M3_NSQ_LEVEL            0
