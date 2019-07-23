@@ -905,7 +905,7 @@ EbErrorType signal_derivation_multi_processes_oq(
         else
 
 #endif
-#if M3_DEPTH
+#if M3_DEPTH|| M4_DEPTH
         if (0)
 #else
         if (picture_control_set_ptr->enc_mode <= ENC_M2)
@@ -918,7 +918,12 @@ EbErrorType signal_derivation_multi_processes_oq(
 #else
             picture_control_set_ptr->pic_depth_mode = PIC_ALL_DEPTH_MODE;
 #endif
+#if M4_DEPTH
+
+        else if (0)
+#else
         else if (picture_control_set_ptr->enc_mode <= ENC_M3)
+#endif
             if (picture_control_set_ptr->slice_type == I_SLICE)
                 picture_control_set_ptr->pic_depth_mode = PIC_ALL_C_DEPTH_MODE;
             else
@@ -1124,13 +1129,17 @@ EbErrorType signal_derivation_multi_processes_oq(
                 picture_control_set_ptr->interpolation_search_level = IT_SEARCH_OFF;
 #endif
 #endif
-#if M2_IT_SEARCH
+#if M2_IT_SEARCH || M4_IT_SEARCH
         else if (0)
 #else
         else if (picture_control_set_ptr->enc_mode <= ENC_M1)
 #endif
             picture_control_set_ptr->interpolation_search_level = IT_SEARCH_FAST_LOOP_UV_BLIND;
+#if M2_IT_SEARCH || M4_IT_SEARCH
+        else if (0)
+#else
         else if (picture_control_set_ptr->enc_mode <= ENC_M3)
+#endif
             if (picture_control_set_ptr->is_used_as_reference_flag)
                 picture_control_set_ptr->interpolation_search_level = IT_SEARCH_FAST_LOOP_UV_BLIND;
             else
@@ -1306,7 +1315,11 @@ EbErrorType signal_derivation_multi_processes_oq(
         else
             cm->sg_filter_mode = 0;
     else
+#if M5_SG
+     if (0)
+#else
     if (picture_control_set_ptr->enc_mode <= ENC_M4)
+#endif
         cm->sg_filter_mode = 4;
     else if (picture_control_set_ptr->enc_mode <= ENC_M6)
         cm->sg_filter_mode = 3;
@@ -1371,7 +1384,11 @@ EbErrorType signal_derivation_multi_processes_oq(
                 picture_control_set_ptr->tx_search_level = TX_SEARCH_ENC_DEC;
     else
 #endif
+#if M5_TX_SEARCH
+     if (0)
+#else
     if (picture_control_set_ptr->enc_mode <= ENC_M4)
+#endif
         picture_control_set_ptr->tx_search_level = TX_SEARCH_FULL_LOOP;
     else if (picture_control_set_ptr->enc_mode <= ENC_M7) {
         if (picture_control_set_ptr->temporal_layer_index == 0)

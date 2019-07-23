@@ -1334,7 +1334,7 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
     else
 #endif
 #if SEARCH_UV_BASE
-#if M1_CHROMA
+#if M1_CHROMA ||M5_CHROMA
     if(0)
 #else
     if (picture_control_set_ptr->enc_mode == ENC_M0 && picture_control_set_ptr->temporal_layer_index == 0)
@@ -1345,7 +1345,11 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
         context_ptr->chroma_level = CHROMA_MODE_0;
     else
 #endif
+#if M5_CHROMA
+    if (0)
+#else
     if (picture_control_set_ptr->enc_mode <= ENC_M4)
+#endif
         context_ptr->chroma_level = CHROMA_MODE_1;
     else
         context_ptr->chroma_level = (sequence_control_set_ptr->encoder_bit_depth == EB_8BIT) ?
@@ -1385,7 +1389,11 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
             context_ptr->decoupled_fast_loop_search_method = FULL_SAD_SEARCH;
     else
 #endif
+#if M5_DECOUPLE_FAST_LOOP
+        if (0)
+#else
         if (picture_control_set_ptr->enc_mode <= ENC_M4)
+#endif
             context_ptr->decoupled_fast_loop_search_method = SSD_SEARCH;
         else
             context_ptr->decoupled_fast_loop_search_method = FULL_SAD_SEARCH;
@@ -1532,13 +1540,17 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
             context_ptr->unipred3x3_injection = 0;
     else
 #endif
-#if  M2_UNI_3x3
+#if  M2_UNI_3x3 || M5_UNI_3x3
         if (0)
 #else
     if (picture_control_set_ptr->enc_mode <= ENC_M1)
 #endif
         context_ptr->unipred3x3_injection = 1;
+#if M5_UNI_3x3
+    else if (0)
+#else
     else if (picture_control_set_ptr->enc_mode <= ENC_M4)
+#endif
         context_ptr->unipred3x3_injection = 2;
     else
         context_ptr->unipred3x3_injection = 0;
@@ -1608,7 +1620,11 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
     // 1                    ON for 16x16 and above
     // 2                    ON for 32x32 and above
 #if NEW_PRESETS
+#if M5_IF_BLK_SIZE
+    if (0)
+#else
     if (picture_control_set_ptr->enc_mode <= ENC_M4)
+#endif
         context_ptr->interpolation_filter_search_blk_size = 0;
     else
         context_ptr->interpolation_filter_search_blk_size = 1;
@@ -1637,7 +1653,11 @@ EbErrorType signal_derivation_enc_dec_kernel_oq(
             context_ptr->spatial_sse_full_loop = EB_FALSE;
     else
 #endif
+#if M5_SPATIAL_SSE
+     if (0)
+#else
     if (picture_control_set_ptr->enc_mode <= ENC_M4)
+#endif
         context_ptr->spatial_sse_full_loop = EB_TRUE;
     else
         context_ptr->spatial_sse_full_loop = EB_FALSE;

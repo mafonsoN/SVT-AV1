@@ -66,7 +66,15 @@ extern "C" {
 #define MD_STAGE_102_104        0
 #define CFL_MODE                0 //(DISABLE_CFL)
 #define M1_DWN_SMPL             0
-
+#define M4_DEPTH                0
+#define M4_IT_SEARCH            0
+#define M5_CHROMA               0
+#define M5_DECOUPLE_FAST_LOOP   0
+#define M5_UNI_3x3              0
+#define M5_IF_BLK_SIZE          0
+#define M5_SPATIAL_SSE          0
+#define M5_SG                   0
+#define M5_TX_SEARCH            0
 
 #define M0_HME_ME_TUNING                1
 #define PREDICTIVE_ME                   1 // Perform ME search around MVP
