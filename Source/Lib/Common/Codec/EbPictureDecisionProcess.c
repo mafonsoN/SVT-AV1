@@ -1659,11 +1659,14 @@ EbErrorType signal_derivation_multi_processes_oq(
         // Set skip atb                          Settings
         // 0                                     OFF
         // 1                                     ON
+#if !SC_SKIP_ATB
+            picture_control_set_ptr->enable_skip_atb = 1;
+#else
         if (MR_MODE || picture_control_set_ptr->sc_content_detected)
             picture_control_set_ptr->enable_skip_atb = 0;
         else
             picture_control_set_ptr->enable_skip_atb = 1;
-
+#endif
 #endif
     return return_error;
 }

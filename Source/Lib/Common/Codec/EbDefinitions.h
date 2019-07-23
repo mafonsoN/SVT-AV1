@@ -37,12 +37,13 @@ extern "C" {
 
 #define SC_NSQ_TABLE    1
 #define SC_QPM          1
-#define SC_CDF          1 
+#define SC_CDF          1
 #define SC_PME          1
-#define SC_SUBPEL       1 
-
-#define SC_COMP_0       0
-#define SC_COMP_1       0
+#define SC_SUBPEL       1
+#define SC_COMP_0       1
+#define SC_COMP_1       1
+#define SC_SKIP_ATB     1
+#define SC_QPS          0
 
 
 #define M1_CAND                         0
