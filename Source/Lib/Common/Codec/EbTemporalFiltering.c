@@ -33,9 +33,42 @@
 #include "av1me.h"
 #include "EbTemporalFiltering_sse4.h"
 #include "EbObject.h"
+#include "EbPictureOperators.h"
 
 #undef _MM_HINT_T2
 #define _MM_HINT_T2  1
+
+// high bit depth packing and unpacking functions
+// TODO: identify what needs to be changed for the highbd support
+// everywhere where EbByte or uint8_t is used, there needs to be an option to use highbd
+// allocate 16bit buffers
+// pack 8 bit+2bit src buffers
+// generate filtered src
+// unpack
+// replace src buffers and save original src
+// misc: use variable called use_highbd (the same as libaom I believe)
+//
+//void pack2d_src(
+//        uint8_t  *in8_bit_buffer,
+//        uint32_t  in8_stride,
+//        uint8_t  *inn_bit_buffer,
+//        uint32_t  inn_stride,
+//        uint16_t *out16_bit_buffer,
+//        uint32_t  out_stride,
+//        uint32_t  width,
+//        uint32_t  height,
+//        EbAsm     asm_type);
+//
+//void un_pack2d(
+//        uint16_t *in16_bit_buffer,
+//        uint32_t  in_stride,
+//        uint8_t  *out8_bit_buffer,
+//        uint32_t  out8_stride,
+//        uint8_t  *outn_bit_buffer,
+//        uint32_t  outn_stride,
+//        uint32_t  width,
+//        uint32_t  height,
+//        EbAsm     asm_type);
 
 static unsigned int index_mult[14] = {
         0, 0, 0, 0, 49152, 39322, 32768, 28087, 24576, 21846, 19661, 17874, 0, 15124
@@ -145,6 +178,43 @@ void save_YUV_to_file(char *filename, EbByte buffer_y, EbByte buffer_u, EbByte b
     }
 }
 #endif
+
+// save YUV to file - auxiliary function for debug
+void save_YUV_to_file_highbd(char *filename, uint16_t* buffer_y, uint16_t* buffer_u, uint16_t* buffer_v,
+                      uint16_t width, uint16_t height,
+                      uint16_t stride_y, uint16_t stride_u, uint16_t stride_v,
+                      uint16_t origin_y, uint16_t origin_x){
+    FILE *fid = NULL;
+    uint16_t *pic_point;
+    int h;
+
+    // save current source picture to a YUV file
+    FOPEN(fid, filename, "wb");
+
+    if (!fid){
+        printf("Unable to open file %s to write.\n", "temp_picture.yuv");
+    }else{
+        // the source picture saved in the enchanced_picture_ptr contains a border in x and y dimensions
+        pic_point = buffer_y + (origin_y*stride_y) + origin_x;
+        for (h = 0; h < height; h++) {
+            fwrite(pic_point, 2, (size_t)width, fid);
+            pic_point = pic_point + stride_y;
+        }
+        pic_point = buffer_u + ((origin_y>>1)*stride_u) + (origin_x>>1);
+        for (h = 0; h < height>>1; h++) {
+            fwrite(pic_point, 2, (size_t)width>>1, fid);
+
+            pic_point = pic_point + stride_u;
+        }
+        pic_point = buffer_v + ((origin_y>>1)*stride_v) + (origin_x>>1);
+        for (h = 0; h < height>>1; h++) {
+            fwrite(pic_point, 2, (size_t)width>>1, fid);
+            pic_point = pic_point + stride_v;
+        }
+        fclose(fid);
+    }
+}
+
 // Copy block/picture of size width x height from src to dst
 void copy_pixels(EbByte dst, int stride_dst, EbByte src, int stride_src, int width, int height){
     int h;
@@ -1210,6 +1280,7 @@ void uni_motion_compensation(MeContext* context_ptr,
 }
 
 // Produce the filtered alt-ref picture
+// - core function
 static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **list_picture_control_set_ptr,
                                             EbPictureBufferDesc **list_input_picture_ptr,
                                             uint8_t altref_strength,
@@ -1544,6 +1615,15 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     return EB_ErrorNone;
 }
 
+// copy estimate noise highbd from libaom (double checking)
+static double estimate_noise_highbd(uint16_t src, uint16_t width, uint16_t height, uint16_t stride_y){
+    int64_t sum = 0;
+    int64_t num = 0;
+    return 0;
+
+    // TODO
+}
+
 // This is an adaptation of the mehtod in the following paper:
 // Shen-Chuan Tai, Shih-Ming Yang, "A fast method for image noise
 // estimation using Laplacian operator and adaptive edge detection,"
@@ -1608,6 +1688,8 @@ static void adjust_filter_params(EbPictureBufferDesc *input_picture_ptr,
                                 input_picture_ptr->width,
                                 input_picture_ptr->height,
                                 input_picture_ptr->stride_y);
+
+    // TODO: adjust filter parameters for 10 bit (I believe libaom is using different ones)
 
     // Adjust the strength of the temporal filtering
     // based on the amount of noise present in the frame
@@ -1744,7 +1826,48 @@ EbErrorType save_src_pic_buffers(PictureParentControlSet *picture_control_set_pt
 
 }
 
-void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
+static void pack_highbd_pic(EbPictureBufferDesc* pic_ptr_ref, uint16_t* buffer_16bit[3], int chroma_ss, EbAsm asm_type){
+
+    const uint32_t input_luma_offset = ((pic_ptr_ref->origin_y) * pic_ptr_ref->stride_y) + (pic_ptr_ref->origin_x);
+    const uint32_t inputBitIncLumaOffset = ((pic_ptr_ref->origin_y)      * pic_ptr_ref->stride_bit_inc_y) + (pic_ptr_ref->origin_x);
+    const uint32_t input_cb_offset = (((pic_ptr_ref->origin_y) >> 1) * pic_ptr_ref->stride_cb) + ((pic_ptr_ref->origin_x) >> 1);
+    const uint32_t inputBitIncCbOffset = (((pic_ptr_ref->origin_y) >> 1) * pic_ptr_ref->stride_bit_inc_cb) + ((pic_ptr_ref->origin_x) >> 1);
+    const uint32_t input_cr_offset = (((pic_ptr_ref->origin_y) >> 1) * pic_ptr_ref->stride_cr) + ((pic_ptr_ref->origin_x) >> 1);
+    const uint32_t inputBitIncCrOffset = (((pic_ptr_ref->origin_y) >> 1) * pic_ptr_ref->stride_bit_inc_cr) + ((pic_ptr_ref->origin_x) >> 1);
+
+
+    pack2d_src(pic_ptr_ref->buffer_y + input_luma_offset,
+               pic_ptr_ref->stride_y,
+               pic_ptr_ref->buffer_bit_inc_y + inputBitIncLumaOffset,
+               pic_ptr_ref->stride_bit_inc_y,
+               buffer_16bit[0],
+               pic_ptr_ref->stride_y,
+               pic_ptr_ref->width,
+               pic_ptr_ref->height,
+               asm_type);
+
+    pack2d_src(pic_ptr_ref->buffer_cb + input_cb_offset,
+               pic_ptr_ref->stride_cb,
+               pic_ptr_ref->buffer_bit_inc_cb + inputBitIncCbOffset,
+               pic_ptr_ref->stride_bit_inc_cb,
+               buffer_16bit[1],
+               pic_ptr_ref->stride_cb,
+               pic_ptr_ref->width >> chroma_ss,
+               pic_ptr_ref->height >> chroma_ss,
+               asm_type);
+
+    pack2d_src(pic_ptr_ref->buffer_cr + input_cr_offset,
+               pic_ptr_ref->stride_cr,
+               pic_ptr_ref->buffer_bit_inc_cr + inputBitIncCrOffset,
+               pic_ptr_ref->stride_bit_inc_cr,
+               buffer_16bit[2],
+               pic_ptr_ref->stride_cr,
+               pic_ptr_ref->width >> chroma_ss,
+               pic_ptr_ref->height >> chroma_ss,
+               asm_type);
+}
+
+int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
                                     PictureParentControlSet *picture_control_set_ptr_central,
                                     MotionEstimationContext_t *me_context_ptr,
                                     int32_t segment_index) {
@@ -1756,6 +1879,32 @@ void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_
     index_center = picture_control_set_ptr_central->past_altref_nframes;
     // source central frame picture buffer
     input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
+
+    // TODO
+    EbBool use_highbd = EB_TRUE;
+    // use_highbd = seq info from sequence control set
+
+    // TODO: test saving the 10 bit input buffer after packing (sanity check)
+    uint16_t *buffer_16bit[3];
+    uint8_t chroma_ss = 1;
+    EbAsm asm_type = picture_control_set_ptr_central->sequence_control_set_ptr->encode_context_ptr->asm_type;
+    EbPictureBufferDesc *pic_center = picture_control_set_ptr_central->enhanced_picture_ptr;
+
+    // allocate 16 bit buffer for all channels
+    if (use_highbd) {
+        EB_MALLOC_ARRAY(buffer_16bit[0], (pic_center->stride_y * (pic_center->height)));
+        EB_MALLOC_ARRAY(buffer_16bit[1], (pic_center->stride_cb * (pic_center->height >> chroma_ss)));
+        EB_MALLOC_ARRAY(buffer_16bit[2], (pic_center->stride_cr * (pic_center->height >> chroma_ss)));
+    }
+
+    pack_highbd_pic(pic_center, buffer_16bit, chroma_ss, asm_type);
+
+    save_YUV_to_file_highbd("frame_768x432_10bit.yuv", buffer_16bit[0], buffer_16bit[1], buffer_16bit[2],
+                            pic_center->width, pic_center->height,
+                            pic_center->stride_bit_inc_y, pic_center->stride_bit_inc_cb, pic_center->stride_bit_inc_cr,
+                            0, 0);
+
+    // ------- high bit depth test
 
     //only one performs any picture based prep
     eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
@@ -1770,19 +1919,30 @@ void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_
         for (int i = 0 ; i < (picture_control_set_ptr_central->past_altref_nframes + picture_control_set_ptr_central->future_altref_nframes + 1); i++) {
             EbPictureBufferDesc *pic_ptr_ref = list_picture_control_set_ptr[i]->enhanced_picture_ptr;
 
-            generate_padding(pic_ptr_ref->buffer_cb,
-                pic_ptr_ref->stride_cb,
-                pic_ptr_ref->width >> 1,
-                pic_ptr_ref->height >> 1,
-                pic_ptr_ref->origin_x >> 1,
-                pic_ptr_ref->origin_y >> 1);
+            if(use_highbd){
 
-            generate_padding(pic_ptr_ref->buffer_cr,
-                pic_ptr_ref->stride_cr,
-                pic_ptr_ref->width >> 1,
-                pic_ptr_ref->height >> 1,
-                pic_ptr_ref->origin_x >> 1,
-                pic_ptr_ref->origin_y >> 1);
+                // TODO:
+                //generate_padding16_bit()
+
+            }else{
+
+                generate_padding(pic_ptr_ref->buffer_cb,
+                                 pic_ptr_ref->stride_cb,
+                                 pic_ptr_ref->width >> 1,
+                                 pic_ptr_ref->height >> 1,
+                                 pic_ptr_ref->origin_x >> 1,
+                                 pic_ptr_ref->origin_y >> 1);
+
+                generate_padding(pic_ptr_ref->buffer_cr,
+                                 pic_ptr_ref->stride_cr,
+                                 pic_ptr_ref->width >> 1,
+                                 pic_ptr_ref->height >> 1,
+                                 pic_ptr_ref->origin_x >> 1,
+                                 pic_ptr_ref->origin_y >> 1);
+
+            }
+
+
         }
 
         picture_control_set_ptr_central->temporal_filtering_on = EB_TRUE; // set temporal filtering flag ON for current picture
@@ -1817,6 +1977,7 @@ void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_
     picture_control_set_ptr_central->filtered_sse += filtered_sse;
     picture_control_set_ptr_central->filtered_sse_uv += filtered_sse_uv;
     if (picture_control_set_ptr_central->temp_filt_seg_acc == picture_control_set_ptr_central->tf_segments_total_count){
+        // TODO: add pad and decimate for highbd
         pad_and_decimate_filtered_pic(picture_control_set_ptr_central);
         // Normalize the filtered SSE. Add 8 bit precision.
         picture_control_set_ptr_central->filtered_sse = (picture_control_set_ptr_central->filtered_sse << 8) / input_picture_ptr->width / input_picture_ptr->height;
@@ -1846,5 +2007,10 @@ void init_temporal_filtering(PictureParentControlSet **list_picture_control_set_
     }
 
     eb_release_mutex(picture_control_set_ptr_central->temp_filt_mutex);
+
+    // TODO: do a proper error return
+    int return_value = 0;
+    return return_value;
+
 }
 
