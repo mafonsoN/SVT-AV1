@@ -1005,8 +1005,6 @@ void tf_inter_prediction(
                     local_origin_y,
                     1,//perform_chroma,
                     asm_type);
-
-
             }
         }
     }
@@ -1325,24 +1323,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     }
 #endif
 
-#if !AV1_MC
-    // initialize chroma interpolated buffers and auxiliary buffers
-    uint8_t *pos_b_buffer_ch[2];
-    uint8_t *pos_h_buffer_ch[2];
-    uint8_t *pos_j_buffer_ch[2];
-    uint8_t *one_d_intermediate_results_buf_ch[2];
-
-    pos_b_buffer_ch[0] = (uint8_t *)malloc(sizeof(uint8_t) * MAX_SEARCH_AREA_WIDTH_CH * MAX_SEARCH_AREA_HEIGHT_CH);
-    pos_h_buffer_ch[0] = (uint8_t *)malloc(sizeof(uint8_t) * MAX_SEARCH_AREA_WIDTH_CH * MAX_SEARCH_AREA_HEIGHT_CH);
-    pos_j_buffer_ch[0] = (uint8_t *)malloc(sizeof(uint8_t) * MAX_SEARCH_AREA_WIDTH_CH * MAX_SEARCH_AREA_HEIGHT_CH);
-    pos_b_buffer_ch[1] = (uint8_t *)malloc(sizeof(uint8_t) * MAX_SEARCH_AREA_WIDTH_CH * MAX_SEARCH_AREA_HEIGHT_CH);
-    pos_h_buffer_ch[1] = (uint8_t *)malloc(sizeof(uint8_t) * MAX_SEARCH_AREA_WIDTH_CH * MAX_SEARCH_AREA_HEIGHT_CH);
-    pos_j_buffer_ch[1] = (uint8_t *)malloc(sizeof(uint8_t) * MAX_SEARCH_AREA_WIDTH_CH * MAX_SEARCH_AREA_HEIGHT_CH);
-
-    one_d_intermediate_results_buf_ch[0] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
-    one_d_intermediate_results_buf_ch[1] = (uint8_t *)malloc(sizeof(uint8_t)*(BLOCK_SIZE_64>>1)*(BLOCK_SIZE_64>>1));
-#endif
-
     MeContext *context_ptr = me_context_ptr->me_context_ptr;
 
     uint32_t  x_seg_idx;
@@ -1354,8 +1334,10 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     uint32_t x_b64_end_idx   = SEGMENT_END_IDX  (x_seg_idx, picture_width_in_b64,  picture_control_set_ptr_central->tf_segments_column_count);
     uint32_t y_b64_start_idx = SEGMENT_START_IDX(y_seg_idx, picture_height_in_b64, picture_control_set_ptr_central->tf_segments_row_count);
     uint32_t y_b64_end_idx   = SEGMENT_END_IDX  (y_seg_idx, picture_height_in_b64, picture_control_set_ptr_central->tf_segments_row_count);
+
     *filtered_sse       = 0;
     *filtered_sse_uv    = 0;
+
     for (blk_row = y_b64_start_idx; blk_row < y_b64_end_idx; blk_row++) {
         for (blk_col = x_b64_start_idx; blk_col < x_b64_end_idx; blk_col++) {
             blk_y_offset      = (blk_col * BW) + (blk_row * BH) * stride[C_Y];
@@ -1377,6 +1359,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
             // for every frame to filter
             for (frame_index = 0; frame_index < (picture_control_set_ptr_central->past_altref_nframes + picture_control_set_ptr_central->future_altref_nframes + 1); frame_index++) {
+
                 // first position of the frame buffer according to frame index
                 src_frame_index[C_Y] = list_input_picture_ptr[frame_index]->buffer_y +
                         list_input_picture_ptr[frame_index]->origin_y*list_input_picture_ptr[frame_index]->stride_y +
@@ -1445,7 +1428,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                     populate_list_with_value(use_16x16_subblocks,N_32X32_BLOCKS,1);
 
                     // Perform MC using the information acquired using the ME step
-#if AV1_MC
                     tf_inter_prediction(
                         picture_control_set_ptr_central,
                         context_ptr,
@@ -1458,19 +1440,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                         (uint32_t)blk_row*BH,
                         use_16x16_subblocks,
                         asm_type);
-#else
-                    uni_motion_compensation(context_ptr,
-                                        list_input_picture_ptr[frame_index],
-                                        pred,
-                                        (uint32_t)blk_col*BW,
-                                        (uint32_t)blk_row*BH,
-                                        pos_b_buffer_ch,
-                                        pos_h_buffer_ch,
-                                        pos_j_buffer_ch,
-                                        one_d_intermediate_results_buf_ch,
-                                        use_16x16_subblocks,
-                                        asm_type);
-#endif
 
                     // Retrieve distortion (variance) on 32x32 and 16x16 sub-blocks
                     get_ME_distortion(me_32x32_subblock_vf,
@@ -1599,30 +1568,17 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
 #endif
 
-#if !AV1_MC
-    free(pos_b_buffer_ch[0]);
-    free(pos_h_buffer_ch[0]);
-    free(pos_j_buffer_ch[0]);
-
-    free(pos_b_buffer_ch[1]);
-    free(pos_h_buffer_ch[1]);
-    free(pos_j_buffer_ch[1]); //TODO: to fix this
-
-    free(one_d_intermediate_results_buf_ch[0]);
-    free(one_d_intermediate_results_buf_ch[1]);
-#endif
-
     return EB_ErrorNone;
 }
 
 // copy estimate noise highbd from libaom (double checking)
-static double estimate_noise_highbd(uint16_t src, uint16_t width, uint16_t height, uint16_t stride_y){
-    int64_t sum = 0;
-    int64_t num = 0;
-    return 0;
-
-    // TODO
-}
+//static double estimate_noise_highbd(uint16_t src, uint16_t width, uint16_t height, uint16_t stride_y){
+//    int64_t sum = 0;
+//    int64_t num = 0;
+//    return 0;
+//
+//    // TODO
+//}
 
 // This is an adaptation of the mehtod in the following paper:
 // Shen-Chuan Tai, Shih-Ming Yang, "A fast method for image noise
@@ -1874,14 +1830,17 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
     uint8_t *altref_strength_ptr, index_center;
     EbPictureBufferDesc *input_picture_ptr;
     uint8_t *alt_ref_buffer[COLOR_CHANNELS];
+
     altref_strength_ptr = &(picture_control_set_ptr_central->altref_strength);
+
     // index of the central source frame
     index_center = picture_control_set_ptr_central->past_altref_nframes;
+
     // source central frame picture buffer
     input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
 
     // TODO
-    EbBool use_highbd = EB_TRUE;
+    EbBool use_highbd = EB_FALSE;
     // use_highbd = seq info from sequence control set
 
     // TODO: test saving the 10 bit input buffer after packing (sanity check)
@@ -1895,16 +1854,16 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
         EB_MALLOC_ARRAY(buffer_16bit[0], (pic_center->stride_y * (pic_center->height)));
         EB_MALLOC_ARRAY(buffer_16bit[1], (pic_center->stride_cb * (pic_center->height >> chroma_ss)));
         EB_MALLOC_ARRAY(buffer_16bit[2], (pic_center->stride_cr * (pic_center->height >> chroma_ss)));
+
+        // ------- high bit depth test
+
+        pack_highbd_pic(pic_center, buffer_16bit, chroma_ss, asm_type);
+
+        save_YUV_to_file_highbd("frame_768x432_10bit.yuv", buffer_16bit[0], buffer_16bit[1], buffer_16bit[2],
+                                pic_center->width, pic_center->height,
+                                pic_center->stride_bit_inc_y, pic_center->stride_bit_inc_cb, pic_center->stride_bit_inc_cr,
+                                0, 0);
     }
-
-    pack_highbd_pic(pic_center, buffer_16bit, chroma_ss, asm_type);
-
-    save_YUV_to_file_highbd("frame_768x432_10bit.yuv", buffer_16bit[0], buffer_16bit[1], buffer_16bit[2],
-                            pic_center->width, pic_center->height,
-                            pic_center->stride_bit_inc_y, pic_center->stride_bit_inc_cb, pic_center->stride_bit_inc_cr,
-                            0, 0);
-
-    // ------- high bit depth test
 
     //only one performs any picture based prep
     eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
@@ -1970,18 +1929,25 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
     alt_ref_buffer[C_V] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_cr +
                           picture_control_set_ptr_central->enhanced_picture_ptr->origin_x / 2 +
                           (picture_control_set_ptr_central->enhanced_picture_ptr->origin_y / 2)*picture_control_set_ptr_central->enhanced_picture_ptr->stride_cr;
+
     uint64_t filtered_sse, filtered_sse_uv;
+
     produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, *altref_strength_ptr, index_center, alt_ref_buffer, &filtered_sse, &filtered_sse_uv, (MotionEstimationContext_t *)me_context_ptr, segment_index);
+
     eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
     picture_control_set_ptr_central->temp_filt_seg_acc++;
+
     picture_control_set_ptr_central->filtered_sse += filtered_sse;
     picture_control_set_ptr_central->filtered_sse_uv += filtered_sse_uv;
+
     if (picture_control_set_ptr_central->temp_filt_seg_acc == picture_control_set_ptr_central->tf_segments_total_count){
         // TODO: add pad and decimate for highbd
         pad_and_decimate_filtered_pic(picture_control_set_ptr_central);
+
         // Normalize the filtered SSE. Add 8 bit precision.
         picture_control_set_ptr_central->filtered_sse = (picture_control_set_ptr_central->filtered_sse << 8) / input_picture_ptr->width / input_picture_ptr->height;
         picture_control_set_ptr_central->filtered_sse_uv = ((picture_control_set_ptr_central->filtered_sse_uv << 8) / (input_picture_ptr->width / 2) / (input_picture_ptr->height / 2)) / 2;
+
 #if DEBUG_TF
     {
         char filename[50] = "filtered_frame_svtav1_";
