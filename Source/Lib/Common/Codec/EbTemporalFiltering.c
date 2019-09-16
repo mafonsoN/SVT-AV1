@@ -850,6 +850,7 @@ EbErrorType av1_inter_prediction(
 
 uint32_t get_mds_idx(uint32_t  orgx, uint32_t  orgy, uint32_t  size, uint32_t use_128x128);
 
+// TODO: if highbd, use av1_inter_prediction_hbd() instead. Check if anything else needs to be changed.
 void tf_inter_prediction(
     PictureParentControlSet   *picture_control_set_ptr,
     MeContext* context_ptr,
@@ -1571,15 +1572,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     return EB_ErrorNone;
 }
 
-// copy estimate noise highbd from libaom (double checking)
-//static double estimate_noise_highbd(uint16_t src, uint16_t width, uint16_t height, uint16_t stride_y){
-//    int64_t sum = 0;
-//    int64_t num = 0;
-//    return 0;
-//
-//    // TODO
-//}
-
 // This is an adaptation of the mehtod in the following paper:
 // Shen-Chuan Tai, Shih-Ming Yang, "A fast method for image noise
 // estimation using Laplacian operator and adaptive edge detection,"
@@ -1589,7 +1581,9 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 // function from libaom
 // Standard bit depht input (=8 bits) to estimate the noise, I don't think there needs to be two methods for this
 // Operates on the Y component only
-static double estimate_noise(EbByte src, uint16_t width, uint16_t height,
+static double estimate_noise(const EbByte src,
+                             uint16_t width,
+                             uint16_t height,
                              uint16_t stride_y) {
     int64_t sum = 0;
     int64_t num = 0;
@@ -1626,39 +1620,63 @@ static double estimate_noise(EbByte src, uint16_t width, uint16_t height,
     return sigma;
 }
 
-// Apply buffer limits and context specific adjustments to arnr filter.
-static void adjust_filter_params(EbPictureBufferDesc *input_picture_ptr,
-                                 uint8_t *altref_strength) {
+// Noise estimation for highbd
+double estimate_noise_highbd(const uint16_t *src,
+                             int width,
+                             int height,
+                             int stride,
+                             int bd) {
+    int64_t sum = 0;
+    int64_t num = 0;
 
-    EbByte src;
-    double noiselevel;
+    for (int i = 1; i < height - 1; ++i) {
+        for (int j = 1; j < width - 1; ++j) {
+            const int k = i * stride + j;
+            // Sobel gradients
+            const int Gx = (src[k - stride - 1] - src[k - stride + 1]) +
+                           (src[k + stride - 1] - src[k + stride + 1]) +
+                           2 * (src[k - 1] - src[k + 1]);
+            const int Gy = (src[k - stride - 1] - src[k + stride - 1]) +
+                           (src[k - stride + 1] - src[k + stride + 1]) +
+                           2 * (src[k - stride] - src[k + stride]);
+            const int Ga = ROUND_POWER_OF_TWO(abs(Gx) + abs(Gy), bd - 8); // divide by 2^2 and round up
+            if (Ga < EDGE_THRESHOLD) {  // Do not consider edge pixels to estimate the noise
+                // Find Laplacian
+                const int v =
+                        4 * src[k] -
+                        2 * (src[k - 1] + src[k + 1] + src[k - stride] + src[k + stride]) +
+                        (src[k - stride - 1] + src[k - stride + 1] + src[k + stride - 1] +
+                         src[k + stride + 1]);
+                sum += ROUND_POWER_OF_TWO(abs(v), bd - 8);
+                ++num;
+            }
+        }
+    }
+    // If very few smooth pels, return -1 since the estimate is unreliable
+    if (num < SMOOTH_THRESHOLD) return -1.0;
+
+    const double sigma = (double)sum / (6 * num) * SQRT_PI_BY_2;
+    return sigma;
+}
+
+// Adjust filtering parameters: strength and nframes
+static void adjust_filter_strength(double noise_level,
+                                   uint8_t *altref_strength) {
+
     int strength = *altref_strength, adj_strength=strength;
-
-    // adjust the starting point of buffer_y of the starting pixel values of the source picture
-    src = input_picture_ptr->buffer_y +
-            input_picture_ptr->origin_y*input_picture_ptr->stride_y +
-            input_picture_ptr->origin_x;
-
-    // Adjust the strength based on the noise level
-    noiselevel = estimate_noise(src,
-                                input_picture_ptr->width,
-                                input_picture_ptr->height,
-                                input_picture_ptr->stride_y);
-
-    // TODO: adjust filter parameters for 10 bit (I believe libaom is using different ones)
 
     // Adjust the strength of the temporal filtering
     // based on the amount of noise present in the frame
     // adjustment in the integer range [-2, 1]
     // if noiselevel < 0, it means that the estimation was
     // unsuccessful and therefore keep the strength as it was set
-    if (noiselevel > 0) {
+    if (noise_level > 0) {
         int noiselevel_adj;
-        if (noiselevel < 0.75)
+        if (noise_level < 0.75)
             noiselevel_adj = -2;
-        else if (noiselevel < 1.75)
+        else if (noise_level < 1.75)
             noiselevel_adj = -1;
-        else if (noiselevel < 4.0)
+        else if (noise_level < 4.0)
             noiselevel_adj = 0;
         else
             noiselevel_adj = 1;
@@ -1828,7 +1846,7 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
                                     MotionEstimationContext_t *me_context_ptr,
                                     int32_t segment_index) {
     uint8_t *altref_strength_ptr, index_center;
-    EbPictureBufferDesc *input_picture_ptr;
+    EbPictureBufferDesc *central_picture_ptr;
     uint8_t *alt_ref_buffer[COLOR_CHANNELS];
 
     altref_strength_ptr = &(picture_control_set_ptr_central->altref_strength);
@@ -1837,33 +1855,11 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
     index_center = picture_control_set_ptr_central->past_altref_nframes;
 
     // source central frame picture buffer
-    input_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
+    central_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
 
-    // TODO
-    EbBool use_highbd = EB_FALSE;
-    // use_highbd = seq info from sequence control set
-
-    // TODO: test saving the 10 bit input buffer after packing (sanity check)
-    uint16_t *buffer_16bit[3];
-    uint8_t chroma_ss = 1;
-    EbAsm asm_type = picture_control_set_ptr_central->sequence_control_set_ptr->encode_context_ptr->asm_type;
-    EbPictureBufferDesc *pic_center = picture_control_set_ptr_central->enhanced_picture_ptr;
-
-    // allocate 16 bit buffer for all channels
-    if (use_highbd) {
-        EB_MALLOC_ARRAY(buffer_16bit[0], (pic_center->stride_y * (pic_center->height)));
-        EB_MALLOC_ARRAY(buffer_16bit[1], (pic_center->stride_cb * (pic_center->height >> chroma_ss)));
-        EB_MALLOC_ARRAY(buffer_16bit[2], (pic_center->stride_cr * (pic_center->height >> chroma_ss)));
-
-        // ------- high bit depth test
-
-        pack_highbd_pic(pic_center, buffer_16bit, chroma_ss, asm_type);
-
-        save_YUV_to_file_highbd("frame_768x432_10bit.yuv", buffer_16bit[0], buffer_16bit[1], buffer_16bit[2],
-                                pic_center->width, pic_center->height,
-                                pic_center->stride_bit_inc_y, pic_center->stride_bit_inc_cb, pic_center->stride_bit_inc_cr,
-                                0, 0);
-    }
+    // TODO get encoder bit depth
+    uint32_t encoder_bit_depth = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.encoder_bit_depth;
+    EbBool is_highbd = (encoder_bit_depth == 8) ? EB_FALSE : EB_TRUE;
 
     //only one performs any picture based prep
     eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
@@ -1871,14 +1867,52 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
 
         picture_control_set_ptr_central->temp_filt_prep_done = 1;
 
+        // allocate 16 bit buffer
+        uint16_t *buffer_16bit[3];
+        uint8_t chroma_ss = 1;
+        EbAsm asm_type = picture_control_set_ptr_central->sequence_control_set_ptr->encode_context_ptr->asm_type;
+
+        if (is_highbd) {
+            EB_MALLOC_ARRAY(buffer_16bit[0], (central_picture_ptr->stride_y * (central_picture_ptr->height)));
+            EB_MALLOC_ARRAY(buffer_16bit[1], (central_picture_ptr->stride_cb * (central_picture_ptr->height >> chroma_ss)));
+            EB_MALLOC_ARRAY(buffer_16bit[2], (central_picture_ptr->stride_cr * (central_picture_ptr->height >> chroma_ss)));
+
+            // ------- high bit depth test
+
+            // pack byte buffers to 16 bit buffer
+            pack_highbd_pic(central_picture_ptr, buffer_16bit, chroma_ss, asm_type);
+
+            save_YUV_to_file_highbd("frame_768x432_10bit.yuv", buffer_16bit[0], buffer_16bit[1], buffer_16bit[2],
+                                    central_picture_ptr->width, central_picture_ptr->height,
+                                    central_picture_ptr->stride_bit_inc_y, central_picture_ptr->stride_bit_inc_cb, central_picture_ptr->stride_bit_inc_cr,
+                                    0, 0);
+        }
+
+        // Estimate source noise level
+        double noise_level;
+        if(is_highbd){
+            noise_level = estimate_noise_highbd(buffer_16bit[0], // Y only
+                                                central_picture_ptr->width,
+                                                central_picture_ptr->height,
+                                                central_picture_ptr->stride_y,
+                                                encoder_bit_depth);
+        }
+        else{
+            EbByte buffer_y = central_picture_ptr->buffer_y + central_picture_ptr->origin_y*central_picture_ptr->stride_y + central_picture_ptr->origin_x;
+            noise_level = estimate_noise(buffer_y, // Y only
+                                         central_picture_ptr->width,
+                                         central_picture_ptr->height,
+                                         central_picture_ptr->stride_y);
+        }
+
         // adjust filter parameter based on the estimated noise of the picture
-        adjust_filter_params(input_picture_ptr, altref_strength_ptr);
+        adjust_filter_strength(noise_level, altref_strength_ptr);
 
         // Pad chroma reference samples - once only per picture
         for (int i = 0 ; i < (picture_control_set_ptr_central->past_altref_nframes + picture_control_set_ptr_central->future_altref_nframes + 1); i++) {
             EbPictureBufferDesc *pic_ptr_ref = list_picture_control_set_ptr[i]->enhanced_picture_ptr;
 
-            if(use_highbd){
+            if(is_highbd){
 
                 // TODO:
                 //generate_padding16_bit()
@@ -1900,7 +1934,6 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
                                  pic_ptr_ref->origin_y >> 1);
 
             }
-
 
         }
 
@@ -1945,8 +1978,8 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
         pad_and_decimate_filtered_pic(picture_control_set_ptr_central);
 
         // Normalize the filtered SSE. Add 8 bit precision.
-        picture_control_set_ptr_central->filtered_sse = (picture_control_set_ptr_central->filtered_sse << 8) / input_picture_ptr->width / input_picture_ptr->height;
-        picture_control_set_ptr_central->filtered_sse_uv = ((picture_control_set_ptr_central->filtered_sse_uv << 8) / (input_picture_ptr->width / 2) / (input_picture_ptr->height / 2)) / 2;
+        picture_control_set_ptr_central->filtered_sse = (picture_control_set_ptr_central->filtered_sse << 8) / central_picture_ptr->width / central_picture_ptr->height;
+        picture_control_set_ptr_central->filtered_sse_uv = ((picture_control_set_ptr_central->filtered_sse_uv << 8) / (central_picture_ptr->width / 2) / (central_picture_ptr->height / 2)) / 2;
 
 #if DEBUG_TF
     {
