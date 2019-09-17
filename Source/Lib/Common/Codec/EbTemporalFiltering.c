@@ -1384,7 +1384,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                             EbPictureBufferDesc **list_input_picture_ptr,
                                             uint8_t altref_strength,
                                             uint8_t index_center,
-                                            uint8_t **alt_ref_buffer,
                                             uint64_t *filtered_sse,
                                             uint64_t *filtered_sse_uv,
                                             MotionEstimationContext_t *me_context_ptr,
@@ -1398,16 +1397,15 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     uint32_t *accum[COLOR_CHANNELS] = { accumulator, accumulator + BLK_PELS, accumulator + (BLK_PELS<<1) };
     uint16_t *count[COLOR_CHANNELS] = { counter, counter + BLK_PELS, counter + (BLK_PELS<<1) };
     EbByte pred[COLOR_CHANNELS] = { predictor, predictor + BLK_PELS, predictor + (BLK_PELS<<1) };
-    uint16_t* pred_16bit[COLOR_CHANNELS] = { predictor_16bit, predictor_16bit + BLK_PELS, predictor_16bit + (BLK_PELS<<1) };
     uint16_t* src_16bit[COLOR_CHANNELS] = { source_16bit, source_16bit + BLK_PELS, source_16bit + (BLK_PELS<<1) };
+    uint16_t* pred_16bit[COLOR_CHANNELS] = { predictor_16bit, predictor_16bit + BLK_PELS, predictor_16bit + (BLK_PELS<<1) };
     uint32_t blk_row, blk_col;
     int stride_pred[COLOR_CHANNELS] = {BW, BW_CH, BW_CH};
     uint16_t blk_width_ch = BW_CH;
     uint16_t blk_height_ch = BH_CH;
-    int blk_y_offset = 0, blk_y_src_offset = 0, blk_ch_offset = 0, blk_ch_src_offset = 0;
-    EbByte src_altref_index_start[COLOR_CHANNELS], src_altref_index[COLOR_CHANNELS];
-    uint16_t* src_frame_index_16bit[COLOR_CHANNELS], src_altref_index_16bit[COLOR_CHANNELS];
-    EbBool is_highbd = EB_FALSE; // TODO
+    int blk_y_src_offset = 0, blk_ch_src_offset = 0;
+    EbByte src_center_ptr_start[COLOR_CHANNELS], src_altref_index[COLOR_CHANNELS];
+    uint16_t* src_center_inc_ptr_start[COLOR_CHANNELS], src_altref_index_16bit[COLOR_CHANNELS];
     int i, j, k;
 
     PictureParentControlSet *picture_control_set_ptr_central;
@@ -1415,6 +1413,9 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     picture_control_set_ptr_central = list_picture_control_set_ptr[index_center];
     input_picture_ptr_central = list_input_picture_ptr[index_center];
     EbAsm asm_type = picture_control_set_ptr_central->sequence_control_set_ptr->encode_context_ptr->asm_type;
+
+    int encoder_bit_depth = (int)picture_control_set_ptr_central->sequence_control_set_ptr->static_config.encoder_bit_depth;
+    EbBool is_highbd = (encoder_bit_depth == 8) ? EB_FALSE : EB_TRUE;
 
     uint32_t blk_cols = (uint32_t)(input_picture_ptr_central->width + BW - 1) / BW; // I think only the part of the picture
     uint32_t blk_rows = (uint32_t)(input_picture_ptr_central->height + BH - 1) / BH; // that fits to the 32x32 blocks are actually filtered
@@ -1443,15 +1444,15 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     uint32_t y_b64_end_idx   = SEGMENT_END_IDX  (y_seg_idx, picture_height_in_b64, picture_control_set_ptr_central->tf_segments_row_count);
 
     // first position of the frame buffer according to the index center
-    src_altref_index_start[C_Y] = list_input_picture_ptr[index_center]->buffer_y +
+    src_center_ptr_start[C_Y] = list_input_picture_ptr[index_center]->buffer_y +
                             list_input_picture_ptr[index_center]->origin_y*list_input_picture_ptr[index_center]->stride_y +
                             list_input_picture_ptr[index_center]->origin_x;
 
-    src_altref_index_start[C_U] = list_input_picture_ptr[index_center]->buffer_cb +
+    src_center_ptr_start[C_U] = list_input_picture_ptr[index_center]->buffer_cb +
                             (list_input_picture_ptr[index_center]->origin_y>>1)*list_input_picture_ptr[index_center]->stride_cb +
                             (list_input_picture_ptr[index_center]->origin_x>>1);
 
-    src_altref_index_start[C_V] = list_input_picture_ptr[index_center]->buffer_cr +
+    src_center_ptr_start[C_V] = list_input_picture_ptr[index_center]->buffer_cr +
                             (list_input_picture_ptr[index_center]->origin_y>>1)*list_input_picture_ptr[index_center]->stride_cr +
                             (list_input_picture_ptr[index_center]->origin_x>>1);
 
@@ -1478,9 +1479,9 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
             // for every frame to filter
             for (frame_index = 0; frame_index < (picture_control_set_ptr_central->past_altref_nframes + picture_control_set_ptr_central->future_altref_nframes + 1); frame_index++) {
 
-                src_altref_index[C_Y] = src_altref_index_start[C_Y] + blk_y_src_offset;
-                src_altref_index[C_U] = src_altref_index_start[C_U] + blk_ch_src_offset;
-                src_altref_index[C_V] = src_altref_index_start[C_V] + blk_ch_src_offset;
+                src_altref_index[C_Y] = src_center_ptr_start[C_Y] + blk_y_src_offset;
+                src_altref_index[C_U] = src_center_ptr_start[C_U] + blk_ch_src_offset;
+                src_altref_index[C_V] = src_center_ptr_start[C_V] + blk_ch_src_offset;
 
                 // ------------
                 // Step 1: motion estimation + compensation
@@ -1611,8 +1612,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
             int byte = blk_y_src_offset;
             for (i = 0, k = 0; i < BH; i++) {
                 for (j = 0; j < BW; j++, k++) {
-                    (*filtered_sse) += (uint64_t)((int32_t)alt_ref_buffer[C_Y][byte] - (int32_t)OD_DIVU(accum[C_Y][k] + (count[C_Y][k] >> 1), count[C_Y][k]))* ((int32_t)alt_ref_buffer[C_Y][byte] - (int32_t)OD_DIVU(accum[C_Y][k] + (count[C_Y][k] >> 1), count[C_Y][k]));
-                    alt_ref_buffer[C_Y][byte] = (uint8_t)OD_DIVU(accum[C_Y][k] + (count[C_Y][k] >> 1), count[C_Y][k]);
+                    (*filtered_sse) += (uint64_t)((int32_t)src_center_ptr_start[C_Y][byte] - (int32_t)OD_DIVU(accum[C_Y][k] + (count[C_Y][k] >> 1), count[C_Y][k]))* ((int32_t)src_center_ptr_start[C_Y][byte] - (int32_t)OD_DIVU(accum[C_Y][k] + (count[C_Y][k] >> 1), count[C_Y][k]));
+                    src_center_ptr_start[C_Y][byte] = (uint8_t)OD_DIVU(accum[C_Y][k] + (count[C_Y][k] >> 1), count[C_Y][k]);
                     byte++;
                 }
                 byte += stride[C_Y] - BW;
@@ -1621,10 +1622,10 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
             byte = blk_ch_src_offset;
             for (i = 0, k = 0; i < blk_height_ch; i++) {
                 for (j = 0; j < blk_width_ch; j++, k++) {
-                    (*filtered_sse_uv) += (uint64_t)((int32_t)alt_ref_buffer[C_U][byte] - (int32_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]))* ((int32_t)alt_ref_buffer[C_U][byte] - (int32_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]));
-                    (*filtered_sse_uv) += (uint64_t)((int32_t)alt_ref_buffer[C_V][byte] - (int32_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]))* ((int32_t)alt_ref_buffer[C_V][byte] - (int32_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]));
-                    alt_ref_buffer[C_U][byte] = (uint8_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]);
-                    alt_ref_buffer[C_V][byte] = (uint8_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]);
+                    (*filtered_sse_uv) += (uint64_t)((int32_t)src_center_ptr_start[C_U][byte] - (int32_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]))* ((int32_t)src_center_ptr_start[C_U][byte] - (int32_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]));
+                    (*filtered_sse_uv) += (uint64_t)((int32_t)src_center_ptr_start[C_V][byte] - (int32_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]))* ((int32_t)src_center_ptr_start[C_V][byte] - (int32_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]));
+                    src_center_ptr_start[C_U][byte] = (uint8_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]);
+                    src_center_ptr_start[C_V][byte] = (uint8_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]);
                     byte++;
                 }
                 byte += stride[C_U] - (BW_CH);
@@ -1898,7 +1899,6 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
                                     int32_t segment_index) {
     uint8_t *altref_strength_ptr, index_center;
     EbPictureBufferDesc *central_picture_ptr;
-    uint8_t *alt_ref_buffer[COLOR_CHANNELS];
 
     altref_strength_ptr = &(picture_control_set_ptr_central->altref_strength);
 
@@ -2036,19 +2036,9 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
     for (int i = 0; i < (picture_control_set_ptr_central->past_altref_nframes + picture_control_set_ptr_central->future_altref_nframes + 1); i++)
         list_input_picture_ptr[i] = list_picture_control_set_ptr[i]->enhanced_picture_ptr;
 
-    alt_ref_buffer[C_Y] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y +
-                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_x +
-                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_y*picture_control_set_ptr_central->enhanced_picture_ptr->stride_y;
-    alt_ref_buffer[C_U] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_cb +
-                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_x / 2 +
-                          (picture_control_set_ptr_central->enhanced_picture_ptr->origin_y / 2)*picture_control_set_ptr_central->enhanced_picture_ptr->stride_cb;
-    alt_ref_buffer[C_V] = picture_control_set_ptr_central->enhanced_picture_ptr->buffer_cr +
-                          picture_control_set_ptr_central->enhanced_picture_ptr->origin_x / 2 +
-                          (picture_control_set_ptr_central->enhanced_picture_ptr->origin_y / 2)*picture_control_set_ptr_central->enhanced_picture_ptr->stride_cr;
-
     uint64_t filtered_sse, filtered_sse_uv;
 
-    produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, *altref_strength_ptr, index_center, alt_ref_buffer, &filtered_sse, &filtered_sse_uv, (MotionEstimationContext_t *)me_context_ptr, segment_index);
+    produce_temporally_filtered_pic(list_picture_control_set_ptr, list_input_picture_ptr, *altref_strength_ptr, index_center, &filtered_sse, &filtered_sse_uv, (MotionEstimationContext_t *)me_context_ptr, segment_index);
 
     eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
     picture_control_set_ptr_central->temp_filt_seg_acc++;
