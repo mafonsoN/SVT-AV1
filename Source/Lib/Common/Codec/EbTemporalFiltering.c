@@ -1800,15 +1800,28 @@ EbErrorType save_src_pic_buffers(PictureParentControlSet *picture_control_set_pt
 
 }
 
-static void pack_highbd_pic(EbPictureBufferDesc* pic_ptr_ref, uint16_t* buffer_16bit[3], int chroma_ss, EbAsm asm_type){
+static void pack_highbd_pic(EbPictureBufferDesc* pic_ptr_ref, uint16_t* buffer_16bit[3], int chroma_ss, EbBool include_padding, EbAsm asm_type){
 
-    const uint32_t input_luma_offset = ((pic_ptr_ref->origin_y) * pic_ptr_ref->stride_y) + (pic_ptr_ref->origin_x);
-    const uint32_t inputBitIncLumaOffset = ((pic_ptr_ref->origin_y)      * pic_ptr_ref->stride_bit_inc_y) + (pic_ptr_ref->origin_x);
-    const uint32_t input_cb_offset = (((pic_ptr_ref->origin_y) >> 1) * pic_ptr_ref->stride_cb) + ((pic_ptr_ref->origin_x) >> 1);
-    const uint32_t inputBitIncCbOffset = (((pic_ptr_ref->origin_y) >> 1) * pic_ptr_ref->stride_bit_inc_cb) + ((pic_ptr_ref->origin_x) >> 1);
-    const uint32_t input_cr_offset = (((pic_ptr_ref->origin_y) >> 1) * pic_ptr_ref->stride_cr) + ((pic_ptr_ref->origin_x) >> 1);
-    const uint32_t inputBitIncCrOffset = (((pic_ptr_ref->origin_y) >> 1) * pic_ptr_ref->stride_bit_inc_cr) + ((pic_ptr_ref->origin_x) >> 1);
+    uint32_t input_luma_offset = 0;
+    uint32_t inputBitIncLumaOffset = 0;
+    uint32_t input_cb_offset = 0;
+    uint32_t inputBitIncCbOffset = 0;
+    uint32_t input_cr_offset = 0;
+    uint32_t inputBitIncCrOffset = 0;
+    uint16_t width = pic_ptr_ref->stride_y;
+    uint16_t height = (uint16_t)(pic_ptr_ref->origin_y*2 + pic_ptr_ref->height);
 
+    if(!include_padding){
+        input_luma_offset = ((pic_ptr_ref->origin_y) * pic_ptr_ref->stride_y) + (pic_ptr_ref->origin_x);
+        inputBitIncLumaOffset = ((pic_ptr_ref->origin_y)      * pic_ptr_ref->stride_bit_inc_y) + (pic_ptr_ref->origin_x);
+        input_cb_offset = (((pic_ptr_ref->origin_y) >> 1) * pic_ptr_ref->stride_cb) + ((pic_ptr_ref->origin_x) >> 1);
+        inputBitIncCbOffset = (((pic_ptr_ref->origin_y) >> 1) * pic_ptr_ref->stride_bit_inc_cb) + ((pic_ptr_ref->origin_x) >> 1);
+        input_cr_offset = (((pic_ptr_ref->origin_y) >> 1) * pic_ptr_ref->stride_cr) + ((pic_ptr_ref->origin_x) >> 1);
+        inputBitIncCrOffset = (((pic_ptr_ref->origin_y) >> 1) * pic_ptr_ref->stride_bit_inc_cr) + ((pic_ptr_ref->origin_x) >> 1);
+
+        width = pic_ptr_ref->width;
+        height = pic_ptr_ref->height;
+    }
 
     pack2d_src(pic_ptr_ref->buffer_y + input_luma_offset,
                pic_ptr_ref->stride_y,
@@ -1816,8 +1829,8 @@ static void pack_highbd_pic(EbPictureBufferDesc* pic_ptr_ref, uint16_t* buffer_1
                pic_ptr_ref->stride_bit_inc_y,
                buffer_16bit[0],
                pic_ptr_ref->stride_y,
-               pic_ptr_ref->width,
-               pic_ptr_ref->height,
+               width,
+               height,
                asm_type);
 
     pack2d_src(pic_ptr_ref->buffer_cb + input_cb_offset,
@@ -1826,8 +1839,8 @@ static void pack_highbd_pic(EbPictureBufferDesc* pic_ptr_ref, uint16_t* buffer_1
                pic_ptr_ref->stride_bit_inc_cb,
                buffer_16bit[1],
                pic_ptr_ref->stride_cb,
-               pic_ptr_ref->width >> chroma_ss,
-               pic_ptr_ref->height >> chroma_ss,
+               width >> chroma_ss,
+               height >> chroma_ss,
                asm_type);
 
     pack2d_src(pic_ptr_ref->buffer_cr + input_cr_offset,
@@ -1836,9 +1849,10 @@ static void pack_highbd_pic(EbPictureBufferDesc* pic_ptr_ref, uint16_t* buffer_1
                pic_ptr_ref->stride_bit_inc_cr,
                buffer_16bit[2],
                pic_ptr_ref->stride_cr,
-               pic_ptr_ref->width >> chroma_ss,
-               pic_ptr_ref->height >> chroma_ss,
+               width >> chroma_ss,
+               height >> chroma_ss,
                asm_type);
+
 }
 
 int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
@@ -1860,6 +1874,7 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
     // TODO get encoder bit depth
     uint32_t encoder_bit_depth = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.encoder_bit_depth;
     EbBool is_highbd = (encoder_bit_depth == 8) ? EB_FALSE : EB_TRUE;
+    uint8_t chroma_ss = 1;
 
     //only one performs any picture based prep
     eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
@@ -1869,21 +1884,20 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
 
         // allocate 16 bit buffer
         uint16_t *buffer_16bit[3];
-        uint8_t chroma_ss = 1;
         EbAsm asm_type = picture_control_set_ptr_central->sequence_control_set_ptr->encode_context_ptr->asm_type;
 
         if (is_highbd) {
-            EB_MALLOC_ARRAY(buffer_16bit[0], (central_picture_ptr->stride_y * (central_picture_ptr->height)));
-            EB_MALLOC_ARRAY(buffer_16bit[1], (central_picture_ptr->stride_cb * (central_picture_ptr->height >> chroma_ss)));
-            EB_MALLOC_ARRAY(buffer_16bit[2], (central_picture_ptr->stride_cr * (central_picture_ptr->height >> chroma_ss)));
+            EB_MALLOC_ARRAY(buffer_16bit[0], (central_picture_ptr->stride_y * (central_picture_ptr->origin_y*2 + central_picture_ptr->height)));
+            EB_MALLOC_ARRAY(buffer_16bit[1], (central_picture_ptr->stride_cb * ((central_picture_ptr->origin_y*2 + central_picture_ptr->height) >> chroma_ss)));
+            EB_MALLOC_ARRAY(buffer_16bit[2], (central_picture_ptr->stride_cr * ((central_picture_ptr->origin_y*2 + central_picture_ptr->height) >> chroma_ss)));
 
             // ------- high bit depth test
 
             // pack byte buffers to 16 bit buffer
-            pack_highbd_pic(central_picture_ptr, buffer_16bit, chroma_ss, asm_type);
+            pack_highbd_pic(central_picture_ptr, buffer_16bit, chroma_ss, EB_TRUE, asm_type);
 
-            save_YUV_to_file_highbd("frame_768x432_10bit.yuv", buffer_16bit[0], buffer_16bit[1], buffer_16bit[2],
-                                    central_picture_ptr->width, central_picture_ptr->height,
+            save_YUV_to_file_highbd("frame_904x568_10bit.yuv", buffer_16bit[0], buffer_16bit[1], buffer_16bit[2],
+                                    central_picture_ptr->stride_y, (uint16_t)(central_picture_ptr->origin_y*2 + central_picture_ptr->height),
                                     central_picture_ptr->stride_bit_inc_y, central_picture_ptr->stride_bit_inc_cb, central_picture_ptr->stride_bit_inc_cr,
                                     0, 0);
         }
@@ -1914,8 +1928,40 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
 
             if(is_highbd){
 
-                // TODO:
-                //generate_padding16_bit()
+                generate_padding(pic_ptr_ref->buffer_cb,
+                                 pic_ptr_ref->stride_cb,
+                                 pic_ptr_ref->width >> chroma_ss,
+                                 pic_ptr_ref->height >> chroma_ss,
+                                 pic_ptr_ref->origin_x >> chroma_ss,
+                                 pic_ptr_ref->origin_y >> chroma_ss);
+
+                generate_padding(pic_ptr_ref->buffer_cr,
+                                 pic_ptr_ref->stride_cr,
+                                 pic_ptr_ref->width >> chroma_ss,
+                                 pic_ptr_ref->height >> chroma_ss,
+                                 pic_ptr_ref->origin_x >> chroma_ss,
+                                 pic_ptr_ref->origin_y >> chroma_ss);
+
+                generate_padding(pic_ptr_ref->buffer_bit_inc_cb,
+                                 pic_ptr_ref->stride_cr,
+                                 pic_ptr_ref->width >> chroma_ss,
+                                 pic_ptr_ref->height >> chroma_ss,
+                                 pic_ptr_ref->origin_x >> chroma_ss,
+                                 pic_ptr_ref->origin_y >> chroma_ss);
+
+                generate_padding(pic_ptr_ref->buffer_bit_inc_cr,
+                                 pic_ptr_ref->stride_cr,
+                                 pic_ptr_ref->width >> chroma_ss,
+                                 pic_ptr_ref->height >> chroma_ss,
+                                 pic_ptr_ref->origin_x >> chroma_ss,
+                                 pic_ptr_ref->origin_y >> chroma_ss);
+
+                // debug only
+//                pack_highbd_pic(pic_ptr_ref, buffer_16bit, chroma_ss, EB_TRUE, asm_type);
+//                save_YUV_to_file_highbd("frame_904x568_10bit_after_padding.yuv", buffer_16bit[0], buffer_16bit[1], buffer_16bit[2],
+//                                        pic_ptr_ref->stride_y, pic_ptr_ref->origin_y*2 + pic_ptr_ref->height,
+//                                        pic_ptr_ref->stride_bit_inc_y, pic_ptr_ref->stride_bit_inc_cb, pic_ptr_ref->stride_bit_inc_cr,
+//                                        0, 0);
 
             }else{
 
