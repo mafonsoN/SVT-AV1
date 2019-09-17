@@ -74,6 +74,12 @@ static unsigned int index_mult[14] = {
         0, 0, 0, 0, 49152, 39322, 32768, 28087, 24576, 21846, 19661, 17874, 0, 15124
 };
 
+static int64_t index_mult_highbd[14] = { 0U,          0U,          0U,
+                                         0U,          3221225472U, 2576980378U,
+                                         2147483648U, 1840700270U, 1610612736U,
+                                         1431655766U, 1288490189U, 1171354718U,
+                                         0U,          991146300U };
+
 // relationship between pu_index and row and col of the 32x32 sub-blocks
 static const uint32_t subblock_xy_32x32[4][2] = { {0,0}, {0,1}, {1,0}, {1,1} };
 
@@ -635,7 +641,31 @@ static INLINE int adjust_modifier(int sum_dist,
     assert(index >= 0 && index <= 13);
     assert(index_mult[index] != 0);
 
+    // TODO: change to AOMMIN()
     int mod = (clamp(sum_dist, 0, UINT16_MAX) * index_mult[index]) >> 16;
+
+    mod += rounding;
+    mod >>= strength;
+
+    mod = AOMMIN(16, mod);
+
+    mod = 16 - mod;
+    mod *= filter_weight;
+
+    return mod;
+}
+
+// Adjust value of the modified (weight of filtering) based on the distortion and strength parameter - highbd
+static INLINE int adjust_modifier_highbd(int sum_dist,
+                                         int index,
+                                         int rounding,
+                                         int strength,
+                                         int filter_weight) {
+    assert(index >= 0 && index <= 13);
+    assert(index_mult[index] != 0);
+
+    int mod = (int)((AOMMIN(sum_dist, INT32_MAX) * index_mult_highbd[index]) >> 32);
+
     mod += rounding;
     mod >>= strength;
 
@@ -660,6 +690,25 @@ static INLINE void calculate_squared_errors(const uint8_t *s,
     for (i = 0; i < h; i++) {
         for (j = 0; j < w; j++) {
             const int16_t diff = s[i * s_stride + j] - p[i * p_stride + j];
+            diff_sse[idx] = diff * diff;
+            idx++;
+        }
+    }
+}
+
+static INLINE void calculate_squared_errors_highbd(const uint16_t *s,
+                                                   int s_stride,
+                                                   const uint16_t *p,
+                                                   int p_stride,
+                                                   uint32_t *diff_sse,
+                                                   unsigned int w,
+                                                   unsigned int h) {
+    int idx = 0;
+    unsigned int i, j;
+
+    for (i = 0; i < h; i++) {
+        for (j = 0; j < w; j++) {
+            const int32_t diff = s[i * s_stride + j] - p[i * p_stride + j];
             diff_sse[idx] = diff * diff;
             idx++;
         }
@@ -756,6 +805,163 @@ void apply_filtering_c(const uint8_t *y_src,
             y_index += 2;
 
             modifier = adjust_modifier(modifier, y_index, rounding, strength, filter_weight);
+
+            k = i * y_pre_stride + j;
+
+            y_count[k] += modifier;
+            y_accum[k] += modifier * pixel_value;
+
+            // Process chroma component
+            if (!(i & ss_y) && !(j & ss_x)) {
+                const int u_pixel_value = u_pre[uv_r * uv_pre_stride + uv_c];
+                const int v_pixel_value = v_pre[uv_r * uv_pre_stride + uv_c];
+
+                // non-local mean approach
+                int cr_index = 0;
+                int u_mod = 0, v_mod = 0;
+                int y_diff = 0;
+
+                for (idy = -1; idy <= 1; ++idy) {
+                    for (idx = -1; idx <= 1; ++idx) {
+                        const int row = uv_r + idy;
+                        const int col = uv_c + idx;
+
+                        if (row >= 0 && row < (int)uv_block_height && col >= 0 &&
+                            col < (int)uv_block_width) {
+                            u_mod += u_diff_sse[row * uv_block_width + col];
+                            v_mod += v_diff_sse[row * uv_block_width + col];
+                            ++cr_index;
+                        }
+                    }
+                }
+
+                assert(cr_index > 0);
+
+                for (idy = 0; idy < 1 + ss_y; ++idy) {
+                    for (idx = 0; idx < 1 + ss_x; ++idx) {
+                        const int row = (uv_r << ss_y) + idy;
+                        const int col = (uv_c << ss_x) + idx;
+                        y_diff += y_diff_sse[row * (int)block_width + col];
+                        ++cr_index;
+                    }
+                }
+
+                u_mod += y_diff;
+                v_mod += y_diff;
+
+                u_mod = adjust_modifier(u_mod, cr_index, rounding, strength, filter_weight);
+                v_mod = adjust_modifier(v_mod, cr_index, rounding, strength, filter_weight);
+
+                m = (i>>ss_y) * uv_pre_stride + (j>>ss_x);
+
+                u_count[m] += u_mod;
+                u_accum[m] += u_mod * u_pixel_value;
+
+                m = (i>>ss_y) * uv_pre_stride + (j>>ss_x);
+
+                v_count[m] += v_mod;
+                v_accum[m] += v_mod * v_pixel_value;
+            }
+        }
+    }
+}
+
+// TODO: basically, a copy of apply_filtering_c() with these changes: (check if anything else needs to be different)
+//  - inputs are uint16_t instead of uint8_t
+//  - diff_sse is 32 bit
+//  - calculate_squared_errors_highbd() is used instead of calculate_squared_errors()
+//  - adjust_modifier_highbd() instead of adjust_modifier()
+
+// Main function that applies filtering to a block according to the weights - highbd
+void apply_filtering_highbd_c(const uint16_t *y_src,
+                              int y_src_stride,
+                              const uint16_t *y_pre,
+                              int y_pre_stride,
+                              const uint16_t *u_src,
+                              const uint16_t *v_src,
+                              int uv_src_stride,
+                              const uint16_t *u_pre,
+                              const uint16_t *v_pre,
+                              int uv_pre_stride,
+                              unsigned int block_width,
+                              unsigned int block_height,
+                              int ss_x,
+                              int ss_y,
+                              int strength,
+                              const int *blk_fw,
+                              int use_whole_blk,
+                              uint32_t *y_accum,
+                              uint16_t *y_count,
+                              uint32_t *u_accum,
+                              uint16_t *u_count,
+                              uint32_t *v_accum,
+                              uint16_t *v_count){ // sub-block filter weights
+
+    unsigned int i, j, k, m;
+    int idx, idy;
+    int modifier;
+    const int rounding = (1 << strength) >> 1;
+    const unsigned int uv_block_width = block_width >> ss_x;
+    const unsigned int uv_block_height = block_height >> ss_y;
+    DECLARE_ALIGNED(16, uint32_t, y_diff_sse[BLK_PELS]);
+    DECLARE_ALIGNED(16, uint32_t, u_diff_sse[BLK_PELS]);
+    DECLARE_ALIGNED(16, uint32_t, v_diff_sse[BLK_PELS]);
+
+    memset(y_diff_sse, 0, BLK_PELS * sizeof(uint32_t));
+    memset(u_diff_sse, 0, BLK_PELS * sizeof(uint32_t));
+    memset(v_diff_sse, 0, BLK_PELS * sizeof(uint32_t));
+
+    assert(use_whole_blk == 0);
+    UNUSED(use_whole_blk);
+
+    // Calculate squared differences for each pixel of the block (pred-orig)
+    calculate_squared_errors_highbd(y_src, y_src_stride, y_pre, y_pre_stride, y_diff_sse,
+                             block_width, block_height);
+    calculate_squared_errors_highbd(u_src, uv_src_stride, u_pre, uv_pre_stride,
+                             u_diff_sse, uv_block_width, uv_block_height);
+    calculate_squared_errors_highbd(v_src, uv_src_stride, v_pre, uv_pre_stride,
+                             v_diff_sse, uv_block_width, uv_block_height);
+
+    for (i = 0; i < block_height; i++) {
+        for (j = 0; j < block_width; j++) {
+            const int pixel_value = y_pre[i * y_pre_stride + j];
+
+            int filter_weight;
+
+            if(block_width == (BW>>1)){
+                filter_weight = get_subblock_filter_weight_4subblocks(i, j, block_height, block_width, blk_fw);
+            }else{
+                filter_weight = get_subblock_filter_weight_16subblocks(i, j, block_height, block_width, blk_fw);
+            }
+
+            // non-local mean approach
+            int y_index = 0;
+
+            const int uv_r = i >> ss_y;
+            const int uv_c = j >> ss_x;
+            modifier = 0;
+
+            for (idy = -1; idy <= 1; ++idy) {
+                for (idx = -1; idx <= 1; ++idx) {
+                    const int row = (int)i + idy;
+                    const int col = (int)j + idx;
+
+                    if (row >= 0 && row < (int)block_height && col >= 0 &&
+                        col < (int)block_width) {
+                        modifier += y_diff_sse[row * (int)block_width + col];
+                        ++y_index;
+                    }
+                }
+            }
+
+            assert(y_index > 0);
+
+            modifier += u_diff_sse[uv_r * uv_block_width + uv_c];
+            modifier += v_diff_sse[uv_r * uv_block_width + uv_c];
+
+            y_index += 2;
+
+            modifier = adjust_modifier_highbd(modifier, y_index, rounding, strength, filter_weight);
 
             k = i * y_pre_stride + j;
 
@@ -1084,6 +1290,28 @@ void tf_inter_prediction(
                             1,//perform_chroma,
                             asm_type);
 
+                        // Need to add interp filters (as done above)
+//                        EbErrorType av1_inter_prediction_hbd(
+//                                PictureControlSet                    *picture_control_set_ptr,
+//                                uint8_t                                 ref_frame_type,
+//                                CodingUnit                           *cu_ptr,
+//                                MvUnit                               *mv_unit,
+//                                uint8_t                                  use_intrabc,
+//                                uint16_t                                pu_origin_x,
+//                                uint16_t                                pu_origin_y,
+//                                uint8_t                                 bwidth,
+//                                uint8_t                                 bheight,
+//                                EbPictureBufferDesc                  *ref_pic_list0,
+//                                EbPictureBufferDesc                  *ref_pic_list1,
+//                                EbPictureBufferDesc                  *prediction_ptr,
+//                                uint16_t                                dst_origin_x,
+//                                uint16_t                                dst_origin_y,
+//                                uint8_t                                 bit_depth,
+//                                EbAsm                                   asm_type);
+
+//                        av1_inter_prediction_hbd(){
+//
+//                        }
 
                         uint8_t *pred_Y_ptr = pred[C_Y] + bsize * idx_y*stride_pred[C_Y] + bsize * idx_x;
                         uint8_t *src_Y_ptr = src[C_Y] + bsize * idx_y*stride_src[C_Y] + bsize * idx_x;
