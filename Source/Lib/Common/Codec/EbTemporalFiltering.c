@@ -34,6 +34,7 @@
 #include "EbTemporalFiltering_sse4.h"
 #include "EbObject.h"
 #include "EbPictureOperators.h"
+#include "EbInterPrediction.h"
 
 #undef _MM_HINT_T2
 #define _MM_HINT_T2  1
@@ -1210,56 +1211,27 @@ static void apply_filtering_central(EbByte *pred,
     }
 }
 
-EbErrorType av1_inter_prediction(
-    PictureControlSet                    *picture_control_set_ptr,
-    uint32_t                             interp_filters,
-    CodingUnit                           *cu_ptr,
-    uint8_t                              ref_frame_type,
-    MvUnit                               *mv_unit,
-    uint8_t                              use_intrabc,
-    uint8_t                              compound_idx,
-    INTERINTER_COMPOUND_DATA             *interinter_comp,
-#if II_COMP_FLAG
-    TileInfo                                * tile,
-    NeighborArrayUnit                       *luma_recon_neighbor_array,
-    NeighborArrayUnit                       *cb_recon_neighbor_array ,
-    NeighborArrayUnit                       *cr_recon_neighbor_array ,
-    uint8_t                                 is_interintra_used ,
-    INTERINTRA_MODE                        interintra_mode,
-    uint8_t                                use_wedge_interintra,
-    int32_t                                interintra_wedge_index,
-
-#endif
-    uint16_t                             pu_origin_x,
-    uint16_t                             pu_origin_y,
-    uint8_t                              bwidth,
-    uint8_t                              bheight,
-    EbPictureBufferDesc                  *ref_pic_list0,
-    EbPictureBufferDesc                  *ref_pic_list1,
-    EbPictureBufferDesc                  *prediction_ptr,
-    uint16_t                             dst_origin_x,
-    uint16_t                             dst_origin_y,
-    EbBool                               perform_chroma,
-    EbAsm                                asm_type);
-
 uint32_t get_mds_idx(uint32_t  orgx, uint32_t  orgy, uint32_t  size, uint32_t use_128x128);
 
-// TODO: if highbd, use av1_inter_prediction_hbd() instead. Check if anything else needs to be changed.
-void tf_inter_prediction(
-    PictureParentControlSet   *picture_control_set_ptr,
-    MeContext* context_ptr,
-    EbPictureBufferDesc *pic_ptr_ref,
-    EbByte *pred,
-    int* stride_pred,
-    EbByte* src,
-    int* stride_src,
-    uint32_t sb_origin_x,
-    uint32_t sb_origin_y,
-    int* use_16x16_subblocks,
-    EbAsm asm_type)
+void tf_inter_prediction(PictureParentControlSet *picture_control_set_ptr,
+                         MeContext* context_ptr,
+                         EbPictureBufferDesc *pic_ptr_ref,
+                         EbByte *pred,
+                         uint16_t** pred_16bit,
+                         int* stride_pred,
+                         EbByte* src,
+                         uint16_t** src_16bit,
+                         int* stride_src,
+                         uint32_t sb_origin_x,
+                         uint32_t sb_origin_y,
+                         int* use_16x16_subblocks,
+                         int encoder_bit_depth,
+                         EbAsm asm_type)
 {
     const InterpFilters interp_filters =
         av1_make_interp_filters(MULTITAP_SHARP, MULTITAP_SHARP);
+
+    EbBool is_highbd = (encoder_bit_depth == 8) ? EB_FALSE : EB_TRUE;
 
     CodingUnit       cu_ptr;
     MacroBlockD      av1xd;
@@ -1267,15 +1239,68 @@ void tf_inter_prediction(
     MvUnit   mv_unit;
     mv_unit.pred_direction = UNI_PRED_LIST_0;
 
+    EbPictureBufferDesc      reference_ptr;
     EbPictureBufferDesc      prediction_ptr;
+
     prediction_ptr.origin_x = 0;
     prediction_ptr.origin_y = 0;
-    prediction_ptr.buffer_y = pred[0];
     prediction_ptr.stride_y = BW;
-    prediction_ptr.buffer_cb = pred[1];
     prediction_ptr.stride_cb = BW_CH;
-    prediction_ptr.buffer_cr = pred[2];
     prediction_ptr.stride_cr = BW_CH;
+
+    if(!is_highbd){
+        prediction_ptr.buffer_y = pred[0];
+        prediction_ptr.buffer_cb = pred[1];
+        prediction_ptr.buffer_cr = pred[2];
+    }else{
+        prediction_ptr.buffer_y = (uint8_t*) pred_16bit[0];
+        prediction_ptr.buffer_cb = (uint8_t*) pred_16bit[1];
+        prediction_ptr.buffer_cr = (uint8_t*) pred_16bit[2];
+
+        reference_ptr.buffer_y = (uint8_t*)malloc(pic_ptr_ref->luma_size * sizeof(uint16_t));
+        reference_ptr.buffer_cb = (uint8_t*)malloc(pic_ptr_ref->chroma_size * sizeof(uint16_t));
+        reference_ptr.buffer_cr = (uint8_t*)malloc(pic_ptr_ref->chroma_size * sizeof(uint16_t));
+
+        reference_ptr.origin_x = pic_ptr_ref->origin_x;
+        reference_ptr.origin_y = pic_ptr_ref->origin_y;
+        reference_ptr.stride_y = pic_ptr_ref->stride_y;
+        reference_ptr.stride_cb = pic_ptr_ref->stride_cb;
+        reference_ptr.stride_cr = pic_ptr_ref->stride_cr;
+        reference_ptr.width = pic_ptr_ref->width;
+        reference_ptr.height = pic_ptr_ref->height;
+
+        uint32_t height_y = (uint32_t)(2*reference_ptr.origin_y + reference_ptr.height);
+
+        pack2d_src(pic_ptr_ref->buffer_y,
+                   reference_ptr.stride_y,
+                   pic_ptr_ref->buffer_bit_inc_y,
+                   pic_ptr_ref->stride_bit_inc_y,
+                   (uint16_t*)reference_ptr.buffer_y,
+                   reference_ptr.stride_y,
+                   reference_ptr.stride_y,
+                   height_y,
+                   asm_type);
+
+        pack2d_src(pic_ptr_ref->buffer_cb,
+                   reference_ptr.stride_cb,
+                   pic_ptr_ref->buffer_bit_inc_cb,
+                   pic_ptr_ref->stride_bit_inc_cb,
+                   (uint16_t*)reference_ptr.buffer_cb,
+                   reference_ptr.stride_cb,
+                   reference_ptr.stride_cb,
+                   height_y >> 1,
+                   asm_type);
+
+        pack2d_src(pic_ptr_ref->buffer_cr,
+                   reference_ptr.stride_cr,
+                   pic_ptr_ref->buffer_bit_inc_cr,
+                   pic_ptr_ref->stride_bit_inc_cr,
+                   (uint16_t*)reference_ptr.buffer_cr,
+                   reference_ptr.stride_cr,
+                   reference_ptr.stride_cr,
+                   height_y >> 1,
+                   asm_type);
+    }
 
     for (uint32_t idx_32x32 = 0; idx_32x32 < 4; idx_32x32++) {
         if (use_16x16_subblocks[idx_32x32] != 0) {
@@ -1319,7 +1344,89 @@ void tf_inter_prediction(
                         mv_unit.mv->x = mv_x + i;
                         mv_unit.mv->y = mv_y + j;
 
-                        av1_inter_prediction(
+                        if(!is_highbd){
+                            av1_inter_prediction(
+                                    NULL,  //picture_control_set_ptr,
+                                    (uint32_t)interp_filters,
+                                    &cu_ptr,
+                                    0,//ref_frame_type,
+                                    &mv_unit,
+                                    0,//use_intrabc,
+                                    1,//compound_idx not used
+                                    NULL,// interinter_comp not used
+#if II_COMP_FLAG
+                                    NULL,
+                                    NULL,
+                                    NULL,
+                                    NULL,
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+#endif
+                                    pu_origin_x,
+                                    pu_origin_y,
+                                    bsize,
+                                    bsize,
+                                    pic_ptr_ref,
+                                    NULL,//ref_pic_list1,
+                                    &prediction_ptr,
+                                    local_origin_x,
+                                    local_origin_y,
+                                    1,//perform_chroma,
+                                    asm_type);
+                        }else{
+                            cu_ptr.interp_filters = interp_filters;
+                            av1_inter_prediction_hbd(NULL, //picture_control_set_ptr,
+                                                     0, //ref_frame_type,
+                                                     &cu_ptr,
+                                                     &mv_unit,
+                                                     0, //use_intrabc,
+                                                     pu_origin_x,
+                                                     pu_origin_y,
+                                                     bsize,
+                                                     bsize,
+                                                     &reference_ptr,
+                                                     NULL, //ref_pic_list1,
+                                                     &prediction_ptr,
+                                                     local_origin_x,
+                                                     local_origin_y,
+                                                     (uint8_t)encoder_bit_depth, //bit depth
+                                                     asm_type);
+                        }
+
+                        uint64_t distortion;
+                        if(!is_highbd){
+                            uint8_t *pred_y_ptr = pred[C_Y] + bsize * idx_y*stride_pred[C_Y] + bsize * idx_x;
+                            uint8_t *src_y_ptr = src[C_Y] + bsize * idx_y*stride_src[C_Y] + bsize * idx_x;
+
+                            const aom_variance_fn_ptr_t *fn_ptr = &mefn_ptr[BLOCK_16X16];
+
+                            unsigned int sse;
+                            distortion = fn_ptr->vf(pred_y_ptr, stride_pred[C_Y], src_y_ptr, stride_src[C_Y], &sse);
+                        }else{
+                            uint16_t *pred_y_ptr = pred_16bit[C_Y] + bsize * idx_y*stride_pred[C_Y] + bsize * idx_x;
+                            uint16_t *src_y_ptr = src_16bit[C_Y] + bsize * idx_y*stride_src[C_Y] + bsize * idx_x;;
+
+                            unsigned int sse;
+                            distortion = variance_highbd_c(pred_y_ptr, stride_pred[C_Y], src_y_ptr, stride_src[C_Y], 16, 16, &sse);
+                        }
+
+                        if (distortion < best_distortion) {
+                            best_distortion = distortion;
+                            best_mv_x = mv_unit.mv->x;
+                            best_mv_y = mv_unit.mv->y;
+                        }
+                    }
+                }
+
+                // Perform final pass using the 1/8 MV
+                //AV1 MVs are always in 1/8th pel precision.
+                mv_unit.mv->x = best_mv_x;
+                mv_unit.mv->y = best_mv_y;
+
+                if(!is_highbd){
+                    av1_inter_prediction(
                             NULL,  //picture_control_set_ptr,
                             (uint32_t)interp_filters,
                             &cu_ptr,
@@ -1349,82 +1456,29 @@ void tf_inter_prediction(
                             local_origin_y,
                             1,//perform_chroma,
                             asm_type);
-
-                        // Need to add interp filters (as done above)
-//                        EbErrorType av1_inter_prediction_hbd(
-//                                PictureControlSet                    *picture_control_set_ptr,
-//                                uint8_t                                 ref_frame_type,
-//                                CodingUnit                           *cu_ptr,
-//                                MvUnit                               *mv_unit,
-//                                uint8_t                                  use_intrabc,
-//                                uint16_t                                pu_origin_x,
-//                                uint16_t                                pu_origin_y,
-//                                uint8_t                                 bwidth,
-//                                uint8_t                                 bheight,
-//                                EbPictureBufferDesc                  *ref_pic_list0,
-//                                EbPictureBufferDesc                  *ref_pic_list1,
-//                                EbPictureBufferDesc                  *prediction_ptr,
-//                                uint16_t                                dst_origin_x,
-//                                uint16_t                                dst_origin_y,
-//                                uint8_t                                 bit_depth,
-//                                EbAsm                                   asm_type);
-
-//                        av1_inter_prediction_hbd(){
-//
-//                        }
-
-                        uint8_t *pred_Y_ptr = pred[C_Y] + bsize * idx_y*stride_pred[C_Y] + bsize * idx_x;
-                        uint8_t *src_Y_ptr = src[C_Y] + bsize * idx_y*stride_src[C_Y] + bsize * idx_x;
-
-                        const aom_variance_fn_ptr_t *fn_ptr = &mefn_ptr[BLOCK_16X16];
-                        unsigned int sse;
-                        uint64_t distortion = fn_ptr->vf(pred_Y_ptr, stride_pred[C_Y], src_Y_ptr, stride_src[C_Y], &sse);
-                        if (distortion < best_distortion) {
-                            best_distortion = distortion;
-                            best_mv_x = mv_unit.mv->x;
-                            best_mv_y = mv_unit.mv->y;
-                        }
-                    }
+                }else{
+                    cu_ptr.interp_filters = interp_filters;
+                    av1_inter_prediction_hbd(NULL, //picture_control_set_ptr,
+                                             0, //ref_frame_type,
+                                             &cu_ptr,
+                                             &mv_unit,
+                                             0, //use_intrabc,
+                                             pu_origin_x,
+                                             pu_origin_y,
+                                             bsize,
+                                             bsize,
+                                             &reference_ptr,
+                                             NULL, //ref_pic_list1,
+                                             &prediction_ptr,
+                                             local_origin_x,
+                                             local_origin_y,
+                                             (uint8_t)encoder_bit_depth, //bit depth
+                                             asm_type);
                 }
-
-                // Perform final pass using the 1/8 MV
-                //AV1 MVs are always in 1/8th pel precision.
-                mv_unit.mv->x = best_mv_x;
-                mv_unit.mv->y = best_mv_y;
-
-                av1_inter_prediction(
-                    NULL,  //picture_control_set_ptr,
-                    (uint32_t)interp_filters,
-                    &cu_ptr,
-                    0,//ref_frame_type,
-                    &mv_unit,
-                    0,//use_intrabc,
-                    1,//compound_idx not used
-                    NULL,// interinter_comp not used
-#if II_COMP_FLAG
-                    NULL,
-                    NULL,
-                    NULL,
-                    NULL,
-                    0,
-                    0,
-                    0,
-                    0,
-#endif
-                    pu_origin_x,
-                    pu_origin_y,
-                    bsize,
-                    bsize,
-                    pic_ptr_ref,
-                    NULL,//ref_pic_list1,
-                    &prediction_ptr,
-                    local_origin_x,
-                    local_origin_y,
-                    1,//perform_chroma,
-                    asm_type);
             }
         }
     }
+
 }
 
 void compensate_block(MeContext* context_ptr,
@@ -1863,22 +1917,33 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                                                // experiments have shown low gains by adding this possibility
                     populate_list_with_value(use_16x16_subblocks,N_32X32_BLOCKS,1);
 
-                    // TODO: add tf_inter_prediction_highbd()
                     // Perform MC using the information acquired using the ME step
-                    tf_inter_prediction(
-                            picture_control_set_ptr_central,
-                            context_ptr,
-                            list_input_picture_ptr[frame_index],
-                            pred,
-                            stride_pred,
-                            src_center_ptr,
-                            stride,
-                            (uint32_t)blk_col*BW,
-                            (uint32_t)blk_row*BH,
-                            use_16x16_subblocks,
-                            asm_type);
+                    tf_inter_prediction(picture_control_set_ptr_central,
+                                        context_ptr,
+                                        list_input_picture_ptr[frame_index],
+                                        pred,
+                                        pred_16bit,
+                                        stride_pred,
+                                        src_center_ptr,
+                                        altref_buffer_highbd_ptr,
+                                        stride,
+                                        (uint32_t)blk_col*BW,
+                                        (uint32_t)blk_row*BH,
+                                        use_16x16_subblocks,
+                                        encoder_bit_depth,
+                                        asm_type);
 
-                    // TODO: add get_ME_distortion_highbd()
+//                    debug - remove
+//                    eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
+//
+//                    save_YUV_to_file_highbd("block_pred_64x64_10bit.yuv", pred_16bit[C_Y], pred_16bit[C_U], pred_16bit[C_V],
+//                                                BW, BH, stride_pred[C_Y], stride_pred[C_U], stride_pred[C_V], 0, 0);
+//
+//                    save_YUV_to_file_highbd("block_src_64x64_10bit.yuv", altref_buffer_highbd_ptr[C_Y], altref_buffer_highbd_ptr[C_U], altref_buffer_highbd_ptr[C_V],
+//                                            BW, BH, stride[C_Y], stride[C_U], stride[C_V], 0, 0);
+//
+//                    eb_release_mutex(picture_control_set_ptr_central->temp_filt_mutex);
+
                     // Retrieve distortion (variance) on 32x32 and 16x16 sub-blocks
                     if(!is_highbd)
                         get_ME_distortion(me_32x32_subblock_vf,
@@ -1929,6 +1994,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
                 // if frame to process is the center frame
                 if (frame_index == index_center) {
+                    // TODO: 10-bit
                     apply_filtering_central(pred,
                                             accum,
                                             count,
@@ -1937,6 +2003,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                 }else{
                     // split filtering function into 32x32 blocks
                     // TODO: implement a 64x64 SIMD version
+                    // TODO: 10-bit
                     for(int block_row = 0; block_row<2; block_row++){
                         for(int block_col = 0; block_col<2; block_col++) {
                             apply_filtering_block(block_row,
@@ -2284,10 +2351,12 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
     // index of the central source frame
     index_center = picture_control_set_ptr_central->past_altref_nframes;
 
+    // if this assertion does not fail (as I think it should not, then remove picture_control_set_ptr_central from the input parameters of init_temporal_filtering())
+    assert(list_picture_control_set_ptr[index_center] == picture_control_set_ptr_central);
+
     // source central frame picture buffer
     central_picture_ptr = picture_control_set_ptr_central->enhanced_picture_ptr;
 
-    // TODO get encoder bit depth
     uint32_t encoder_bit_depth = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.encoder_bit_depth;
     EbBool is_highbd = (encoder_bit_depth == 8) ? EB_FALSE : EB_TRUE;
     uint8_t chroma_ss = 1;
