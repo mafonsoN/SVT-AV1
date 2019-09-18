@@ -430,38 +430,98 @@ void get_blk_fw_using_dist(int const *me_32x32_subblock_vf, int const *me_16x16_
 
 // compute variance for the MC block residuals
 void get_ME_distortion(int* me_32x32_subblock_vf,
-                       int *me_16x16_subblock_vf,
-                       uint8_t* pred_Y,
-                       int stride_pred_Y,
-                       uint8_t* src_Y,
-                       int stride_src_Y){
+                       int* me_16x16_subblock_vf,
+                       uint8_t* pred_y,
+                       int stride_pred_y,
+                       uint8_t* src_y,
+                       int stride_src_y){
     unsigned int sse;
 
-    uint8_t * pred_Y_ptr;
-    uint8_t * src_Y_ptr;
+    uint8_t * pred_y_ptr;
+    uint8_t * src_y_ptr;
 
     for(uint32_t index_32x32 = 0; index_32x32 < 4; index_32x32++) {
         int row = subblock_xy_32x32[index_32x32][0];
         int col = subblock_xy_32x32[index_32x32][1];
 
-        pred_Y_ptr = pred_Y + 32*row*stride_pred_Y + 32*col;
-        src_Y_ptr = src_Y + 32*row*stride_src_Y + 32*col;
+        pred_y_ptr = pred_y + 32*row*stride_pred_y + 32*col;
+        src_y_ptr = src_y + 32*row*stride_src_y + 32*col;
 
         const aom_variance_fn_ptr_t *fn_ptr = &mefn_ptr[BLOCK_32X32];
 
-        me_32x32_subblock_vf[index_32x32] = fn_ptr->vf(pred_Y_ptr, stride_pred_Y, src_Y_ptr, stride_src_Y, &sse );
+        me_32x32_subblock_vf[index_32x32] = fn_ptr->vf(pred_y_ptr, stride_pred_y, src_y_ptr, stride_src_y, &sse );
     }
 
     for(uint32_t index_16x16 = 0; index_16x16 < 16; index_16x16++) {
         int row = subblock_xy_16x16[index_16x16][0];
         int col = subblock_xy_16x16[index_16x16][1];
 
-        pred_Y_ptr = pred_Y + 16*row*stride_pred_Y + 16*col;
-        src_Y_ptr = src_Y + 16*row*stride_src_Y + 16*col;
+        pred_y_ptr = pred_y + 16*row*stride_pred_y + 16*col;
+        src_y_ptr = src_y + 16*row*stride_src_y + 16*col;
 
         const aom_variance_fn_ptr_t *fn_ptr = &mefn_ptr[BLOCK_16X16];
 
-        me_16x16_subblock_vf[index_16x16] = fn_ptr->vf(pred_Y_ptr, stride_pred_Y, src_Y_ptr, stride_src_Y, &sse );
+        me_16x16_subblock_vf[index_16x16] = fn_ptr->vf(pred_y_ptr, stride_pred_y, src_y_ptr, stride_src_y, &sse );
+    }
+}
+
+// TODO: use or implement a simd version of this
+static uint32_t variance_highbd_c(const uint16_t *a,
+                                  int a_stride,
+                                  const uint16_t *b,
+                                  int b_stride,
+                                  int w,
+                                  int h,
+                                  uint32_t *sse) {
+    int i, j;
+
+    int sad = 0;
+    *sse = 0;
+
+    for (i = 0; i < h; ++i) {
+        for (j = 0; j < w; ++j) {
+            const int diff = a[j] - b[j];
+            sad += diff;
+            *sse += diff * diff;
+        }
+
+        a += a_stride;
+        b += b_stride;
+    }
+
+    return *sse - (sad * sad)/(w*h);
+}
+
+// compute variance for the MC block residuals - highbd
+void get_ME_distortion_highbd(int* me_32x32_subblock_vf,
+                              int* me_16x16_subblock_vf,
+                              uint16_t* pred_y,
+                              int stride_pred_y,
+                              uint16_t* src_y,
+                              int stride_src_y){
+    unsigned int sse;
+
+    uint16_t* pred_Y_ptr;
+    uint16_t* src_Y_ptr;
+
+    for(uint32_t index_32x32 = 0; index_32x32 < 4; index_32x32++) {
+        int row = subblock_xy_32x32[index_32x32][0];
+        int col = subblock_xy_32x32[index_32x32][1];
+
+        pred_Y_ptr = pred_y + 32*row*stride_pred_y + 32*col;
+        src_Y_ptr = src_y + 32*row*stride_src_y + 32*col;
+
+        me_32x32_subblock_vf[index_32x32] = variance_highbd_c(pred_Y_ptr, stride_pred_y, src_Y_ptr, stride_src_y, 32, 32, &sse );
+    }
+
+    for(uint32_t index_16x16 = 0; index_16x16 < 16; index_16x16++) {
+        int row = subblock_xy_16x16[index_16x16][0];
+        int col = subblock_xy_16x16[index_16x16][1];
+
+        pred_Y_ptr = pred_y + 16*row*stride_pred_y + 16*col;
+        src_Y_ptr = src_y + 16*row*stride_src_y + 16*col;
+
+        me_16x16_subblock_vf[index_16x16] = variance_highbd_c(pred_Y_ptr, stride_pred_y, src_Y_ptr, stride_src_y, 16, 16, &sse );
     }
 }
 
@@ -1806,26 +1866,34 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                     // TODO: add tf_inter_prediction_highbd()
                     // Perform MC using the information acquired using the ME step
                     tf_inter_prediction(
-                        picture_control_set_ptr_central,
-                        context_ptr,
-                        list_input_picture_ptr[frame_index],
-                        pred,
-                        stride_pred,
-                        src_center_ptr,
-                        stride,
-                        (uint32_t)blk_col*BW,
-                        (uint32_t)blk_row*BH,
-                        use_16x16_subblocks,
-                        asm_type);
+                            picture_control_set_ptr_central,
+                            context_ptr,
+                            list_input_picture_ptr[frame_index],
+                            pred,
+                            stride_pred,
+                            src_center_ptr,
+                            stride,
+                            (uint32_t)blk_col*BW,
+                            (uint32_t)blk_row*BH,
+                            use_16x16_subblocks,
+                            asm_type);
 
                     // TODO: add get_ME_distortion_highbd()
                     // Retrieve distortion (variance) on 32x32 and 16x16 sub-blocks
-                    get_ME_distortion(me_32x32_subblock_vf,
-                                      me_16x16_subblock_vf,
-                                      pred[C_Y],
-                                      stride_pred[C_Y],
-                                      src_center_ptr[C_Y],
-                                      stride[C_Y]);
+                    if(!is_highbd)
+                        get_ME_distortion(me_32x32_subblock_vf,
+                                          me_16x16_subblock_vf,
+                                          pred[C_Y],
+                                          stride_pred[C_Y],
+                                          src_center_ptr[C_Y],
+                                          stride[C_Y]);
+                    else
+                        get_ME_distortion_highbd(me_32x32_subblock_vf,
+                                                 me_16x16_subblock_vf,
+                                                 pred_16bit[C_Y],
+                                                 stride_pred[C_Y],
+                                                 altref_buffer_highbd_ptr[C_Y],
+                                                 stride[C_Y]);
 
                     // Get sub-block filter weights depending on the variance
                     get_blk_fw_using_dist(me_32x32_subblock_vf, me_16x16_subblock_vf, use_16x16_subblocks_only, blk_fw);
