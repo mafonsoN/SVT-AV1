@@ -35,6 +35,7 @@
 #include "EbObject.h"
 #include "EbPictureOperators.h"
 #include "EbInterPrediction.h"
+#include "aom_dsp_rtcd.h"
 
 #undef _MM_HINT_T2
 #define _MM_HINT_T2  1
@@ -97,6 +98,30 @@ typedef void(*TempFilteringType)(const uint8_t *y_src,
                                  uint32_t *v_accum,
                                  uint16_t *v_count);
 
+typedef void(*TempFilteringHighbdType)(const uint16_t *y_src,
+                                       int y_src_stride,
+                                       const uint16_t *y_pre,
+                                       int y_pre_stride,
+                                       const uint16_t *u_src,
+                                       const uint16_t *v_src,
+                                       int uv_src_stride,
+                                       const uint16_t *u_pre,
+                                       const uint16_t *v_pre,
+                                       int uv_pre_stride,
+                                       unsigned int block_width,
+                                       unsigned int block_height,
+                                       int ss_x,
+                                       int ss_y,
+                                       int strength,
+                                       const int *blk_fw,
+                                       int use_whole_blk,
+                                       uint32_t *y_accum,
+                                       uint16_t *y_count,
+                                       uint32_t *u_accum,
+                                       uint16_t *u_count,
+                                       uint32_t *v_accum,
+                                       uint16_t *v_count);
+
 void apply_filtering_c(const uint8_t *y_src,
                        int y_src_stride,
                        const uint8_t *y_pre,
@@ -121,11 +146,42 @@ void apply_filtering_c(const uint8_t *y_src,
                        uint32_t *v_accum,
                        uint16_t *v_count);
 
+void apply_filtering_highbd_c(const uint16_t *y_src,
+                              int y_src_stride,
+                              const uint16_t *y_pre,
+                              int y_pre_stride,
+                              const uint16_t *u_src,
+                              const uint16_t *v_src,
+                              int uv_src_stride,
+                              const uint16_t *u_pre,
+                              const uint16_t *v_pre,
+                              int uv_pre_stride,
+                              unsigned int block_width,
+                              unsigned int block_height,
+                              int ss_x,
+                              int ss_y,
+                              int strength,
+                              const int *blk_fw,
+                              int use_whole_blk,
+                              uint32_t *y_accum,
+                              uint16_t *y_count,
+                              uint32_t *u_accum,
+                              uint16_t *u_count,
+                              uint32_t *v_accum,
+                              uint16_t *v_count);
+
 static TempFilteringType FUNC_TABLE apply_temp_filtering_32x32_func_ptr_array[ASM_TYPE_TOTAL] = {
         // NON_SIMD
         apply_filtering_c,
         // SSE4
         av1_apply_temporal_filter_sse4_1
+};
+
+static TempFilteringHighbdType FUNC_TABLE apply_temp_filtering_highbd_32x32_func_ptr_array[ASM_TYPE_TOTAL] = {
+        // NON_SIMD
+        apply_filtering_highbd_c,
+        // SSE4
+        av1_highbd_apply_temporal_filter_sse4_1
 };
 
 // save YUV to file - auxiliary function for debug
@@ -916,12 +972,6 @@ void apply_filtering_c(const uint8_t *y_src,
     }
 }
 
-// TODO: basically, a copy of apply_filtering_c() with these changes: (check if anything else needs to be different)
-//  - inputs are uint16_t instead of uint8_t
-//  - diff_sse is 32 bit
-//  - calculate_squared_errors_highbd() is used instead of calculate_squared_errors()
-//  - adjust_modifier_highbd() instead of adjust_modifier()
-
 // Main function that applies filtering to a block according to the weights - highbd
 void apply_filtering_highbd_c(const uint16_t *y_src,
                               int y_src_stride,
@@ -1191,10 +1241,13 @@ void apply_filtering_block(int block_row,
         pred_ptr_16bit[C_U] = pred_16bit[C_U] + offset_block_buffer_U;
         pred_ptr_16bit[C_V] = pred_16bit[C_V] + offset_block_buffer_V;
 
-//        TempFilteringType apply_32x32_temp_filter_fn = apply_temp_filtering_32x32_func_ptr_array[asm_type];
+        // TODO: delete when simd function for high is fixed
+        asm_type = 0;
+
+        TempFilteringHighbdType apply_32x32_temp_filter_fn = apply_temp_filtering_highbd_32x32_func_ptr_array[asm_type];
 
         // Apply the temporal filtering strategy
-        apply_filtering_highbd_c(src_ptr_16bit[C_Y],
+        apply_32x32_temp_filter_fn(src_ptr_16bit[C_Y],
                                  stride[C_Y],
                                  pred_ptr_16bit[C_Y],
                                  stride_pred[C_Y],
