@@ -310,65 +310,6 @@ static void pack_highbd_pic(EbPictureBufferDesc* pic_ptr_ref, uint16_t* buffer_1
 
 }
 
-static void pack_highbd_block(EbPictureBufferDesc* pic_ptr_ref,
-                              uint16_t* block_16bit[3],
-                              uint32_t offset_y,
-                              uint32_t offset_inc_y,
-                              uint32_t offset_cb,
-                              uint32_t offset_inc_cb,
-                              uint32_t offset_cr,
-                              uint32_t offset_inc_cr,
-                              uint32_t width,
-                              uint32_t height,
-                              int chroma_ss,
-                              EbAsm asm_type){
-
-    uint32_t start_frame_offset_y = (pic_ptr_ref->origin_y)*pic_ptr_ref->stride_y +
-                               (pic_ptr_ref->origin_x);
-    uint32_t start_frame_offset_cb = (pic_ptr_ref->origin_y>>chroma_ss)*pic_ptr_ref->stride_cb +
-                                (pic_ptr_ref->origin_x>>chroma_ss);
-    uint32_t start_frame_offset_cr = (pic_ptr_ref->origin_y>>chroma_ss)*pic_ptr_ref->stride_cr +
-                                (pic_ptr_ref->origin_x>>chroma_ss);
-
-    uint32_t start_frame_inc_offset_y = (pic_ptr_ref->origin_y)*pic_ptr_ref->stride_bit_inc_y +
-                                   (pic_ptr_ref->origin_x);
-    uint32_t start_frame_inc_offset_cb = (pic_ptr_ref->origin_y>>chroma_ss)*pic_ptr_ref->stride_bit_inc_cb +
-                                    (pic_ptr_ref->origin_x>>chroma_ss);
-    uint32_t start_frame_inc_offset_cr = (pic_ptr_ref->origin_y>>chroma_ss)*pic_ptr_ref->stride_bit_inc_cr +
-                                    (pic_ptr_ref->origin_x>>chroma_ss);
-
-    pack2d_src(pic_ptr_ref->buffer_y + start_frame_offset_y + offset_y,
-               pic_ptr_ref->stride_y,
-               pic_ptr_ref->buffer_bit_inc_y + start_frame_inc_offset_y + offset_inc_y,
-               pic_ptr_ref->stride_bit_inc_y,
-               block_16bit[0],
-               pic_ptr_ref->stride_y,
-               width,
-               height,
-               asm_type);
-
-    pack2d_src(pic_ptr_ref->buffer_cb + start_frame_offset_cb + offset_cb,
-               pic_ptr_ref->stride_cb,
-               pic_ptr_ref->buffer_bit_inc_cb + start_frame_inc_offset_cb + offset_inc_cb,
-               pic_ptr_ref->stride_bit_inc_cb,
-               block_16bit[1],
-               pic_ptr_ref->stride_cb,
-               width >> chroma_ss,
-               height >> chroma_ss,
-               asm_type);
-
-    pack2d_src(pic_ptr_ref->buffer_cr + start_frame_offset_cr + offset_cr,
-               pic_ptr_ref->stride_cr,
-               pic_ptr_ref->buffer_bit_inc_cr + start_frame_inc_offset_cr + offset_inc_cr,
-               pic_ptr_ref->stride_bit_inc_cr,
-               block_16bit[2],
-               pic_ptr_ref->stride_cr,
-               width >> chroma_ss,
-               height >> chroma_ss,
-               asm_type);
-
-}
-
 // Copy block/picture of size width x height from src to dst
 void copy_pixels(EbByte dst, int stride_dst, EbByte src, int stride_src, int width, int height){
     int h;
@@ -745,7 +686,7 @@ static INLINE int adjust_modifier(int sum_dist,
     assert(index >= 0 && index <= 13);
     assert(index_mult[index] != 0);
 
-    // TODO: change to AOMMIN()
+    //mod = (sum_dist / index) * 3;
     int mod = (clamp(sum_dist, 0, UINT16_MAX) * index_mult[index]) >> 16;
 
     mod += rounding;
@@ -760,7 +701,7 @@ static INLINE int adjust_modifier(int sum_dist,
 }
 
 // Adjust value of the modified (weight of filtering) based on the distortion and strength parameter - highbd
-static INLINE int adjust_modifier_highbd(int sum_dist,
+static INLINE int adjust_modifier_highbd(int64_t sum_dist,
                                          int index,
                                          int rounding,
                                          int strength,
@@ -768,9 +709,8 @@ static INLINE int adjust_modifier_highbd(int sum_dist,
     assert(index >= 0 && index <= 13);
     assert(index_mult_highbd[index] != 0);
 
-    sum_dist = sum_dist / 16; // TODO: adjust this according to the encoder bit depth
-
-    int mod = (clamp(sum_dist, 0, UINT16_MAX) * index_mult[index]) >> 16;
+    //mod = (sum_dist / index) * 3;
+    int mod = (int)((AOMMIN(sum_dist, INT32_MAX) * index_mult_highbd[index]) >> 32);
 
     mod += rounding;
     mod >>= strength;
@@ -999,7 +939,6 @@ void apply_filtering_highbd_c(const uint16_t *y_src,
 
     unsigned int i, j, k, m;
     int idx, idy;
-    int modifier;
     const int rounding = (1 << strength) >> 1;
     const unsigned int uv_block_width = block_width >> ss_x;
     const unsigned int uv_block_height = block_height >> ss_y;
@@ -1022,25 +961,7 @@ void apply_filtering_highbd_c(const uint16_t *y_src,
     calculate_squared_errors_highbd(v_src, uv_src_stride, v_pre, uv_pre_stride,
                              v_diff_sse, uv_block_width, uv_block_height);
 
-//    save_YUV_to_file_highbd("block_pred_32x32_10bit.yuv", y_pre, u_pre, v_pre,
-//                                32, 32, y_pre_stride, uv_pre_stride, uv_pre_stride, 0, 0);
-//    save_YUV_to_file_highbd("block_src_32x32_10bit.yuv", y_src, u_src, v_src,
-//                            32, 32, y_src_stride, uv_src_stride, uv_src_stride, 0, 0);
-//
-//    int sum_y = 0, sum_u = 0, sum_v = 0;
-//    for(i=0; i<1024; i++){
-//        sum_y += y_diff_sse[i];
-//        sum_u += u_diff_sse[i];
-//        sum_v += v_diff_sse[i];
-//    }
-//    double mse_y = (double)sum_y / 1024;
-//    double mse_u = (double)sum_u / 1024;
-//    double mse_v = (double)sum_v / 1024;
-//
-//    printf("mse_y = %lf\n, mse_u = %lf\n, mse_v = %lf\n", mse_y, mse_u, mse_v);
-
     for (i = 0; i < block_height; i++) {
-//        printf("\n");
         for (j = 0; j < block_width; j++) {
             const int pixel_value = y_pre[i * y_pre_stride + j];
 
@@ -1057,8 +978,8 @@ void apply_filtering_highbd_c(const uint16_t *y_src,
 
             const int uv_r = i >> ss_y;
             const int uv_c = j >> ss_x;
-            modifier = 0;
-            int y_diff_sum = 0;
+            int64_t modifier;
+            int64_t y_diff_sum = 0;
 
             for (idy = -1; idy <= 1; ++idy) {
                 for (idx = -1; idx <= 1; ++idx) {
@@ -1094,7 +1015,7 @@ void apply_filtering_highbd_c(const uint16_t *y_src,
 
                 // non-local mean approach
                 int cr_index = 0;
-                int u_mod = 0, v_mod = 0;
+                int64_t u_mod = 0, v_mod = 0;
                 int y_diff = 0;
 
                 for (idy = -1; idy <= 1; ++idy) {
@@ -1140,8 +1061,6 @@ void apply_filtering_highbd_c(const uint16_t *y_src,
             }
         }
     }
-
-//    printf("done");
 }
 
 void apply_filtering_block(int block_row,
@@ -1240,9 +1159,6 @@ void apply_filtering_block(int block_row,
         pred_ptr_16bit[C_Y] = pred_16bit[C_Y] + offset_block_buffer_Y;
         pred_ptr_16bit[C_U] = pred_16bit[C_U] + offset_block_buffer_U;
         pred_ptr_16bit[C_V] = pred_16bit[C_V] + offset_block_buffer_V;
-
-        // TODO: delete when simd function for high is fixed
-        asm_type = 0;
 
         TempFilteringHighbdType apply_32x32_temp_filter_fn = apply_temp_filtering_highbd_32x32_func_ptr_array[asm_type];
 
@@ -2166,7 +2082,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                     // TODO: implement a 64x64 SIMD version
                     for(int block_row = 0; block_row<2; block_row++){
                         for(int block_col = 0; block_col<2; block_col++) {
-//                            eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
                             apply_filtering_block(block_row,
                                                   block_col,
                                                   src_center_ptr,
@@ -2185,7 +2100,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                                   blk_fw,
                                                   is_highbd,
                                                   asm_type);
-//                            eb_release_mutex(picture_control_set_ptr_central->temp_filt_mutex);
                         }
                     }
                 }
@@ -2365,7 +2279,9 @@ double estimate_noise_highbd(const uint16_t *src,
 
 // Adjust filtering parameters: strength and nframes
 static void adjust_filter_strength(double noise_level,
-                                   uint8_t *altref_strength) {
+                                   uint8_t *altref_strength,
+                                   int is_highbd,
+                                   int encoder_bit_depth) {
 
     int strength = *altref_strength, adj_strength=strength;
 
@@ -2398,6 +2314,10 @@ static void adjust_filter_strength(double noise_level,
 
     // TODO: apply further refinements to the filter parameters
     // according to 1st pass statistics
+
+    // if highbd, adjust filter strength strength = strength * 2*(bit depth - 8)
+    if(is_highbd)
+        strength = (uint8_t)(strength + 2 * (encoder_bit_depth - 8));
 
     *altref_strength = (uint8_t)strength;
 
@@ -2620,7 +2540,7 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
         }
 
         // adjust filter parameter based on the estimated noise of the picture
-        adjust_filter_strength(noise_level, altref_strength_ptr);
+        adjust_filter_strength(noise_level, altref_strength_ptr, is_highbd, encoder_bit_depth);
 
         // Pad chroma reference samples - once only per picture
         for (int i = 0 ; i < (picture_control_set_ptr_central->past_altref_nframes + picture_control_set_ptr_central->future_altref_nframes + 1); i++) {
