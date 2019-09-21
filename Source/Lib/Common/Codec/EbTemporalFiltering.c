@@ -2120,18 +2120,17 @@ static void adjust_filter_strength(double noise_level,
     else
         strength = 0;
 
-#if DEBUG_TF
-    printf("[DEBUG] noise level: %g, strength = %d, adj_strength = %d\n", noiselevel, *altref_strength, strength);
-#endif
-
-    // TODO: apply further refinements to the filter parameters
-    // according to 1st pass statistics
-
     // if highbd, adjust filter strength strength = strength + 2*(bit depth - 8)
     if(is_highbd)
         strength = strength + 2 * (encoder_bit_depth - 8);
 
+#if DEBUG_TF
+    printf("[DEBUG] noise level: %g, strength = %d, adj_strength = %d\n", noise_level, *altref_strength, strength);
+#endif
+
     *altref_strength = (uint8_t)strength;
+
+    // TODO: apply further refinements to the filter parameters according to 1st pass statistics
 
 }
 
@@ -2378,8 +2377,13 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
     eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
     picture_control_set_ptr_central->temp_filt_seg_acc++;
 
-    picture_control_set_ptr_central->filtered_sse += filtered_sse;
-    picture_control_set_ptr_central->filtered_sse_uv += filtered_sse_uv;
+    if(!is_highbd){
+        picture_control_set_ptr_central->filtered_sse += filtered_sse;
+        picture_control_set_ptr_central->filtered_sse_uv += filtered_sse_uv;
+    }else{
+        picture_control_set_ptr_central->filtered_sse += filtered_sse >> 4;
+        picture_control_set_ptr_central->filtered_sse_uv += filtered_sse_uv >> 4;
+    }
 
     if (picture_control_set_ptr_central->temp_filt_seg_acc == picture_control_set_ptr_central->tf_segments_total_count){
 
