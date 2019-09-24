@@ -640,7 +640,7 @@ void* resource_coordination_kernel(void *input_ptr)
             sb_params_init(sequence_control_set_ptr);
             sb_geom_init(sequence_control_set_ptr);
 
-        sequence_control_set_ptr->enable_altrefs =  sequence_control_set_ptr->static_config.enable_altrefs &&
+            sequence_control_set_ptr->enable_altrefs =  sequence_control_set_ptr->static_config.enable_altrefs &&
                     sequence_control_set_ptr->static_config.altref_nframes > 1 ? EB_TRUE : EB_FALSE;    
 
 #if II_COMP_FLAG
