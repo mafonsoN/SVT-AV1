@@ -1726,6 +1726,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     int frame_index;
     DECLARE_ALIGNED(16, uint32_t, accumulator[BLK_PELS * COLOR_CHANNELS]);
     DECLARE_ALIGNED(16, uint16_t, counter[BLK_PELS * COLOR_CHANNELS]);
+    uint32_t *accum[COLOR_CHANNELS] = { accumulator, accumulator + BLK_PELS, accumulator + (BLK_PELS<<1) };
+    uint16_t *count[COLOR_CHANNELS] = { counter, counter + BLK_PELS, counter + (BLK_PELS<<1) };
 
     EbByte predictor = { NULL };
     uint16_t *predictor_16bit = { NULL };
@@ -1736,9 +1738,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     }
     EbByte pred[COLOR_CHANNELS] = { predictor, predictor + BLK_PELS, predictor + (BLK_PELS<<1) };
     uint16_t* pred_16bit[COLOR_CHANNELS] = { predictor_16bit, predictor_16bit + BLK_PELS, predictor_16bit + (BLK_PELS<<1) };
-
-    uint32_t *accum[COLOR_CHANNELS] = { accumulator, accumulator + BLK_PELS, accumulator + (BLK_PELS<<1) };
-    uint16_t *count[COLOR_CHANNELS] = { counter, counter + BLK_PELS, counter + (BLK_PELS<<1) };
 
     EbByte src_center_ptr_start[COLOR_CHANNELS], src_center_ptr[COLOR_CHANNELS];
     uint16_t* altref_buffer_highbd_start[COLOR_CHANNELS], *altref_buffer_highbd_ptr[COLOR_CHANNELS];
@@ -2160,6 +2159,7 @@ static void pad_and_decimate_filtered_pic(PictureParentControlSet *picture_contr
 
 // save original enchanced_picture_ptr buffer in a separate buffer (to be replaced by the temporally filtered pic)
 static EbErrorType save_src_pic_buffers(PictureParentControlSet *picture_control_set_ptr_central,
+                                        uint32_t ss_y,
                                         EbBool is_highbd){
 
     // allocate memory for the copy of the original enhanced buffer
@@ -2183,9 +2183,13 @@ static EbErrorType save_src_pic_buffers(PictureParentControlSet *picture_control
     // copy buffers
     // Y
     uint32_t height_y = (uint32_t)(picture_control_set_ptr_central->enhanced_picture_ptr->height +
-            picture_control_set_ptr_central->enhanced_picture_ptr->origin_y * 2);
-    uint32_t height_uv = (uint32_t)(picture_control_set_ptr_central->enhanced_picture_ptr->height +
-                                   picture_control_set_ptr_central->enhanced_picture_ptr->origin_y * 2);
+                                  picture_control_set_ptr_central->enhanced_picture_ptr->origin_y * 2);
+    uint32_t height_uv = (uint32_t)((picture_control_set_ptr_central->enhanced_picture_ptr->height +
+                                   picture_control_set_ptr_central->enhanced_picture_ptr->origin_y * 2) >> ss_y);
+
+    assert(height_y * picture_control_set_ptr_central->enhanced_picture_ptr->stride_y == picture_control_set_ptr_central->enhanced_picture_ptr->luma_size);
+    assert(height_uv * picture_control_set_ptr_central->enhanced_picture_ptr->stride_cb == picture_control_set_ptr_central->enhanced_picture_ptr->chroma_size);
+    assert(height_uv * picture_control_set_ptr_central->enhanced_picture_ptr->stride_cr == picture_control_set_ptr_central->enhanced_picture_ptr->chroma_size);
 
     pic_copy_kernel_8bit(picture_control_set_ptr_central->enhanced_picture_ptr->buffer_y,
                          picture_control_set_ptr_central->enhanced_picture_ptr->stride_y,
@@ -2316,6 +2320,7 @@ EbErrorType svt_av1_init_temporal_filtering(PictureParentControlSet **list_pictu
         // if stat_report is enabled for PSNR computation
         if(picture_control_set_ptr_central->sequence_control_set_ptr->static_config.stat_report){
             save_src_pic_buffers(picture_control_set_ptr_central,
+                                 ss_y,
                                  is_highbd);
         }
 
