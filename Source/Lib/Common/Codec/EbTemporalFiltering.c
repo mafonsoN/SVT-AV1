@@ -1774,29 +1774,29 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     uint32_t y_b64_end_idx   = SEGMENT_END_IDX  (y_seg_idx, picture_height_in_b64, picture_control_set_ptr_central->tf_segments_row_count);
 
     // first position of the frame buffer according to the index center
-    src_center_ptr_start[C_Y] = list_input_picture_ptr[index_center]->buffer_y +
-                            list_input_picture_ptr[index_center]->origin_y*list_input_picture_ptr[index_center]->stride_y +
-                            list_input_picture_ptr[index_center]->origin_x;
+    src_center_ptr_start[C_Y] = input_picture_ptr_central->buffer_y +
+                            input_picture_ptr_central->origin_y*input_picture_ptr_central->stride_y +
+                            input_picture_ptr_central->origin_x;
 
-    src_center_ptr_start[C_U] = list_input_picture_ptr[index_center]->buffer_cb +
-                            (list_input_picture_ptr[index_center]->origin_y>>ss_y)*list_input_picture_ptr[index_center]->stride_cb +
-                            (list_input_picture_ptr[index_center]->origin_x>>ss_x);
+    src_center_ptr_start[C_U] = input_picture_ptr_central->buffer_cb +
+                            (input_picture_ptr_central->origin_y>>ss_y)*input_picture_ptr_central->stride_cb +
+                            (input_picture_ptr_central->origin_x>>ss_x);
 
-    src_center_ptr_start[C_V] = list_input_picture_ptr[index_center]->buffer_cr +
-                            (list_input_picture_ptr[index_center]->origin_y>>ss_y)*list_input_picture_ptr[index_center]->stride_cr +
-                            (list_input_picture_ptr[index_center]->origin_x>>ss_x);
+    src_center_ptr_start[C_V] = input_picture_ptr_central->buffer_cr +
+                            (input_picture_ptr_central->origin_y>>ss_y)*input_picture_ptr_central->stride_cr +
+                            (input_picture_ptr_central->origin_x>>ss_x);
 
     altref_buffer_highbd_start[C_Y] = picture_control_set_ptr_central->altref_buffer_highbd[C_Y] +
-                                list_input_picture_ptr[index_center]->origin_y*list_input_picture_ptr[index_center]->stride_y +
-                                list_input_picture_ptr[index_center]->origin_x;
+                                input_picture_ptr_central->origin_y*input_picture_ptr_central->stride_y +
+                                input_picture_ptr_central->origin_x;
 
     altref_buffer_highbd_start[C_U] = picture_control_set_ptr_central->altref_buffer_highbd[C_U] +
-                                (list_input_picture_ptr[index_center]->origin_y>>ss_y)*list_input_picture_ptr[index_center]->stride_bit_inc_cb +
-                                (list_input_picture_ptr[index_center]->origin_x>>ss_x);
+                                (input_picture_ptr_central->origin_y>>ss_y)*input_picture_ptr_central->stride_bit_inc_cb +
+                                (input_picture_ptr_central->origin_x>>ss_x);
 
     altref_buffer_highbd_start[C_V] = picture_control_set_ptr_central->altref_buffer_highbd[C_V] +
-                                (list_input_picture_ptr[index_center]->origin_y>>ss_y)*list_input_picture_ptr[index_center]->stride_bit_inc_cr +
-                                (list_input_picture_ptr[index_center]->origin_x>>ss_x);
+                                (input_picture_ptr_central->origin_y>>ss_y)*input_picture_ptr_central->stride_bit_inc_cr +
+                                (input_picture_ptr_central->origin_x>>ss_x);
 
     *filtered_sse       = 0;
     *filtered_sse_uv    = 0;
@@ -1870,7 +1870,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                         (uint32_t)blk_col*BW, // x block
                                         (uint32_t)blk_row*BH, // y block
                                         context_ptr,
-                                        list_input_picture_ptr[index_center]); // source picture
+                                        input_picture_ptr_central); // source picture
 
                     EbBool use_16x16_subblocks_only = EB_TRUE; // TODO: hardcoded to use 16x16 subblocks only, however,
                                                                // the support for the use of 32x32 subblocks as well is almost complete
