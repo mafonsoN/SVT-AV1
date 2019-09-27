@@ -112,66 +112,66 @@ typedef void(*TempFilteringHighbdType)(const uint16_t *y_src,
                                        uint32_t *v_accum,
                                        uint16_t *v_count);
 
-void apply_filtering_c(const uint8_t *y_src,
-                       int y_src_stride,
-                       const uint8_t *y_pre,
-                       int y_pre_stride,
-                       const uint8_t *u_src,
-                       const uint8_t *v_src,
-                       int uv_src_stride,
-                       const uint8_t *u_pre,
-                       const uint8_t *v_pre,
-                       int uv_pre_stride,
-                       unsigned int block_width,
-                       unsigned int block_height,
-                       int ss_x,
-                       int ss_y,
-                       int strength,
-                       const int *blk_fw,
-                       int use_whole_blk,
-                       uint32_t *y_accum,
-                       uint16_t *y_count,
-                       uint32_t *u_accum,
-                       uint16_t *u_count,
-                       uint32_t *v_accum,
-                       uint16_t *v_count);
+void svt_av1_apply_filtering_c(const uint8_t *y_src,
+                               int y_src_stride,
+                               const uint8_t *y_pre,
+                               int y_pre_stride,
+                               const uint8_t *u_src,
+                               const uint8_t *v_src,
+                               int uv_src_stride,
+                               const uint8_t *u_pre,
+                               const uint8_t *v_pre,
+                               int uv_pre_stride,
+                               unsigned int block_width,
+                               unsigned int block_height,
+                               int ss_x,
+                               int ss_y,
+                               int strength,
+                               const int *blk_fw,
+                               int use_whole_blk,
+                               uint32_t *y_accum,
+                               uint16_t *y_count,
+                               uint32_t *u_accum,
+                               uint16_t *u_count,
+                               uint32_t *v_accum,
+                               uint16_t *v_count);
 
-void apply_filtering_highbd_c(const uint16_t *y_src,
-                              int y_src_stride,
-                              const uint16_t *y_pre,
-                              int y_pre_stride,
-                              const uint16_t *u_src,
-                              const uint16_t *v_src,
-                              int uv_src_stride,
-                              const uint16_t *u_pre,
-                              const uint16_t *v_pre,
-                              int uv_pre_stride,
-                              unsigned int block_width,
-                              unsigned int block_height,
-                              int ss_x,
-                              int ss_y,
-                              int strength,
-                              const int *blk_fw,
-                              int use_whole_blk,
-                              uint32_t *y_accum,
-                              uint16_t *y_count,
-                              uint32_t *u_accum,
-                              uint16_t *u_count,
-                              uint32_t *v_accum,
-                              uint16_t *v_count);
+void svt_av1_apply_filtering_highbd_c(const uint16_t *y_src,
+                                      int y_src_stride,
+                                      const uint16_t *y_pre,
+                                      int y_pre_stride,
+                                      const uint16_t *u_src,
+                                      const uint16_t *v_src,
+                                      int uv_src_stride,
+                                      const uint16_t *u_pre,
+                                      const uint16_t *v_pre,
+                                      int uv_pre_stride,
+                                      unsigned int block_width,
+                                      unsigned int block_height,
+                                      int ss_x,
+                                      int ss_y,
+                                      int strength,
+                                      const int *blk_fw,
+                                      int use_whole_blk,
+                                      uint32_t *y_accum,
+                                      uint16_t *y_count,
+                                      uint32_t *u_accum,
+                                      uint16_t *u_count,
+                                      uint32_t *v_accum,
+                                      uint16_t *v_count);
 
 static TempFilteringType FUNC_TABLE apply_temp_filtering_32x32_func_ptr_array[ASM_TYPE_TOTAL] = {
         // NON_SIMD
-        apply_filtering_c,
+        svt_av1_apply_filtering_c,
         // SSE4
-        av1_apply_temporal_filter_sse4_1
+        svt_av1_apply_temporal_filter_sse4_1
 };
 
 static TempFilteringHighbdType FUNC_TABLE apply_temp_filtering_highbd_32x32_func_ptr_array[ASM_TYPE_TOTAL] = {
         // NON_SIMD
-        apply_filtering_highbd_c,
+        svt_av1_apply_filtering_highbd_c,
         // SSE4
-        av1_highbd_apply_temporal_filter_sse4_1
+        svt_av1_highbd_apply_temporal_filter_sse4_1
 };
 
 #if DEBUG_TF
@@ -427,11 +427,11 @@ static void populate_list_with_value(int *list,
 }
 
 // get block filter weights using a distance metric
-void get_blk_fw_using_dist(int const *me_32x32_subblock_vf,
-                           int const *me_16x16_subblock_vf,
-                           EbBool use_16x16_subblocks_only,
-                           int *blk_fw,
-                           EbBool is_highbd){
+static void get_blk_fw_using_dist(int const *me_32x32_subblock_vf,
+                                  int const *me_16x16_subblock_vf,
+                                  EbBool use_16x16_subblocks_only,
+                                  int *blk_fw,
+                                  EbBool is_highbd){
     uint32_t blk_idx, idx_32x32;
 
     int me_sum_16x16_subblock_vf[4] = {0};
@@ -502,12 +502,12 @@ void get_blk_fw_using_dist(int const *me_32x32_subblock_vf,
 }
 
 // compute variance for the MC block residuals
-void get_ME_distortion(int* me_32x32_subblock_vf,
-                       int* me_16x16_subblock_vf,
-                       uint8_t* pred_y,
-                       int stride_pred_y,
-                       uint8_t* src_y,
-                       int stride_src_y){
+static void get_ME_distortion(int* me_32x32_subblock_vf,
+                              int* me_16x16_subblock_vf,
+                              uint8_t* pred_y,
+                              int stride_pred_y,
+                              uint8_t* src_y,
+                              int stride_src_y){
     unsigned int sse;
 
     uint8_t * pred_y_ptr;
@@ -566,12 +566,12 @@ static uint32_t variance_highbd_c(const uint16_t *a,
 }
 
 // compute variance for the MC block residuals - highbd
-void get_ME_distortion_highbd(int* me_32x32_subblock_vf,
-                              int* me_16x16_subblock_vf,
-                              uint16_t* pred_y,
-                              int stride_pred_y,
-                              uint16_t* src_y,
-                              int stride_src_y){
+static void get_ME_distortion_highbd(int* me_32x32_subblock_vf,
+                                     int* me_16x16_subblock_vf,
+                                     uint16_t* pred_y,
+                                     int stride_pred_y,
+                                     uint16_t* src_y,
+                                     int stride_src_y){
     unsigned int sse;
 
     uint16_t* pred_Y_ptr;
@@ -599,14 +599,14 @@ void get_ME_distortion_highbd(int* me_32x32_subblock_vf,
 }
 
 // Create and initialize all necessary ME context structures
-void create_ME_context_and_picture_control(MotionEstimationContext_t *context_ptr,
-                                           PictureParentControlSet *picture_control_set_ptr_frame,
-                                           PictureParentControlSet *picture_control_set_ptr_central,
-                                           EbPictureBufferDesc *input_picture_ptr_central,
-                                           int blk_row,
-                                           int blk_col,
-                                           uint32_t ss_x,
-                                           uint32_t ss_y){
+static void create_ME_context_and_picture_control(MotionEstimationContext_t *context_ptr,
+                                                  PictureParentControlSet *picture_control_set_ptr_frame,
+                                                  PictureParentControlSet *picture_control_set_ptr_central,
+                                                  EbPictureBufferDesc *input_picture_ptr_central,
+                                                  int blk_row,
+                                                  int blk_col,
+                                                  uint32_t ss_x,
+                                                  uint32_t ss_y){
     uint32_t lcuRow;
 
     // set reference picture for alt-refs
@@ -826,7 +826,7 @@ static INLINE void calculate_squared_errors(const uint8_t *s,
     for (i = 0; i < h; i++) {
         for (j = 0; j < w; j++) {
             const int16_t diff = s[i * s_stride + j] - p[i * p_stride + j];
-            diff_sse[idx] = (uint16_t)diff * diff;
+            diff_sse[idx] = (uint16_t)(diff * diff);
             idx++;
         }
     }
@@ -852,29 +852,29 @@ static INLINE void calculate_squared_errors_highbd(const uint16_t *s,
 }
 
 // Main function that applies filtering to a block according to the weights
-void apply_filtering_c(const uint8_t *y_src,
-                        int y_src_stride,
-                        const uint8_t *y_pre,
-                        int y_pre_stride,
-                        const uint8_t *u_src,
-                        const uint8_t *v_src,
-                        int uv_src_stride,
-                        const uint8_t *u_pre,
-                        const uint8_t *v_pre,
-                        int uv_pre_stride,
-                        unsigned int block_width,
-                        unsigned int block_height,
-                        int ss_x,
-                        int ss_y,
-                        int strength,
-                        const int *blk_fw,
-                        int use_whole_blk,
-                        uint32_t *y_accum,
-                        uint16_t *y_count,
-                        uint32_t *u_accum,
-                        uint16_t *u_count,
-                        uint32_t *v_accum,
-                        uint16_t *v_count){ // sub-block filter weights
+void svt_av1_apply_filtering_c(const uint8_t *y_src,
+                               int y_src_stride,
+                               const uint8_t *y_pre,
+                               int y_pre_stride,
+                               const uint8_t *u_src,
+                               const uint8_t *v_src,
+                               int uv_src_stride,
+                               const uint8_t *u_pre,
+                               const uint8_t *v_pre,
+                               int uv_pre_stride,
+                               unsigned int block_width,
+                               unsigned int block_height,
+                               int ss_x,
+                               int ss_y,
+                               int strength,
+                               const int *blk_fw,
+                               int use_whole_blk,
+                               uint32_t *y_accum,
+                               uint16_t *y_count,
+                               uint32_t *u_accum,
+                               uint16_t *u_count,
+                               uint32_t *v_accum,
+                               uint16_t *v_count){ // sub-block filter weights
 
     unsigned int i, j, k, m;
     int idx, idy;
@@ -1003,29 +1003,29 @@ void apply_filtering_c(const uint8_t *y_src,
 }
 
 // Main function that applies filtering to a block according to the weights - highbd
-void apply_filtering_highbd_c(const uint16_t *y_src,
-                              int y_src_stride,
-                              const uint16_t *y_pre,
-                              int y_pre_stride,
-                              const uint16_t *u_src,
-                              const uint16_t *v_src,
-                              int uv_src_stride,
-                              const uint16_t *u_pre,
-                              const uint16_t *v_pre,
-                              int uv_pre_stride,
-                              unsigned int block_width,
-                              unsigned int block_height,
-                              int ss_x,
-                              int ss_y,
-                              int strength,
-                              const int *blk_fw,
-                              int use_whole_blk,
-                              uint32_t *y_accum,
-                              uint16_t *y_count,
-                              uint32_t *u_accum,
-                              uint16_t *u_count,
-                              uint32_t *v_accum,
-                              uint16_t *v_count){ // sub-block filter weights
+void svt_av1_apply_filtering_highbd_c(const uint16_t *y_src,
+                                      int y_src_stride,
+                                      const uint16_t *y_pre,
+                                      int y_pre_stride,
+                                      const uint16_t *u_src,
+                                      const uint16_t *v_src,
+                                      int uv_src_stride,
+                                      const uint16_t *u_pre,
+                                      const uint16_t *v_pre,
+                                      int uv_pre_stride,
+                                      unsigned int block_width,
+                                      unsigned int block_height,
+                                      int ss_x,
+                                      int ss_y,
+                                      int strength,
+                                      const int *blk_fw,
+                                      int use_whole_blk,
+                                      uint32_t *y_accum,
+                                      uint16_t *y_count,
+                                      uint32_t *u_accum,
+                                      uint16_t *u_count,
+                                      uint32_t *v_accum,
+                                      uint16_t *v_count){ // sub-block filter weights
 
     unsigned int i, j, k, m;
     int idx, idy;
@@ -1153,24 +1153,24 @@ void apply_filtering_highbd_c(const uint16_t *y_src,
     }
 }
 
-void apply_filtering_block(int block_row,
-                           int block_col,
-                           EbByte *src,
-                           uint16_t** src_16bit,
-                           EbByte *pred,
-                           uint16_t** pred_16bit,
-                           uint32_t **accum,
-                           uint16_t **count,
-                           uint32_t *stride,
-                           uint32_t *stride_pred,
-                           int block_width,
-                           int block_height,
-                           uint32_t ss_x, // chroma sub-sampling in x
-                           uint32_t ss_y, // chroma sub-sampling in y
-                           int altref_strength,
-                           const int *blk_fw,
-                           EbBool is_highbd,
-                           EbAsm asm_type) {
+static void apply_filtering_block(int block_row,
+                                  int block_col,
+                                  EbByte *src,
+                                  uint16_t** src_16bit,
+                                  EbByte *pred,
+                                  uint16_t** pred_16bit,
+                                  uint32_t **accum,
+                                  uint16_t **count,
+                                  uint32_t *stride,
+                                  uint32_t *stride_pred,
+                                  int block_width,
+                                  int block_height,
+                                  uint32_t ss_x, // chroma sub-sampling in x
+                                  uint32_t ss_y, // chroma sub-sampling in y
+                                  int altref_strength,
+                                  const int *blk_fw,
+                                  EbBool is_highbd,
+                                  EbAsm asm_type) {
 
     int blk_h = BH >> 1; int blk_w = BW >> 1; // fixed 32x32 blocks for now
 
@@ -1372,22 +1372,22 @@ static void apply_filtering_central_highbd(uint16_t** pred_16bit,
 
 uint32_t get_mds_idx(uint32_t  orgx, uint32_t  orgy, uint32_t  size, uint32_t use_128x128);
 
-void tf_inter_prediction(PictureParentControlSet *picture_control_set_ptr,
-                         MeContext* context_ptr,
-                         EbPictureBufferDesc *pic_ptr_ref,
-                         EbByte *pred,
-                         uint16_t** pred_16bit,
-                         uint32_t* stride_pred,
-                         EbByte* src,
-                         uint16_t** src_16bit,
-                         uint32_t* stride_src,
-                         uint32_t sb_origin_x,
-                         uint32_t sb_origin_y,
-                         uint32_t ss_x,
-                         uint32_t ss_y,
-                         const int* use_16x16_subblocks,
-                         int encoder_bit_depth,
-                         EbAsm asm_type)
+static void tf_inter_prediction(PictureParentControlSet *picture_control_set_ptr,
+                                MeContext* context_ptr,
+                                EbPictureBufferDesc *pic_ptr_ref,
+                                EbByte *pred,
+                                uint16_t** pred_16bit,
+                                uint32_t* stride_pred,
+                                EbByte* src,
+                                uint16_t** src_16bit,
+                                uint32_t* stride_src,
+                                uint32_t sb_origin_x,
+                                uint32_t sb_origin_y,
+                                uint32_t ss_x,
+                                uint32_t ss_y,
+                                const int* use_16x16_subblocks,
+                                int encoder_bit_depth,
+                                EbAsm asm_type)
 {
     const InterpFilters interp_filters =
         av1_make_interp_filters(MULTITAP_SHARP, MULTITAP_SHARP);
@@ -1650,16 +1650,16 @@ void tf_inter_prediction(PictureParentControlSet *picture_control_set_ptr,
 
 }
 
-void get_final_filtered_pixels(EbByte* src_center_ptr_start,
-                               uint16_t** altref_buffer_highbd_start,
-                               uint32_t** accum,
-                               uint16_t** count,
-                               const uint32_t* stride,
-                               int blk_y_src_offset,
-                               int blk_ch_src_offset,
-                               uint64_t* filtered_sse,
-                               uint64_t* filtered_sse_uv,
-                               EbBool is_highbd){
+static void get_final_filtered_pixels(EbByte* src_center_ptr_start,
+                                      uint16_t** altref_buffer_highbd_start,
+                                      uint32_t** accum,
+                                      uint16_t** count,
+                                      const uint32_t* stride,
+                                      int blk_y_src_offset,
+                                      int blk_ch_src_offset,
+                                      uint64_t* filtered_sse,
+                                      uint64_t* filtered_sse_uv,
+                                      EbBool is_highbd){
 
             int i, j, k;
 
@@ -2046,11 +2046,11 @@ static double estimate_noise(const uint8_t* src,
 }
 
 // Noise estimation for highbd
-double estimate_noise_highbd(const uint16_t *src,
-                             int width,
-                             int height,
-                             int stride,
-                             int bd) {
+static double estimate_noise_highbd(const uint16_t *src,
+                                    int width,
+                                    int height,
+                                    int stride,
+                                    int bd) {
     int64_t sum = 0;
     int64_t num = 0;
 
@@ -2129,7 +2129,7 @@ static void adjust_filter_strength(double noise_level,
 
 }
 
-int pad_and_decimate_filtered_pic(PictureParentControlSet *picture_control_set_ptr_central){
+static void pad_and_decimate_filtered_pic(PictureParentControlSet *picture_control_set_ptr_central){
     // reference structures (padded pictures + downsampled versions)
     EbPaReferenceObject *src_object = (EbPaReferenceObject*)picture_control_set_ptr_central->pa_reference_picture_wrapper_ptr->object_ptr;
     EbPictureBufferDesc *padded_pic_ptr = src_object->input_padded_picture_ptr;
@@ -2156,31 +2156,11 @@ int pad_and_decimate_filtered_pic(PictureParentControlSet *picture_control_set_p
             padded_pic_ptr,
             src_object->quarter_filtered_picture_ptr,
             src_object->sixteenth_filtered_picture_ptr);
-    return 0;
-}
-
-// Copy block/picture of size width x height from src to dst with origin_src and origin_dst
-void copy_pixels_with_origin(EbByte dst, int stride_dst,
-                             int origin_dst_y, int origin_dst_x,
-                             EbByte src, int stride_src,
-                             int origin_src_y, int origin_src_x,
-                             int width, int height){
-
-    int h;
-    EbByte src_cpy = src + origin_src_y*stride_src + origin_src_x;
-    EbByte dst_cpy = dst + origin_dst_y*stride_dst + origin_dst_x;
-
-    for (h=0; h<height; h++){
-        EB_MEMCPY(dst_cpy, src_cpy, width * sizeof(uint8_t));
-        dst_cpy += stride_dst;
-        src_cpy += stride_src;
-    }
-
 }
 
 // save original enchanced_picture_ptr buffer in a separate buffer (to be replaced by the temporally filtered pic)
-EbErrorType save_src_pic_buffers(PictureParentControlSet *picture_control_set_ptr_central,
-                                 EbBool is_highbd){
+static EbErrorType save_src_pic_buffers(PictureParentControlSet *picture_control_set_ptr_central,
+                                        EbBool is_highbd){
 
     // allocate memory for the copy of the original enhanced buffer
     EB_MALLOC_ARRAY(picture_control_set_ptr_central->save_enhanced_picture_ptr[C_Y],
@@ -2257,10 +2237,10 @@ EbErrorType save_src_pic_buffers(PictureParentControlSet *picture_control_set_pt
 
 }
 
-int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
-                            PictureParentControlSet *picture_control_set_ptr_central,
-                            MotionEstimationContext_t *me_context_ptr,
-                            int32_t segment_index) {
+EbErrorType svt_av1_init_temporal_filtering(PictureParentControlSet **list_picture_control_set_ptr,
+                                            PictureParentControlSet *picture_control_set_ptr_central,
+                                            MotionEstimationContext_t *me_context_ptr,
+                                            int32_t segment_index) {
     uint8_t *altref_strength_ptr, index_center;
     EbPictureBufferDesc *central_picture_ptr;
 
@@ -2429,8 +2409,6 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
 
     eb_release_mutex(picture_control_set_ptr_central->temp_filt_mutex);
 
-    // TODO: do a proper error return
-    int return_value = 0;
-    return return_value;
+    return EB_ErrorNone;
 
 }
