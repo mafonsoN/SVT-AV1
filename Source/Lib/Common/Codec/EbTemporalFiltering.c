@@ -1721,17 +1721,24 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                                    uint64_t *filtered_sse,
                                                    uint64_t *filtered_sse_uv,
                                                    MotionEstimationContext_t *me_context_ptr,
-                                                   int32_t segment_index) {
+                                                   int32_t segment_index,
+                                                   EbBool is_highbd) {
     int frame_index;
     DECLARE_ALIGNED(16, uint32_t, accumulator[BLK_PELS * COLOR_CHANNELS]);
     DECLARE_ALIGNED(16, uint16_t, counter[BLK_PELS * COLOR_CHANNELS]);
-    DECLARE_ALIGNED(32, uint8_t, predictor[BLK_PELS * COLOR_CHANNELS]);
-    DECLARE_ALIGNED(32, uint16_t, predictor_16bit[BLK_PELS * COLOR_CHANNELS]);
+
+    EbByte predictor = { NULL };
+    uint16_t *predictor_16bit = { NULL };
+    if(!is_highbd){
+        EB_MALLOC_ALIGNED_ARRAY(predictor, BLK_PELS * COLOR_CHANNELS);
+    }else{
+        EB_MALLOC_ALIGNED_ARRAY(predictor_16bit, BLK_PELS * COLOR_CHANNELS);
+    }
+    EbByte pred[COLOR_CHANNELS] = { predictor, predictor + BLK_PELS, predictor + (BLK_PELS<<1) };
+    uint16_t* pred_16bit[COLOR_CHANNELS] = { predictor_16bit, predictor_16bit + BLK_PELS, predictor_16bit + (BLK_PELS<<1) };
 
     uint32_t *accum[COLOR_CHANNELS] = { accumulator, accumulator + BLK_PELS, accumulator + (BLK_PELS<<1) };
     uint16_t *count[COLOR_CHANNELS] = { counter, counter + BLK_PELS, counter + (BLK_PELS<<1) };
-    EbByte pred[COLOR_CHANNELS] = { predictor, predictor + BLK_PELS, predictor + (BLK_PELS<<1) };
-    uint16_t* pred_16bit[COLOR_CHANNELS] = { predictor_16bit, predictor_16bit + BLK_PELS, predictor_16bit + (BLK_PELS<<1) };
 
     EbByte src_center_ptr_start[COLOR_CHANNELS], src_center_ptr[COLOR_CHANNELS];
     uint16_t* altref_buffer_highbd_start[COLOR_CHANNELS], *altref_buffer_highbd_ptr[COLOR_CHANNELS];
@@ -1747,7 +1754,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     EbAsm asm_type = picture_control_set_ptr_central->sequence_control_set_ptr->encode_context_ptr->asm_type;
 
     int encoder_bit_depth = (int)picture_control_set_ptr_central->sequence_control_set_ptr->static_config.encoder_bit_depth;
-    EbBool is_highbd = (encoder_bit_depth == 8) ? (uint8_t)EB_FALSE : (uint8_t)EB_TRUE;
 
     // chroma subsampling
     uint32_t ss_x = picture_control_set_ptr_central->sequence_control_set_ptr->subsampling_x;
@@ -1982,6 +1988,11 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                       is_highbd);
         }
     }
+
+    if(!is_highbd)
+        EB_FREE_ALIGNED_ARRAY(predictor);
+    else
+        EB_FREE_ALIGNED_ARRAY(predictor_16bit);
 
     return EB_ErrorNone;
 }
@@ -2345,7 +2356,8 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
                                     &filtered_sse,
                                     &filtered_sse_uv,
                                     me_context_ptr,
-                                    segment_index);
+                                    segment_index,
+                                    is_highbd);
 
     eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
     picture_control_set_ptr_central->temp_filt_seg_acc++;
