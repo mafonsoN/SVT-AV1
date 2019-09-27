@@ -418,32 +418,6 @@ void generate_padding_pic(EbPictureBufferDesc* pic_ptr,
     }
 }
 
-void get_ss_from_color_format(EbColorFormat color_format,
-                              uint32_t *ss_x,
-                              uint32_t *ss_y) {
-    switch (color_format) {
-        case EB_YUV420 :
-            *ss_x = 1;
-            *ss_y = 1;
-            break;
-        case EB_YUV422 :
-            *ss_x = 1;
-            *ss_y = 0;
-            break;
-        case EB_YUV444 :
-            *ss_x = 0;
-            *ss_y = 0;
-            break;
-        case EB_YUV400:
-            printf("Unsupported colour format: YUV400\n");
-            assert(0);
-        default :
-            printf("Unsupported colour format\n");
-            assert(0);
-    }
-}
-
-
 // assign a single value to all elements in an array
 static void populate_list_with_value(int *list,
                                      int nelements,
@@ -1776,9 +1750,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     EbBool is_highbd = (encoder_bit_depth == 8) ? (uint8_t)EB_FALSE : (uint8_t)EB_TRUE;
 
     // chroma subsampling
-    EbColorFormat color_format = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.encoder_color_format;
-    uint32_t ss_x = 0, ss_y = 0;
-    get_ss_from_color_format(color_format, &ss_x, &ss_y);
+    uint32_t ss_x = picture_control_set_ptr_central->sequence_control_set_ptr->subsampling_x;
+    uint32_t ss_y = picture_control_set_ptr_central->sequence_control_set_ptr->subsampling_y;
 
     uint32_t blk_cols = (uint32_t)(input_picture_ptr_central->width + BW - 1) / BW; // I think only the part of the picture
     uint32_t blk_rows = (uint32_t)(input_picture_ptr_central->height + BH - 1) / BH; // that fits to the 32x32 blocks are actually filtered
@@ -2296,9 +2269,9 @@ int init_temporal_filtering(PictureParentControlSet **list_picture_control_set_p
 
     EbAsm asm_type = picture_control_set_ptr_central->sequence_control_set_ptr->encode_context_ptr->asm_type;
 
-    EbColorFormat color_format = picture_control_set_ptr_central->sequence_control_set_ptr->static_config.encoder_color_format;
-    uint32_t ss_x = 0, ss_y = 0;
-    get_ss_from_color_format(color_format, &ss_x, &ss_y);
+    // chroma subsampling
+    uint32_t ss_x = picture_control_set_ptr_central->sequence_control_set_ptr->subsampling_x;
+    uint32_t ss_y = picture_control_set_ptr_central->sequence_control_set_ptr->subsampling_y;
 
     //only one performs any picture based prep
     eb_block_on_mutex(picture_control_set_ptr_central->temp_filt_mutex);
