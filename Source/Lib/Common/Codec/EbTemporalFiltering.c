@@ -882,24 +882,24 @@ void apply_filtering_c(const uint8_t *y_src,
     const int rounding = (1 << strength) >> 1;
     const unsigned int uv_block_width = block_width >> ss_x;
     const unsigned int uv_block_height = block_height >> ss_y;
-    DECLARE_ALIGNED(16, uint16_t, y_diff_sse[BLK_PELS]);
-    DECLARE_ALIGNED(16, uint16_t, u_diff_sse[BLK_PELS]);
-    DECLARE_ALIGNED(16, uint16_t, v_diff_sse[BLK_PELS]);
+    DECLARE_ALIGNED(16, uint16_t, y_diff_se[BLK_PELS]);
+    DECLARE_ALIGNED(16, uint16_t, u_diff_se[BLK_PELS]);
+    DECLARE_ALIGNED(16, uint16_t, v_diff_se[BLK_PELS]);
 
-    memset(y_diff_sse, 0, BLK_PELS * sizeof(uint16_t));
-    memset(u_diff_sse, 0, BLK_PELS * sizeof(uint16_t));
-    memset(v_diff_sse, 0, BLK_PELS * sizeof(uint16_t));
+    memset(y_diff_se, 0, BLK_PELS * sizeof(uint16_t));
+    memset(u_diff_se, 0, BLK_PELS * sizeof(uint16_t));
+    memset(v_diff_se, 0, BLK_PELS * sizeof(uint16_t));
 
     assert(use_whole_blk == 0);
     UNUSED(use_whole_blk);
 
     // Calculate squared differences for each pixel of the block (pred-orig)
-    calculate_squared_errors(y_src, y_src_stride, y_pre, y_pre_stride, y_diff_sse,
+    calculate_squared_errors(y_src, y_src_stride, y_pre, y_pre_stride, y_diff_se,
                              block_width, block_height);
     calculate_squared_errors(u_src, uv_src_stride, u_pre, uv_pre_stride,
-                             u_diff_sse, uv_block_width, uv_block_height);
+                             u_diff_se, uv_block_width, uv_block_height);
     calculate_squared_errors(v_src, uv_src_stride, v_pre, uv_pre_stride,
-                             v_diff_sse, uv_block_width, uv_block_height);
+                             v_diff_se, uv_block_width, uv_block_height);
 
     for (i = 0; i < block_height; i++) {
         for (j = 0; j < block_width; j++) {
@@ -927,7 +927,7 @@ void apply_filtering_c(const uint8_t *y_src,
 
                     if (row >= 0 && row < (int)block_height && col >= 0 &&
                         col < (int)block_width) {
-                        modifier += y_diff_sse[row * (int)block_width + col];
+                        modifier += y_diff_se[row * (int)block_width + col];
                         ++y_index;
                     }
                 }
@@ -935,8 +935,8 @@ void apply_filtering_c(const uint8_t *y_src,
 
             assert(y_index > 0);
 
-            modifier += u_diff_sse[uv_r * uv_block_width + uv_c];
-            modifier += v_diff_sse[uv_r * uv_block_width + uv_c];
+            modifier += u_diff_se[uv_r * uv_block_width + uv_c];
+            modifier += v_diff_se[uv_r * uv_block_width + uv_c];
 
             y_index += 2;
 
@@ -964,8 +964,8 @@ void apply_filtering_c(const uint8_t *y_src,
 
                         if (row >= 0 && row < (int)uv_block_height && col >= 0 &&
                             col < (int)uv_block_width) {
-                            u_mod += u_diff_sse[row * uv_block_width + col];
-                            v_mod += v_diff_sse[row * uv_block_width + col];
+                            u_mod += u_diff_se[row * uv_block_width + col];
+                            v_mod += v_diff_se[row * uv_block_width + col];
                             ++cr_index;
                         }
                     }
@@ -977,7 +977,7 @@ void apply_filtering_c(const uint8_t *y_src,
                     for (idx = 0; idx < 1 + ss_x; ++idx) {
                         const int row = (uv_r << ss_y) + idy;
                         const int col = (uv_c << ss_x) + idx;
-                        y_diff += y_diff_sse[row * (int)block_width + col];
+                        y_diff += y_diff_se[row * (int)block_width + col];
                         ++cr_index;
                     }
                 }
@@ -1032,24 +1032,24 @@ void apply_filtering_highbd_c(const uint16_t *y_src,
     const int rounding = (1 << strength) >> 1;
     const unsigned int uv_block_width = block_width >> ss_x;
     const unsigned int uv_block_height = block_height >> ss_y;
-    DECLARE_ALIGNED(16, uint32_t, y_diff_sse[BLK_PELS]);
-    DECLARE_ALIGNED(16, uint32_t, u_diff_sse[BLK_PELS]);
-    DECLARE_ALIGNED(16, uint32_t, v_diff_sse[BLK_PELS]);
+    DECLARE_ALIGNED(16, uint32_t, y_diff_se[BLK_PELS]);
+    DECLARE_ALIGNED(16, uint32_t, u_diff_se[BLK_PELS]);
+    DECLARE_ALIGNED(16, uint32_t, v_diff_se[BLK_PELS]);
 
-    memset(y_diff_sse, 0, BLK_PELS * sizeof(uint32_t));
-    memset(u_diff_sse, 0, BLK_PELS * sizeof(uint32_t));
-    memset(v_diff_sse, 0, BLK_PELS * sizeof(uint32_t));
+    memset(y_diff_se, 0, BLK_PELS * sizeof(uint32_t));
+    memset(u_diff_se, 0, BLK_PELS * sizeof(uint32_t));
+    memset(v_diff_se, 0, BLK_PELS * sizeof(uint32_t));
 
     assert(use_whole_blk == 0);
     UNUSED(use_whole_blk);
 
     // Calculate squared differences for each pixel of the block (pred-orig)
-    calculate_squared_errors_highbd(y_src, y_src_stride, y_pre, y_pre_stride, y_diff_sse,
+    calculate_squared_errors_highbd(y_src, y_src_stride, y_pre, y_pre_stride, y_diff_se,
                              block_width, block_height);
     calculate_squared_errors_highbd(u_src, uv_src_stride, u_pre, uv_pre_stride,
-                             u_diff_sse, uv_block_width, uv_block_height);
+                             u_diff_se, uv_block_width, uv_block_height);
     calculate_squared_errors_highbd(v_src, uv_src_stride, v_pre, uv_pre_stride,
-                             v_diff_sse, uv_block_width, uv_block_height);
+                             v_diff_se, uv_block_width, uv_block_height);
 
     for (i = 0; i < block_height; i++) {
         for (j = 0; j < block_width; j++) {
@@ -1078,7 +1078,7 @@ void apply_filtering_highbd_c(const uint16_t *y_src,
 
                     if (row >= 0 && row < (int)block_height && col >= 0 &&
                         col < (int)block_width) {
-                        y_diff_sum += y_diff_sse[row * (int)block_width + col];
+                        y_diff_sum += y_diff_se[row * (int)block_width + col];
                         ++y_index;
                     }
                 }
@@ -1086,8 +1086,8 @@ void apply_filtering_highbd_c(const uint16_t *y_src,
 
             assert(y_index > 0);
 
-            y_diff_sum += u_diff_sse[uv_r * uv_block_width + uv_c];
-            y_diff_sum += v_diff_sse[uv_r * uv_block_width + uv_c];
+            y_diff_sum += u_diff_se[uv_r * uv_block_width + uv_c];
+            y_diff_sum += v_diff_se[uv_r * uv_block_width + uv_c];
 
             y_index += 2;
 
@@ -1115,8 +1115,8 @@ void apply_filtering_highbd_c(const uint16_t *y_src,
 
                         if (row >= 0 && row < (int)uv_block_height && col >= 0 &&
                             col < (int)uv_block_width) {
-                            u_mod += u_diff_sse[row * uv_block_width + col];
-                            v_mod += v_diff_sse[row * uv_block_width + col];
+                            u_mod += u_diff_se[row * uv_block_width + col];
+                            v_mod += v_diff_se[row * uv_block_width + col];
                             ++cr_index;
                         }
                     }
@@ -1128,7 +1128,7 @@ void apply_filtering_highbd_c(const uint16_t *y_src,
                     for (idx = 0; idx < 1 + ss_x; ++idx) {
                         const int row = (uv_r << ss_y) + idy;
                         const int col = (uv_c << ss_x) + idx;
-                        y_diff += y_diff_sse[row * (int)block_width + col];
+                        y_diff += y_diff_se[row * (int)block_width + col];
                         ++cr_index;
                     }
                 }
