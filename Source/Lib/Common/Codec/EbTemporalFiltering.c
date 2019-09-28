@@ -36,6 +36,7 @@
 #include "EbPictureOperators.h"
 #include "EbInterPrediction.h"
 #include "aom_dsp_rtcd.h"
+#include "EbComputeVariance_C.h"
 
 #undef _MM_HINT_T2
 #define _MM_HINT_T2  1
@@ -536,33 +537,6 @@ static void get_ME_distortion(int* me_32x32_subblock_vf,
 
         me_16x16_subblock_vf[index_16x16] = fn_ptr->vf(pred_y_ptr, stride_pred_y, src_y_ptr, stride_src_y, &sse );
     }
-}
-
-// TODO: use or implement a simd version of this
-static uint32_t variance_highbd_c(const uint16_t *a,
-                                  int a_stride,
-                                  const uint16_t *b,
-                                  int b_stride,
-                                  int w,
-                                  int h,
-                                  uint32_t *sse) {
-    int i, j;
-
-    int sad = 0;
-    *sse = 0;
-
-    for (i = 0; i < h; ++i) {
-        for (j = 0; j < w; ++j) {
-            const int diff = a[j] - b[j];
-            sad += diff;
-            *sse += diff * diff;
-        }
-
-        a += a_stride;
-        b += b_stride;
-    }
-
-    return *sse - (sad * sad)/(w*h);
 }
 
 // compute variance for the MC block residuals - highbd
