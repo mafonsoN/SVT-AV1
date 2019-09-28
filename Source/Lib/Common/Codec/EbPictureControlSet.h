@@ -13752,7 +13752,6 @@ extern "C" {
         // Rate Control
         uint8_t                               picture_qp;
         uint8_t                               dif_cu_delta_qp_depth;
-        uint8_t                               use_delta_qp;
 
         // SB Array
         uint8_t                               sb_max_depth;
@@ -13878,6 +13877,10 @@ extern "C" {
         EbBool    raster_scan_cu_validity[CU_MAX_COUNT];
         uint8_t   potential_logo_sb;
         uint8_t   is_edge_sb;
+        uint32_t  tile_start_x;
+        uint32_t  tile_start_y;
+        uint32_t  tile_end_x;
+        uint32_t  tile_end_y;
     } SbParams;
 
     typedef struct SbGeom

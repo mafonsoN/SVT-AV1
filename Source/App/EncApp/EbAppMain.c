@@ -25,6 +25,8 @@
 #include "EbTime.h"
 #ifdef _WIN32
 #include <Windows.h>
+#include <io.h>     /* _setmode() */
+#include <fcntl.h>  /* _O_BINARY */
 #else
 #include <pthread.h>
 #include <semaphore.h>
@@ -32,10 +34,6 @@
 #include <errno.h>
 #endif
 
-#ifdef _MSC_VER
-#include <io.h>     /* _setmode() */
-#include <fcntl.h>  /* _O_BINARY */
-#endif
 /***************************************
  * External Functions
  ***************************************/
@@ -63,7 +61,7 @@ void EventHandler(int32_t dummy) {
 }
 
 void AssignAppThreadGroup(uint8_t target_socket) {
-#ifdef _MSC_VER
+#ifdef _WIN32
     if (GetActiveProcessorGroupCount() == 2) {
         GROUP_AFFINITY           group_affinity;
         GetThreadGroupAffinity(GetCurrentThread(), &group_affinity);
@@ -83,7 +81,7 @@ double get_psnr(double sse, double max);
  ***************************************/
 int32_t main(int32_t argc, char* argv[])
 {
-#ifdef _MSC_VER
+#ifdef _WIN32
     _setmode(_fileno(stdin), _O_BINARY);
     _setmode(_fileno(stdout), _O_BINARY);
 #endif
@@ -115,8 +113,11 @@ int32_t main(int32_t argc, char* argv[])
         // Initialize config
         for (instanceCount = 0; instanceCount < num_channels; ++instanceCount) {
             configs[instanceCount] = (EbConfig*)malloc(sizeof(EbConfig));
-            if (!configs[instanceCount])
+            if (!configs[instanceCount]) {
+                while(instanceCount-- > 0)
+                    free(configs[instanceCount]);
                 return EB_ErrorInsufficientResources;
+            }
             eb_config_ctor(configs[instanceCount]);
             return_errors[instanceCount] = EB_ErrorNone;
         }
@@ -124,8 +125,11 @@ int32_t main(int32_t argc, char* argv[])
         // Initialize appCallback
         for (instanceCount = 0; instanceCount < num_channels; ++instanceCount) {
             appCallbacks[instanceCount] = (EbAppContext*)malloc(sizeof(EbAppContext));
-            if (!appCallbacks[instanceCount])
+            if (!appCallbacks[instanceCount]) {
+                while(instanceCount-- > 0)
+                    free(appCallbacks[instanceCount]);
                 return EB_ErrorInsufficientResources;
+            }
         }
 
         for (instanceCount = 0; instanceCount < MAX_CHANNEL_NUMBER; ++instanceCount) {

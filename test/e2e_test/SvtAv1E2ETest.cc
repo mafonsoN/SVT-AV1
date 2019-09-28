@@ -104,7 +104,7 @@ std::vector<TestVideoVector> parkjoy = {
 };
 
 static const std::vector<EncTestSetting> default_enc_settings = {
-    {"EncModeTest1", {{"EncoderMode", "1"}}, default_test_vectors},
+    {"EncModeTest1", {{"EncoderMode", "0"}}, default_test_vectors},
     {"EncModeTest2", {{"EncoderMode", "3"}}, default_test_vectors},
     {"EncModeTest3", {{"EncoderMode", "5"}}, default_test_vectors},
     {"EncModeTest4", {{"EncoderMode", "8"}}, default_test_vectors},
@@ -134,9 +134,6 @@ static const std::vector<EncTestSetting> default_enc_settings = {
     // partition_depth and ext_block_flag, since they are
     // not used in encoder;
 
-    // test improve_sharpness, defaut is 0
-    {"SharpnessTest1", {{"ImproveSharpness", "1"}}, default_test_vectors},
-
     // test constrained intra, default is 0
     {"ConstrainIntraTest1", {{"ConstrainedIntra", "1"}}, default_test_vectors},
 
@@ -154,7 +151,7 @@ static const std::vector<EncTestSetting> default_enc_settings = {
 
     // test ScreenContentMode, default 2 auto detection mode;
     {"ScreenToolTest1", {{"ScreenContentMode", "0"}}, default_test_vectors},
-    {"ScreenToolTest2", {{"ScreenContentMode", "1"}}, screen_test_vectors},
+    {"ScreenToolTest2", {{"ScreenContentMode", "1"}, {"EncoderMode", "1"}}, screen_test_vectors},
 
     // test enable_adaptive_quantization, default is 0
     {"AdapQTest1", {{"AdaptiveQuantization", "1"}}, default_test_vectors},
@@ -182,6 +179,8 @@ static const std::vector<EncTestSetting> default_enc_settings = {
 
     // test by using a dummy source of color bar
     {"DummySrcTest1", {{"EncoderMode", "8"}}, dummy_test_vectors},
+    {"DummySrcTest2", {{"EncoderMode", "8"}, {"Profile", "2"}}, dummy_422_test_vectors},
+    {"DummySrcTest3", {{"EncoderMode", "8"}, {"Profile", "1"}}, dummy_444_test_vectors},
 };
 
 /* clang-format on */

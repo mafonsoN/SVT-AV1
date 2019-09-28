@@ -55,12 +55,9 @@
 #ifdef _WIN32
 #include <windows.h>
 #else
-#include <unistd.h>
-#endif
-
-#if defined(__linux__) || defined(__APPLE__)
-#include <pthread.h>
 #include <errno.h>
+#include <pthread.h>
+#include <unistd.h>
 #endif
 
 #define RTCD_C
@@ -110,8 +107,8 @@ typedef struct logicalProcessorGroup {
     uint32_t num;
     uint32_t group[1024];
 }processorGroup;
-#define MAX_PROCESSOR_GROUP 16
-processorGroup                   lp_group[MAX_PROCESSOR_GROUP];
+#define INITIAL_PROCESSOR_GROUP 16
+processorGroup                  *lp_group = NULL;
 #endif
 static int32_t CanUseIntelCore4thGenFeatures()
 {
@@ -154,11 +151,12 @@ EbErrorType InitThreadManagmentParams() {
     const char* PHYSICALID = "physical id";
     int processor_id_len = EB_STRLEN(PROCESSORID, 128);
     int physical_id_len = EB_STRLEN(PHYSICALID, 128);
+    int maxSize = INITIAL_PROCESSOR_GROUP;
     if (processor_id_len < 0 || processor_id_len >= 128)
         return EB_ErrorInsufficientResources;
     if (physical_id_len < 0 || physical_id_len >= 128)
         return EB_ErrorInsufficientResources;
-    memset(lp_group, 0, sizeof(lp_group));
+    memset(lp_group, 0, INITIAL_PROCESSOR_GROUP * sizeof(processorGroup));
 
     FILE *fin = fopen("/proc/cpuinfo", "r");
     if (fin) {
@@ -174,12 +172,18 @@ EbErrorType InitThreadManagmentParams() {
                 char* p = line + physical_id_len;
                 while(*p < '0' || *p > '9') p++;
                 socket_id = strtol(p, NULL, 0);
-                if (socket_id < 0 || socket_id > 15) {
+                if (socket_id < 0) {
                     fclose(fin);
                     return EB_ErrorInsufficientResources;
                 }
                 if (socket_id + 1 > num_groups)
                     num_groups = socket_id + 1;
+                if (socket_id >= maxSize) {
+                    maxSize = maxSize * 2;
+                    lp_group = realloc(lp_group, maxSize * sizeof(processorGroup));
+                    if (lp_group == NULL)
+                        return EB_ErrorInsufficientResources;
+                }
                 lp_group[socket_id].group[lp_group[socket_id].num++] = processor_id;
             }
         }
@@ -285,7 +289,7 @@ void init_intra_predictors_internal(void);
 void eb_av1_init_me_luts(void);
 
 void SwitchToRealTime(){
-#if defined(__linux__) || defined(__APPLE__)
+#ifndef _WIN32
 
     struct sched_param schedParam = {
         .sched_priority = 99
@@ -811,7 +815,7 @@ extern void av1_init_wedge_masks(void);
 /**********************************
 * Initialize Encoder Library
 **********************************/
-#if defined(__linux__) || defined(__APPLE__)
+#ifdef __GNUC__
 __attribute__((visibility("default")))
 #endif
 EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
@@ -1728,7 +1732,7 @@ EB_API EbErrorType eb_init_encoder(EbComponentType *svt_enc_component)
 /**********************************
 * DeInitialize Encoder Library
 **********************************/
-#if defined(__linux__) || defined(__APPLE__)
+#ifdef __GNUC__
 __attribute__((visibility("default")))
 #endif
 EB_API EbErrorType eb_deinit_encoder(EbComponentType *svt_enc_component){
@@ -1745,7 +1749,7 @@ EbErrorType init_svt_av1_encoder_handle(
 /**********************************
 * GetHandle
 **********************************/
-#if defined(__linux__) || defined(__APPLE__)
+#ifdef __GNUC__
 __attribute__((visibility("default")))
 #endif
 EB_API EbErrorType eb_init_handle(
@@ -1757,6 +1761,12 @@ EB_API EbErrorType eb_init_handle(
     EbErrorType           return_error = EB_ErrorNone;
     if(p_handle == NULL)
          return EB_ErrorBadParameter;
+
+    #if defined(__linux__)
+        if(lp_group == NULL) {
+            EB_MALLOC(lp_group, INITIAL_PROCESSOR_GROUP * sizeof(processorGroup));
+        }
+    #endif
 
     *p_handle = (EbComponentType*)malloc(sizeof(EbComponentType));
     if (*p_handle == (EbComponentType*)NULL) {
@@ -1784,7 +1794,7 @@ EB_API EbErrorType eb_init_handle(
 /**********************************
 * Encoder Componenet DeInit
 **********************************/
-EbErrorType eb_h265_enc_component_de_init(EbComponentType  *svt_enc_component)
+EbErrorType eb_av1_enc_component_de_init(EbComponentType  *svt_enc_component)
 {
     EbErrorType       return_error = EB_ErrorNone;
 
@@ -1801,7 +1811,7 @@ EbErrorType eb_h265_enc_component_de_init(EbComponentType  *svt_enc_component)
 /**********************************
 * eb_deinit_handle
 **********************************/
-#if defined(__linux__) || defined(__APPLE__)
+#ifdef __GNUC__
 __attribute__((visibility("default")))
 #endif
 EB_API EbErrorType eb_deinit_handle(
@@ -1810,13 +1820,19 @@ EB_API EbErrorType eb_deinit_handle(
     EbErrorType return_error = EB_ErrorNone;
 
     if (svt_enc_component) {
-        return_error = eb_h265_enc_component_de_init(svt_enc_component);
+        return_error = eb_av1_enc_component_de_init(svt_enc_component);
 
         free(svt_enc_component);
         eb_decrease_component_count();
     }
     else
         return_error = EB_ErrorInvalidComponent;
+
+    #if  defined(__linux__)
+        if(lp_group != NULL) {
+            EB_FREE(lp_group);
+        }
+    #endif
     return return_error;
 }
 
@@ -2082,6 +2098,7 @@ void CopyApiFromApp(
     // Adaptive Loop Filter
     sequence_control_set_ptr->static_config.tile_rows = ((EbSvtAv1EncConfiguration*)pComponentParameterStructure)->tile_rows;
     sequence_control_set_ptr->static_config.tile_columns = ((EbSvtAv1EncConfiguration*)pComponentParameterStructure)->tile_columns;
+    sequence_control_set_ptr->static_config.unrestricted_motion_vector = ((EbSvtAv1EncConfiguration*)pComponentParameterStructure)->unrestricted_motion_vector;
 
     // Rate Control
     sequence_control_set_ptr->static_config.scene_change_detection = ((EbSvtAv1EncConfiguration*)pComponentParameterStructure)->scene_change_detection;
@@ -2122,7 +2139,6 @@ void CopyApiFromApp(
     sequence_control_set_ptr->static_config.compressed_ten_bit_format = ((EbSvtAv1EncConfiguration*)pComponentParameterStructure)->compressed_ten_bit_format;
 
     // Thresholds
-    sequence_control_set_ptr->static_config.improve_sharpness = ((EbSvtAv1EncConfiguration*)pComponentParameterStructure)->improve_sharpness;
     sequence_control_set_ptr->static_config.high_dynamic_range_input = ((EbSvtAv1EncConfiguration*)pComponentParameterStructure)->high_dynamic_range_input;
     sequence_control_set_ptr->static_config.screen_content_mode = ((EbSvtAv1EncConfiguration*)pComponentParameterStructure)->screen_content_mode;
 
@@ -2409,6 +2425,10 @@ static EbErrorType VerifySettings(
         SVT_LOG("Error Instance %u: Log2Tile rows/cols must be [0 - 6] \n", channelNumber + 1);
         return_error = EB_ErrorBadParameter;
     }
+    if (config->unrestricted_motion_vector > 1) {
+        SVT_LOG("Error Instance %u : Invalid Unrestricted Motion Vector flag [0 - 1]\n", channelNumber + 1);
+        return_error = EB_ErrorBadParameter;
+    }
 
     if (config->scene_change_detection > 1) {
         SVT_LOG("Error Instance %u: The scene change detection must be [0 - 1] \n", channelNumber + 1);
@@ -2424,11 +2444,6 @@ static EbErrorType VerifySettings(
     }
     else if ((config->min_qp_allowed) > (config->max_qp_allowed)) {
         SVT_LOG("Error Instance %u:  MinQpAllowed must be smaller than MaxQpAllowed\n", channelNumber + 1);
-        return_error = EB_ErrorBadParameter;
-    }
-
-    if (config->improve_sharpness > 1) {
-        SVT_LOG("Error instance %u : Invalid ImproveSharpness. ImproveSharpness must be [0 - 1]\n", channelNumber + 1);
         return_error = EB_ErrorBadParameter;
     }
 
@@ -2582,11 +2597,11 @@ EbErrorType eb_svt_enc_init_parameter(
     config_ptr->hme_level2_search_area_in_height_array[0] = 1;
     config_ptr->hme_level2_search_area_in_height_array[1] = 1;
     config_ptr->constrained_intra = EB_FALSE;
-    config_ptr->improve_sharpness = EB_FALSE;
 
     // Bitstream options
     //config_ptr->codeVpsSpsPps = 0;
     //config_ptr->codeEosNal = 0;
+    config_ptr->unrestricted_motion_vector = EB_TRUE;
 
     config_ptr->high_dynamic_range_input = 0;
     config_ptr->screen_content_mode = 2;
@@ -2718,7 +2733,7 @@ static void print_lib_params(
 
 * Set Parameter
 **********************************/
-#if defined(__linux__) || defined(__APPLE__)
+#ifdef __GNUC__
 __attribute__((visibility("default")))
 #endif
 EB_API EbErrorType eb_svt_enc_set_parameter(
@@ -2778,7 +2793,7 @@ EB_API EbErrorType eb_svt_enc_set_parameter(
 
     return return_error;
 }
-#if defined(__linux__) || defined(__APPLE__)
+#ifdef __GNUC__
 __attribute__((visibility("default")))
 #endif
 EB_API EbErrorType eb_svt_enc_stream_header(
@@ -2826,7 +2841,7 @@ EB_API EbErrorType eb_svt_enc_stream_header(
 
     return return_error;
 }
-#if defined(__linux__) || defined(__APPLE__)
+#ifdef __GNUC__
 __attribute__((visibility("default")))
 #endif
 EB_API EbErrorType eb_svt_release_enc_stream_header(
@@ -2844,7 +2859,7 @@ EB_API EbErrorType eb_svt_release_enc_stream_header(
     return return_error;
 }
 //
-#if defined(__linux__) || defined(__APPLE__)
+#ifdef __GNUC__
 __attribute__((visibility("default")))
 #endif
 EB_API EbErrorType eb_svt_enc_eos_nal(
@@ -3041,7 +3056,7 @@ static void CopyInputBuffer(
 /**********************************
 * Empty This Buffer
 **********************************/
-#if defined(__linux__) || defined(__APPLE__)
+#ifdef __GNUC__
 __attribute__((visibility("default")))
 #endif
 EB_API EbErrorType eb_svt_enc_send_picture(
@@ -3091,7 +3106,7 @@ static void CopyOutputReconBuffer(
 /**********************************
 * eb_svt_get_packet sends out packet
 **********************************/
-#if defined(__linux__) || defined(__APPLE__)
+#ifdef __GNUC__
 __attribute__((visibility("default")))
 #endif
 EB_API EbErrorType eb_svt_get_packet(
@@ -3127,7 +3142,7 @@ EB_API EbErrorType eb_svt_get_packet(
     return return_error;
 }
 
-#if defined(__linux__) || defined(__APPLE__)
+#ifdef __GNUC__
 __attribute__((visibility("default")))
 #endif
 EB_API void eb_svt_release_out_buffer(
@@ -3142,7 +3157,7 @@ EB_API void eb_svt_release_out_buffer(
 /**********************************
 * Fill This Buffer
 **********************************/
-#if defined(__linux__) || defined(__APPLE__)
+#ifdef __GNUC__
 __attribute__((visibility("default")))
 #endif
 EB_API EbErrorType eb_svt_get_recon(

@@ -91,12 +91,12 @@ void ProcessInputFieldBufferingMode(
     ebInputPtr = lumaInputPtr;
     // Skip 1 luma row if bottom field (point to the bottom field)
     if (processed_frame_count % 2 != 0)
-        fseeko64(input_file, (long)sourceLumaRowSize, SEEK_CUR);
+        fseeko(input_file, (long)sourceLumaRowSize, SEEK_CUR);
 
     for (inputRowIndex = 0; inputRowIndex < input_padded_height; inputRowIndex++) {
         *filledLen += (uint32_t)fread(ebInputPtr, 1, sourceLumaRowSize, input_file);
         // Skip 1 luma row (only fields)
-        fseeko64(input_file, (long)sourceLumaRowSize, SEEK_CUR);
+        fseeko(input_file, (long)sourceLumaRowSize, SEEK_CUR);
         ebInputPtr += sourceLumaRowSize;
     }
 
@@ -104,14 +104,14 @@ void ProcessInputFieldBufferingMode(
     ebInputPtr = cbInputPtr;
     // Step back 1 luma row if bottom field (undo the previous jump), and skip 1 chroma row if bottom field (point to the bottom field)
     if (processed_frame_count % 2 != 0) {
-        fseeko64(input_file, -(long)sourceLumaRowSize, SEEK_CUR);
-        fseeko64(input_file, (long)sourceChromaRowSize, SEEK_CUR);
+        fseeko(input_file, -(long)sourceLumaRowSize, SEEK_CUR);
+        fseeko(input_file, (long)sourceChromaRowSize, SEEK_CUR);
     }
 
     for (inputRowIndex = 0; inputRowIndex < input_padded_height >> 1; inputRowIndex++) {
         *filledLen += (uint32_t)fread(ebInputPtr, 1, sourceChromaRowSize, input_file);
         // Skip 1 chroma row (only fields)
-        fseeko64(input_file, (long)sourceChromaRowSize, SEEK_CUR);
+        fseeko(input_file, (long)sourceChromaRowSize, SEEK_CUR);
         ebInputPtr += sourceChromaRowSize;
     }
 
@@ -123,13 +123,13 @@ void ProcessInputFieldBufferingMode(
     for (inputRowIndex = 0; inputRowIndex < input_padded_height >> 1; inputRowIndex++) {
         *filledLen += (uint32_t)fread(ebInputPtr, 1, sourceChromaRowSize, input_file);
         // Skip 1 chroma row (only fields)
-        fseeko64(input_file, (long)sourceChromaRowSize, SEEK_CUR);
+        fseeko(input_file, (long)sourceChromaRowSize, SEEK_CUR);
         ebInputPtr += sourceChromaRowSize;
     }
 
     // Step back 1 chroma row if bottom field (undo the previous jump)
     if (processed_frame_count % 2 != 0)
-        fseeko64(input_file, -(long)sourceChromaRowSize, SEEK_CUR);
+        fseeko(input_file, -(long)sourceChromaRowSize, SEEK_CUR);
 }
 
 /***********************************************
@@ -195,7 +195,6 @@ EbErrorType CopyConfigurationParameters(
     callback_data->eb_enc_parameters.constrained_intra = (EbBool)config->constrained_intra;
     callback_data->eb_enc_parameters.channel_id = config->channel_id;
     callback_data->eb_enc_parameters.active_channel_count = config->active_channel_count;
-    callback_data->eb_enc_parameters.improve_sharpness = (uint8_t)config->improve_sharpness;
     callback_data->eb_enc_parameters.high_dynamic_range_input = config->high_dynamic_range_input;
     callback_data->eb_enc_parameters.encoder_bit_depth = config->encoder_bit_depth;
     callback_data->eb_enc_parameters.encoder_color_format =
@@ -209,6 +208,7 @@ EbErrorType CopyConfigurationParameters(
     callback_data->eb_enc_parameters.asm_type = config->asm_type;
     callback_data->eb_enc_parameters.logical_processors = config->logical_processors;
     callback_data->eb_enc_parameters.target_socket = config->target_socket;
+    callback_data->eb_enc_parameters.unrestricted_motion_vector = config->unrestricted_motion_vector;
     callback_data->eb_enc_parameters.recon_enabled = config->recon_file ? EB_TRUE : EB_FALSE;
     // --- start: ALTREF_FILTERING_SUPPORT
     callback_data->eb_enc_parameters.enable_altrefs  = (EbBool)config->enable_altrefs;

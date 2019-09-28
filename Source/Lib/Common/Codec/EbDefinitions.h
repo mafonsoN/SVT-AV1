@@ -25,14 +25,8 @@
 #define inline __inline
 #elif __GNUC__
 #define inline __inline__
-#ifndef fseeko64
-#define fseeko64 fseek
-#endif
-#ifndef ftello64
-#define ftello64 ftell
-#endif
 #else
-#error OS not supported
+#define inline
 #endif
 
 #ifdef __cplusplus
@@ -40,12 +34,15 @@ extern "C" {
 #endif
 
 #define II_COMP_FLAG 1
+#define PRED_CHANGE                  1 // Change the MRP in 4L Pictures 3, 5 , 7 and 9 use 1 as the reference
+#define PRED_CHANGE_5L               1 // Change the MRP in 5L Pictures 3, 5 , 7 and 9 use 1 as the reference, 11, 13, 15 and 17 use 9 as the reference
 
 
 #define NON_AVX512_SUPPORT
 
 #define MR_MODE                           0
 #define EIGTH_PEL_MV                      0
+#define COMP_INTERINTRA                   1 // InterIntra mode support
 
 //FOR DEBUGGING - Do not remove
 #define NO_ENCDEC                         0 // bypass encDec to test cmpliance of MD. complained achieved when skip_flag is OFF. Port sample code from VCI-SW_AV1_Candidate1 branch
@@ -282,6 +279,8 @@ extern void RunEmms();
     (((value) < 0) ? -ROUND_POWER_OF_TWO_64(-(value), (n)) \
                  : ROUND_POWER_OF_TWO_64((value), (n)))
 
+#define IS_POWER_OF_TWO(x) (((x) & ((x)-1)) == 0)
+
 #ifdef __cplusplus
 #define EB_EXTERN extern "C"
 #else
@@ -290,7 +289,7 @@ extern void RunEmms();
 
 #define INLINE __inline
 #define RESTRICT
-#ifdef _MSC_VER
+#ifdef _WIN32
 #define FOPEN(f,s,m) fopen_s(&f,s,m)
 #else
 #define FOPEN(f,s,m) f=fopen(s,m)
@@ -299,14 +298,14 @@ extern void RunEmms();
 #define IMPLIES(a, b) (!(a) || (b))  //  Logical 'a implies b' (or 'a -> b')
 #if (defined(__GNUC__) && __GNUC__) || defined(__SUNPRO_C)
 #define DECLARE_ALIGNED(n, typ, val) typ val __attribute__((aligned(n)))
-#elif defined(_MSC_VER)
+#elif defined(_WIN32)
 #define DECLARE_ALIGNED(n, typ, val) __declspec(align(n)) typ val
 #else
 #warning No alignment directives known for this compiler.
 #define DECLARE_ALIGNED(n, typ, val) typ val
 #endif
 
-#if defined(_MSC_VER)
+#ifdef _MSC_VER
 #define EB_ALIGN(n) __declspec(align(n))
 #elif defined(__GNUC__)
 #define EB_ALIGN(n) __attribute__((__aligned__(n)))
@@ -314,7 +313,7 @@ extern void RunEmms();
 #define EB_ALIGN(n)
 #endif
 
-#if defined(_MSC_VER)
+#ifdef _MSC_VER
 #define AOM_FORCE_INLINE __forceinline
 #define AOM_INLINE __inline
 #else
@@ -419,14 +418,16 @@ static INLINE uint16_t clip_pixel_highbd(int32_t val, int32_t bd) {
     case 12: return (uint16_t)clamp(val, 0, 4095);
     }
 }
+
+static INLINE unsigned int negative_to_zero(int value) {
+    return value & ~(value >> (sizeof(value) * 8 - 1));
+}
 //*********************************************************************************************************************//
 // enums.h
 /*!\brief Decorator indicating that given struct/union/enum is packed */
 #ifndef ATTRIBUTE_PACKED
 #if defined(__GNUC__) && __GNUC__
 #define ATTRIBUTE_PACKED __attribute__((packed))
-#elif defined(_MSC_VER)
-#define ATTRIBUTE_PACKED
 #else
 #define ATTRIBUTE_PACKED
 #endif
@@ -608,7 +609,7 @@ typedef char PartitionContextType;
 #define PARTITION_CONTEXTS (PARTITION_BlockSizeS * PARTITION_PLOFFSET)
 
 // block transform size
-#if defined(_MSC_VER)
+#ifdef _MSC_VER
 typedef uint8_t TxSize;
 enum ATTRIBUTE_PACKED {
 #else
@@ -638,7 +639,7 @@ typedef enum ATTRIBUTE_PACKED {
     TX_SIZES_LARGEST = TX_64X64,
     TX_INVALID = 255  // Invalid transform size
 
-#if defined(_MSC_VER)
+#ifdef _MSC_VER
 };
 #else
 } TxSize;
@@ -1035,6 +1036,10 @@ typedef enum
 #define   COMPOUND_INTRA  4//just for the decoder
 #define AOM_BLEND_A64_ROUND_BITS 6
 #define AOM_BLEND_A64_MAX_ALPHA (1 << AOM_BLEND_A64_ROUND_BITS)  // 64
+
+#define AOM_BLEND_A64(a, v0, v1)                                          \
+  ROUND_POWER_OF_TWO((a) * (v0) + (AOM_BLEND_A64_MAX_ALPHA - (a)) * (v1), \
+                     AOM_BLEND_A64_ROUND_BITS)
 #define DIFF_FACTOR_LOG2 4
 #define DIFF_FACTOR (1 << DIFF_FACTOR_LOG2)
 #define AOM_BLEND_AVG(v0, v1) ROUND_POWER_OF_TWO((v0) + (v1), 1)
@@ -1068,18 +1073,21 @@ enum {
     DIFFWTD_MASK_TYPES,
 } UENUM1BYTE(DIFFWTD_MASK_TYPE);
 typedef struct {
-    uint8_t *seg_mask;
-    int wedge_index;
-    int wedge_sign;
+
+    /*!< Specifies how the two predictions should be blended together. */
+    CompoundType type;
+
+    /*!< Used to derive the direction and offset of the wedge mask used during blending. */
+    uint8_t wedge_index;
+
+    /*!< Specifies the sign of the wedge blend. */
+    uint8_t wedge_sign;
+
+    /*!< Specifies the type of mask to be used during blending. */
     DIFFWTD_MASK_TYPE mask_type;
-    COMPOUND_TYPE type;
-} INTERINTER_COMPOUND_DATA;
+} InterInterCompoundData;
 
 #if II_COMP_FLAG
-#define AOM_BLEND_A64(a, v0, v1)                                          \
-  ROUND_POWER_OF_TWO((a) * (v0) + (AOM_BLEND_A64_MAX_ALPHA - (a)) * (v1), \
-                     AOM_BLEND_A64_ROUND_BITS)
-#define IS_POWER_OF_TWO(x) (((x) & ((x)-1)) == 0)
 #define INTERINTRA_MODE  InterIntraMode
 #endif
 typedef enum ATTRIBUTE_PACKED
@@ -1855,7 +1863,7 @@ static const EbWarpedMotionParams default_warp_params = {
 #define M6_YBITS_THSHLD                     80
 #define M6_YDC_THSHLD                       10
 
-#ifdef    _MSC_VER
+#ifdef _WIN32
 #define NOINLINE                __declspec ( noinline )
 #define FORCE_INLINE            __forceinline
 #else
@@ -2417,7 +2425,7 @@ void(*ErrorHandler)(
 #if LIB_PRINTF_ENABLE
 #define SVT_LOG printf
 #else
-#if _MSC_VER
+#ifdef _MSC_VER
 #define SVT_LOG(s, ...) printf("")
 #else
 #define SVT_LOG(s, ...) printf("",##__VA_ARGS__)

@@ -5,6 +5,9 @@
 
 // Command line argument parsing
 
+#ifndef EbDecParamParser_h
+#define EbDecParamParser_h
+
 /***************************************
  * Includes
  ***************************************/
@@ -15,7 +18,7 @@
 #include "EbSvtAv1Dec.h"
 #include "EbFileUtils.h"
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #define FOPEN(f,s,m) fopen_s(&f,s,m)
 #else
 #define FOPEN(f,s,m) f=fopen(s,m)
@@ -37,6 +40,7 @@
 #define MD5_SUPPORT_TOKEN               "-md5"
 #define FPS_FRM_TOKEN                   "-fps-frm"
 #define FPS_SUMMARY_TOKEN               "-fps-summary"
+#define FILM_GRAIN_TOKEN                "-skip-film-grain"
 #define MAX_NUM_TOKENS 200
 
 #define EB_STRCMP(target,token) \
@@ -52,4 +56,7 @@ typedef struct ConfigEntry {
     void(*scf)(const char *, EbSvtAv1DecConfiguration *);
 } ConfigEntry;
 
-EbErrorType read_command_line(int32_t argc, char *const argv[], EbSvtAv1DecConfiguration *configs, CLInput *cli);
+EbErrorType read_command_line(int32_t argc, char *const argv[], EbSvtAv1DecConfiguration *configs,
+    CLInput *cli, ObuDecInputContext *obu_ctx);
+
+#endif

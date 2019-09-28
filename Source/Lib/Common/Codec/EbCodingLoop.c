@@ -66,7 +66,6 @@ typedef void(*EB_AV1_ENCODE_LOOP_FUNC_PTR)(
     EbAsm                 asm_type,
     uint32_t                  *count_non_zero_coeffs,
     uint32_t                 component_mask,
-    uint32_t                   use_delta_qp,
     uint32_t                 dZoffset,
     uint16_t                 *eob,
     MacroblockPlane       *candidate_plane);
@@ -419,7 +418,6 @@ void encode_pass_tx_search(
     EbAsm                          asm_type,
     uint32_t                       *count_non_zero_coeffs,
     uint32_t                       component_mask,
-    uint32_t                       use_delta_qp,
     uint32_t                       dZoffset,
     uint16_t                       *eob,
     MacroblockPlane                *candidate_plane);
@@ -427,7 +425,7 @@ void encode_pass_tx_search(
 /**********************************************************
 * Encode Loop
 *
-* Summary: Performs a H.265 conformant
+* Summary: Performs an AV1 conformant
 *   Transform, Quantization  and Inverse Quantization of a TU.
 *
 * Inputs:
@@ -458,12 +456,10 @@ static void Av1EncodeLoop(
     EbAsm                 asm_type,
     uint32_t                  *count_non_zero_coeffs,
     uint32_t                 component_mask,
-    uint32_t                   use_delta_qp,
     uint32_t                 dZoffset,
     uint16_t                 *eob,
     MacroblockPlane       *candidate_plane){
     (void)dZoffset;
-    (void)use_delta_qp;
     (void)cb_qp;
 
     //    uint32_t                 chroma_qp = cb_qp;
@@ -508,13 +504,13 @@ static void Av1EncodeLoop(
             residual16bit->stride_y,
             context_ptr->blk_geom->tx_width[cu_ptr->tx_depth][context_ptr->txb_itr],
             context_ptr->blk_geom->tx_height[cu_ptr->tx_depth][context_ptr->txb_itr]);
-        uint8_t  tx_search_skip_fag = (picture_control_set_ptr->parent_pcs_ptr->tx_search_level == TX_SEARCH_ENC_DEC && (picture_control_set_ptr->parent_pcs_ptr->atb_mode == 0 || cu_ptr->prediction_mode_flag == INTER_MODE)) ? get_skip_tx_search_flag(
+        uint8_t  tx_search_skip_flag = (picture_control_set_ptr->parent_pcs_ptr->tx_search_level == TX_SEARCH_ENC_DEC && (picture_control_set_ptr->parent_pcs_ptr->atb_mode == 0 || cu_ptr->prediction_mode_flag == INTER_MODE)) ? get_skip_tx_search_flag(
             context_ptr->blk_geom->sq_size,
             MAX_MODE_COST,
             0,
             1) : 1;
 
-        if (!tx_search_skip_fag) {
+        if (!tx_search_skip_flag) {
                 encode_pass_tx_search(
                     picture_control_set_ptr,
                     context_ptr,
@@ -528,7 +524,6 @@ static void Av1EncodeLoop(
                     asm_type,
                     count_non_zero_coeffs,
                     component_mask,
-                    use_delta_qp,
                     dZoffset,
                     eob,
                     candidate_plane);
@@ -843,7 +838,6 @@ void encode_pass_tx_search_hbd(
     EbAsm                          asm_type,
     uint32_t                       *count_non_zero_coeffs,
     uint32_t                       component_mask,
-    uint32_t                       use_delta_qp,
     uint32_t                       dZoffset,
     uint16_t                       *eob,
     MacroblockPlane                *candidate_plane);
@@ -851,7 +845,7 @@ void encode_pass_tx_search_hbd(
 /**********************************************************
 * Encode Loop
 *
-* Summary: Performs a H.265 conformant
+* Summary: Performs an AV1 conformant
 *   Transform, Quantization  and Inverse Quantization of a TU.
 *
 * Inputs:
@@ -882,13 +876,11 @@ static void Av1EncodeLoop16bit(
     EbAsm                 asm_type,
     uint32_t                  *count_non_zero_coeffs,
     uint32_t                 component_mask,
-    uint32_t                   use_delta_qp,
     uint32_t                 dZoffset,
     uint16_t                 *eob,
     MacroblockPlane       *candidate_plane)
 
 {
-    (void)use_delta_qp;
     (void)dZoffset;
     (void)cb_qp;
 
@@ -929,13 +921,13 @@ static void Av1EncodeLoop16bit(
                 residual16bit->stride_y,
                 context_ptr->blk_geom->tx_width[cu_ptr->tx_depth][context_ptr->txb_itr],
                 context_ptr->blk_geom->tx_height[cu_ptr->tx_depth][context_ptr->txb_itr]);
-            uint8_t  tx_search_skip_fag = (picture_control_set_ptr->parent_pcs_ptr->tx_search_level == TX_SEARCH_ENC_DEC && (picture_control_set_ptr->parent_pcs_ptr->atb_mode == 0 || cu_ptr->prediction_mode_flag == INTER_MODE)) ? get_skip_tx_search_flag(
+            uint8_t  tx_search_skip_flag = (picture_control_set_ptr->parent_pcs_ptr->tx_search_level == TX_SEARCH_ENC_DEC && (picture_control_set_ptr->parent_pcs_ptr->atb_mode == 0 || cu_ptr->prediction_mode_flag == INTER_MODE)) ? get_skip_tx_search_flag(
                 context_ptr->blk_geom->sq_size,
                 MAX_MODE_COST,
                 0,
                 1) : 1;
 
-            if (!tx_search_skip_fag) {
+            if (!tx_search_skip_flag) {
                     encode_pass_tx_search_hbd(
                         picture_control_set_ptr,
                         context_ptr,
@@ -949,7 +941,6 @@ static void Av1EncodeLoop16bit(
                         asm_type,
                         count_non_zero_coeffs,
                         component_mask,
-                        use_delta_qp,
                         dZoffset,
                         eob,
                         candidate_plane);
@@ -1211,7 +1202,7 @@ static void Av1EncodeLoop16bit(
 /**********************************************************
 * Encode Generate Recon
 *
-* Summary: Performs a H.265 conformant
+* Summary: Performs an AV1 conformant
 *   Inverse Transform and generate
 *   the reconstructed samples of a TU.
 *
@@ -1319,7 +1310,7 @@ static void Av1EncodeGenerateRecon(
 /**********************************************************
 * Encode Generate Recon
 *
-* Summary: Performs a H.265 conformant
+* Summary: Performs an AV1 conformant
 *   Inverse Transform and generate
 *   the reconstructed samples of a TU.
 *
@@ -1636,7 +1627,7 @@ void perform_intra_coding_loop(
         }
         // Encode Transform Unit -INTRA-
 
-        uint8_t cb_qp = cu_ptr->qp;
+        uint16_t cb_qp = cu_ptr->qp;
         Av1EncodeLoopFunctionTable[is16bit](
             picture_control_set_ptr,
             context_ptr,
@@ -1653,7 +1644,6 @@ void perform_intra_coding_loop(
             asm_type,
             count_non_zero_coeffs,
             PICTURE_BUFFER_DESC_LUMA_MASK,
-            0,
             cu_ptr->delta_qp > 0 ? 0 : dZoffset,
             eobs[context_ptr->txb_itr],
             cuPlane);
@@ -1902,7 +1892,7 @@ void perform_intra_coding_loop(
         }
 
         // Encode Transform Unit -INTRA-
-        uint8_t cb_qp = cu_ptr->qp;
+        uint16_t cb_qp = cu_ptr->qp;
 
         Av1EncodeLoopFunctionTable[is16bit](
             picture_control_set_ptr,
@@ -1920,7 +1910,6 @@ void perform_intra_coding_loop(
             asm_type,
             count_non_zero_coeffs,
             PICTURE_BUFFER_DESC_CHROMA_MASK,
-            0,
             cu_ptr->delta_qp > 0 ? 0 : dZoffset,
             eobs[context_ptr->txb_itr],
             cuPlane);
@@ -2079,7 +2068,7 @@ void av1_copy_frame_mvs(PictureControlSet *picture_control_set_ptr, const Av1Com
 /*******************************************
 * Encode Pass
 *
-* Summary: Performs a H.265 conformant
+* Summary: Performs an AV1 conformant
 *   reconstruction based on the LCU
 *   mode decision.
 *
@@ -2171,9 +2160,6 @@ EB_EXTERN void av1_encode_pass(
     else  // non ref pictures
         recon_buffer = is16bit ? picture_control_set_ptr->recon_picture16bit_ptr : picture_control_set_ptr->recon_picture_ptr;
 
-    EbBool use_delta_qp = (EbBool)sequence_control_set_ptr->static_config.improve_sharpness;
-    EbBool oneSegment = (sequence_control_set_ptr->enc_dec_segment_col_count_array[picture_control_set_ptr->temporal_layer_index] == 1) && (sequence_control_set_ptr->enc_dec_segment_row_count_array[picture_control_set_ptr->temporal_layer_index] == 1);
-    EbBool useDeltaQpSegments = oneSegment ? 0 : (EbBool)sequence_control_set_ptr->static_config.improve_sharpness;
 
     // DeriveZeroLumaCbf
     EbBool  highIntraRef = EB_FALSE;
@@ -2726,7 +2712,7 @@ EB_EXTERN void av1_encode_pass(
 
                             // Encode Transform Unit -INTRA-
                             {
-                                uint8_t             cb_qp = cu_ptr->qp;
+                                uint16_t             cb_qp = cu_ptr->qp;
 
                                 Av1EncodeLoopFunctionTable[is16bit](
                                     picture_control_set_ptr,
@@ -2744,7 +2730,6 @@ EB_EXTERN void av1_encode_pass(
                                     asm_type,
                                     count_non_zero_coeffs,
                                     blk_geom->has_uv ? PICTURE_BUFFER_DESC_FULL_MASK : PICTURE_BUFFER_DESC_LUMA_MASK,
-                                    useDeltaQpSegments,
                                     cu_ptr->delta_qp > 0 ? 0 : dZoffset,
                                     eobs[context_ptr->txb_itr],
                                     cuPlane);
@@ -2919,9 +2904,7 @@ EB_EXTERN void av1_encode_pass(
                     //EbBool doLumaMC = EB_TRUE;
                     EbBool doMVpred = EB_TRUE;
                     //if QP M and Segments are used, First Cu in SB row should have at least one coeff.
-                    EbBool isFirstCUinRow = (use_delta_qp == 1) &&
-                        !oneSegment &&
-                        (context_ptr->cu_origin_x == 0 && context_ptr->cu_origin_y == sb_origin_y) ? EB_TRUE : EB_FALSE;
+                    EbBool isFirstCUinRow = EB_FALSE;
                     zeroLumaCbfMD = (EbBool)(checkZeroLumaCbf && ((&cu_ptr->prediction_unit_array[0])->merge_flag == EB_FALSE && cu_ptr->block_has_coeff == 0 && isFirstCUinRow == EB_FALSE));
                     zeroLumaCbfMD = EB_FALSE;
 
@@ -3091,7 +3074,7 @@ EB_EXTERN void av1_encode_pass(
 
                     uint32_t totTu = context_ptr->blk_geom->txb_count[cu_ptr->tx_depth];
                     uint8_t   tuIt;
-                    uint8_t   cb_qp = cu_ptr->qp;
+                    uint16_t   cb_qp = cu_ptr->qp;
                     uint32_t  component_mask = context_ptr->blk_geom->has_uv ? PICTURE_BUFFER_DESC_FULL_MASK : PICTURE_BUFFER_DESC_LUMA_MASK;
 
                     if (cu_ptr->prediction_unit_array[0].merge_flag == EB_FALSE) {
@@ -3159,7 +3142,6 @@ EB_EXTERN void av1_encode_pass(
                                     asm_type,
                                     count_non_zero_coeffs,
                                     context_ptr->blk_geom->has_uv && uv_pass ? PICTURE_BUFFER_DESC_FULL_MASK : PICTURE_BUFFER_DESC_LUMA_MASK,
-                                    useDeltaQpSegments,
                                     cu_ptr->delta_qp > 0 ? 0 : dZoffset,
                                     eobs[context_ptr->txb_itr],
                                     cuPlane);
@@ -3470,7 +3452,6 @@ EB_EXTERN void av1_encode_pass(
                                 asm_type,
                                 count_non_zero_coeffs,
                                 context_ptr->blk_geom->has_uv && uv_pass ? PICTURE_BUFFER_DESC_FULL_MASK : PICTURE_BUFFER_DESC_LUMA_MASK,
-                                useDeltaQpSegments,
                                 cu_ptr->delta_qp > 0 ? 0 : dZoffset,
                                 eobs[context_ptr->txb_itr],
                                 cuPlane);
@@ -3757,8 +3738,8 @@ EB_EXTERN void no_enc_dec_pass(
                 CodingUnit            *cu_ptr = context_ptr->cu_ptr = &context_ptr->md_context->md_cu_arr_nsq[d1_itr];
 
                 cu_ptr->delta_qp = 0;
-                cu_ptr->qp = (sequence_control_set_ptr->static_config.improve_sharpness) ? context_ptr->qpm_qp : picture_control_set_ptr->picture_qp;
-                sb_ptr->qp = (sequence_control_set_ptr->static_config.improve_sharpness) ? context_ptr->qpm_qp : picture_control_set_ptr->picture_qp;
+                cu_ptr->qp = picture_control_set_ptr->picture_qp;
+                sb_ptr->qp = picture_control_set_ptr->picture_qp;
                 cu_ptr->org_delta_qp = cu_ptr->delta_qp;
 
                 {

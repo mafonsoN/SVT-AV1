@@ -1475,6 +1475,7 @@ void enc_pass_av1_mv_pred(
 
     (void)mode;
     IntMv    nearestmv[2], nearmv[2];
+    memset(nearestmv, 0, sizeof(nearestmv));
 
     generate_av1_mvp_table(
         tile,
@@ -2289,6 +2290,32 @@ int av1_is_dv_valid(const MV dv,
         if (src_sb128_col > active_sb128_col + (active_sb_row - src_sb_row))
             return 0;
     }
+
+    return 1;
+}
+
+int is_inside_tile_boundary(TileInfo *tile, int16_t mvx, int16_t mvy, int mi_col, int mi_row, BlockSize bsize)
+{
+    const int bw = block_size_wide[bsize];
+    const int bh = block_size_high[bsize];
+    const int SCALE_PX_TO_MV = 8;
+    const int src_top_edge = mi_row * MI_SIZE * SCALE_PX_TO_MV + mvy;
+    const int tile_top_edge = tile->mi_row_start * MI_SIZE * SCALE_PX_TO_MV;
+    if (src_top_edge < tile_top_edge)
+        return 0;
+    const int src_left_edge = mi_col * MI_SIZE * SCALE_PX_TO_MV + mvx;
+    const int tile_left_edge = tile->mi_col_start * MI_SIZE * SCALE_PX_TO_MV;
+    if (src_left_edge < tile_left_edge)
+        return 0;
+    // Is the bottom right inside the current tile?
+    const int src_bottom_edge = (mi_row * MI_SIZE + bh) * SCALE_PX_TO_MV + mvy;
+    const int tile_bottom_edge = tile->mi_row_end * MI_SIZE * SCALE_PX_TO_MV;
+    if (src_bottom_edge > tile_bottom_edge)
+        return 0;
+    const int src_right_edge = (mi_col * MI_SIZE + bw) * SCALE_PX_TO_MV + mvx;
+    const int tile_right_edge = tile->mi_col_end * MI_SIZE * SCALE_PX_TO_MV;
+    if (src_right_edge > tile_right_edge)
+        return 0;
 
     return 1;
 }
