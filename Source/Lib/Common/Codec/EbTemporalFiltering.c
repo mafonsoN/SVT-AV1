@@ -1042,8 +1042,8 @@ void svt_av1_apply_filtering_highbd_c(const uint16_t *y_src,
 
             const int uv_r = i >> ss_y;
             const int uv_c = j >> ss_x;
-            int64_t modifier;
-            int64_t y_diff_sum = 0;
+            int final_y_mod;
+            int64_t y_mod = 0;
 
             for (idy = -1; idy <= 1; ++idy) {
                 for (idx = -1; idx <= 1; ++idx) {
@@ -1052,7 +1052,7 @@ void svt_av1_apply_filtering_highbd_c(const uint16_t *y_src,
 
                     if (row >= 0 && row < (int)block_height && col >= 0 &&
                         col < (int)block_width) {
-                        y_diff_sum += y_diff_se[row * (int)block_width + col];
+                        y_mod += y_diff_se[row * (int)block_width + col];
                         ++y_index;
                     }
                 }
@@ -1060,17 +1060,17 @@ void svt_av1_apply_filtering_highbd_c(const uint16_t *y_src,
 
             assert(y_index > 0);
 
-            y_diff_sum += u_diff_se[uv_r * uv_block_width + uv_c];
-            y_diff_sum += v_diff_se[uv_r * uv_block_width + uv_c];
+            y_mod += u_diff_se[uv_r * uv_block_width + uv_c];
+            y_mod += v_diff_se[uv_r * uv_block_width + uv_c];
 
             y_index += 2;
 
-            modifier = adjust_modifier_highbd(y_diff_sum, y_index, rounding, strength, filter_weight);
+            final_y_mod = adjust_modifier_highbd(y_mod, y_index, rounding, strength, filter_weight);
 
             k = i * y_pre_stride + j;
 
-            y_count[k] += modifier;
-            y_accum[k] += modifier * pixel_value;
+            y_count[k] += final_y_mod;
+            y_accum[k] += final_y_mod * pixel_value;
 
             // Process chroma component
             if (!(i & ss_y) && !(j & ss_x)) {
@@ -1080,6 +1080,7 @@ void svt_av1_apply_filtering_highbd_c(const uint16_t *y_src,
                 // non-local mean approach
                 int cr_index = 0;
                 int64_t u_mod = 0, v_mod = 0;
+                int final_u_mod, final_v_mod;
                 int y_diff = 0;
 
                 for (idy = -1; idy <= 1; ++idy) {
@@ -1110,18 +1111,18 @@ void svt_av1_apply_filtering_highbd_c(const uint16_t *y_src,
                 u_mod += y_diff;
                 v_mod += y_diff;
 
-                u_mod = adjust_modifier_highbd(u_mod, cr_index, rounding, strength, filter_weight);
-                v_mod = adjust_modifier_highbd(v_mod, cr_index, rounding, strength, filter_weight);
+                final_u_mod = adjust_modifier_highbd(u_mod, cr_index, rounding, strength, filter_weight);
+                final_v_mod = adjust_modifier_highbd(v_mod, cr_index, rounding, strength, filter_weight);
 
                 m = (i>>ss_y) * uv_pre_stride + (j>>ss_x);
 
-                u_count[m] += u_mod;
-                u_accum[m] += u_mod * u_pixel_value;
+                u_count[m] += final_u_mod;
+                u_accum[m] += final_u_mod * u_pixel_value;
 
                 m = (i>>ss_y) * uv_pre_stride + (j>>ss_x);
 
-                v_count[m] += v_mod;
-                v_accum[m] += v_mod * v_pixel_value;
+                v_count[m] += final_v_mod;
+                v_accum[m] += final_v_mod * v_pixel_value;
             }
         }
     }
