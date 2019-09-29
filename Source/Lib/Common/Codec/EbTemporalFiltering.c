@@ -1941,8 +1941,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                                   count,
                                                   stride,
                                                   stride_pred,
-                                                  BW >> ss_x,
-                                                  BH >> ss_y,
+                                                  BW >> 1, // fixed 32x32
+                                                  BH >> 1, // fixed 32x32
                                                   ss_x, // chroma sub-sampling in x
                                                   ss_y, // chroma sub-sampling in y
                                                   altref_strength,
