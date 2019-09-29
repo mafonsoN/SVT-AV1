@@ -250,8 +250,8 @@ void save_YUV_to_file_highbd(char *filename, uint16_t* buffer_y, uint16_t* buffe
 }
 #endif
 
-static void pack_highbd_pic(EbPictureBufferDesc* pic_ptr,
-                            uint16_t* buffer_16bit[3],
+static void pack_highbd_pic(EbPictureBufferDesc *pic_ptr,
+                            uint16_t *buffer_16bit[3],
                             uint32_t ss_x,
                             uint32_t ss_y,
                             EbBool include_padding,
@@ -310,8 +310,8 @@ static void pack_highbd_pic(EbPictureBufferDesc* pic_ptr,
 
 }
 
-static void unpack_highbd_pic(uint16_t* buffer_highbd[3],
-                              EbPictureBufferDesc* pic_ptr,
+static void unpack_highbd_pic(uint16_t *buffer_highbd[3],
+                              EbPictureBufferDesc *pic_ptr,
                               uint32_t ss_x,
                               uint32_t ss_y,
                               EbBool include_padding,
@@ -369,7 +369,7 @@ static void unpack_highbd_pic(uint16_t* buffer_highbd[3],
               asm_type);
 }
 
-void generate_padding_pic(EbPictureBufferDesc* pic_ptr,
+void generate_padding_pic(EbPictureBufferDesc *pic_ptr,
                           uint32_t ss_x,
                           uint32_t ss_y,
                           EbBool is_highbd){
@@ -503,11 +503,11 @@ static void get_blk_fw_using_dist(int const *me_32x32_subblock_vf,
 }
 
 // compute variance for the MC block residuals
-static void get_ME_distortion(int* me_32x32_subblock_vf,
-                              int* me_16x16_subblock_vf,
-                              uint8_t* pred_y,
+static void get_ME_distortion(int *me_32x32_subblock_vf,
+                              int *me_16x16_subblock_vf,
+                              uint8_t *pred_y,
                               int stride_pred_y,
-                              uint8_t* src_y,
+                              uint8_t *src_y,
                               int stride_src_y){
     unsigned int sse;
 
@@ -540,16 +540,16 @@ static void get_ME_distortion(int* me_32x32_subblock_vf,
 }
 
 // compute variance for the MC block residuals - highbd
-static void get_ME_distortion_highbd(int* me_32x32_subblock_vf,
-                                     int* me_16x16_subblock_vf,
-                                     uint16_t* pred_y,
+static void get_ME_distortion_highbd(int *me_32x32_subblock_vf,
+                                     int *me_16x16_subblock_vf,
+                                     uint16_t *pred_y,
                                      int stride_pred_y,
-                                     uint16_t* src_y,
+                                     uint16_t *src_y,
                                      int stride_src_y){
     unsigned int sse;
 
-    uint16_t* pred_Y_ptr;
-    uint16_t* src_Y_ptr;
+    uint16_t *pred_Y_ptr;
+    uint16_t *src_Y_ptr;
 
     for(uint32_t index_32x32 = 0; index_32x32 < 4; index_32x32++) {
         int row = subblock_xy_32x32[index_32x32][0];
@@ -1130,9 +1130,9 @@ void svt_av1_apply_filtering_highbd_c(const uint16_t *y_src,
 static void apply_filtering_block(int block_row,
                                   int block_col,
                                   EbByte *src,
-                                  uint16_t** src_16bit,
+                                  uint16_t **src_16bit,
                                   EbByte *pred,
-                                  uint16_t** pred_16bit,
+                                  uint16_t **pred_16bit,
                                   uint32_t **accum,
                                   uint16_t **count,
                                   uint32_t *stride,
@@ -1257,9 +1257,9 @@ static void apply_filtering_block(int block_row,
 }
 
 // Apply filtering to the central picture
-static void apply_filtering_central(EbByte* pred,
-                                    uint32_t** accum,
-                                    uint16_t** count,
+static void apply_filtering_central(EbByte *pred,
+                                    uint32_t **accum,
+                                    uint16_t **count,
                                     uint16_t blk_width,
                                     uint16_t blk_height,
                                     uint32_t ss_x,
@@ -1301,9 +1301,9 @@ static void apply_filtering_central(EbByte* pred,
 }
 
 // Apply filtering to the central picture
-static void apply_filtering_central_highbd(uint16_t** pred_16bit,
-                                           uint32_t** accum,
-                                           uint16_t** count,
+static void apply_filtering_central_highbd(uint16_t **pred_16bit,
+                                           uint32_t **accum,
+                                           uint16_t **count,
                                            uint16_t blk_height,
                                            uint16_t blk_width,
                                            uint32_t ss_x,
@@ -1347,14 +1347,14 @@ static void apply_filtering_central_highbd(uint16_t** pred_16bit,
 uint32_t get_mds_idx(uint32_t  orgx, uint32_t  orgy, uint32_t  size, uint32_t use_128x128);
 
 static void tf_inter_prediction(PictureParentControlSet *picture_control_set_ptr,
-                                MeContext* context_ptr,
+                                MeContext *context_ptr,
                                 EbPictureBufferDesc *pic_ptr_ref,
                                 EbByte *pred,
-                                uint16_t** pred_16bit,
-                                uint32_t* stride_pred,
-                                EbByte* src,
-                                uint16_t** src_16bit,
-                                uint32_t* stride_src,
+                                uint16_t **pred_16bit,
+                                uint32_t *stride_pred,
+                                EbByte *src,
+                                uint16_t **src_16bit,
+                                uint32_t *stride_src,
                                 uint32_t sb_origin_x,
                                 uint32_t sb_origin_y,
                                 uint32_t ss_x,
@@ -1630,15 +1630,15 @@ static void tf_inter_prediction(PictureParentControlSet *picture_control_set_ptr
 
 }
 
-static void get_final_filtered_pixels(EbByte* src_center_ptr_start,
-                                      uint16_t** altref_buffer_highbd_start,
-                                      uint32_t** accum,
-                                      uint16_t** count,
-                                      const uint32_t* stride,
+static void get_final_filtered_pixels(EbByte *src_center_ptr_start,
+                                      uint16_t **altref_buffer_highbd_start,
+                                      uint32_t **accum,
+                                      uint16_t **count,
+                                      const uint32_t *stride,
                                       int blk_y_src_offset,
                                       int blk_ch_src_offset,
-                                      uint64_t* filtered_sse,
-                                      uint64_t* filtered_sse_uv,
+                                      uint64_t *filtered_sse,
+                                      uint64_t *filtered_sse_uv,
                                       EbBool is_highbd){
 
             int i, j, k;
@@ -1985,7 +1985,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 // function from libaom
 // Standard bit depht input (=8 bits) to estimate the noise, I don't think there needs to be two methods for this
 // Operates on the Y component only
-static double estimate_noise(const uint8_t* src,
+static double estimate_noise(const uint8_t *src,
                              uint16_t width,
                              uint16_t height,
                              uint16_t stride_y) {
