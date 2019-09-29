@@ -1386,10 +1386,16 @@ static void tf_inter_prediction(PictureParentControlSet *picture_control_set_ptr
     prediction_ptr.stride_cr = BW_CH;
 
     if(!is_highbd){
+        assert(src[C_Y] != NULL);
+        assert(src[C_U] != NULL);
+        assert(src[C_V] != NULL);
         prediction_ptr.buffer_y = pred[C_Y];
         prediction_ptr.buffer_cb = pred[C_U];
         prediction_ptr.buffer_cr = pred[C_V];
     }else{
+        assert(src_16bit[C_Y] != NULL);
+        assert(src_16bit[C_U] != NULL);
+        assert(src_16bit[C_V] != NULL);
         prediction_ptr.buffer_y = (uint8_t*) pred_16bit[C_Y];
         prediction_ptr.buffer_cb = (uint8_t*) pred_16bit[C_U];
         prediction_ptr.buffer_cr = (uint8_t*) pred_16bit[C_V];
@@ -1713,8 +1719,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     EbByte pred[COLOR_CHANNELS] = { predictor, predictor + BLK_PELS, predictor + (BLK_PELS<<1) };
     uint16_t* pred_16bit[COLOR_CHANNELS] = { predictor_16bit, predictor_16bit + BLK_PELS, predictor_16bit + (BLK_PELS<<1) };
 
-    EbByte src_center_ptr_start[COLOR_CHANNELS], src_center_ptr[COLOR_CHANNELS];
-    uint16_t* altref_buffer_highbd_start[COLOR_CHANNELS], *altref_buffer_highbd_ptr[COLOR_CHANNELS];
+    EbByte src_center_ptr_start[COLOR_CHANNELS], src_center_ptr[COLOR_CHANNELS] = { NULL };
+    uint16_t* altref_buffer_highbd_start[COLOR_CHANNELS], *altref_buffer_highbd_ptr[COLOR_CHANNELS] = { NULL };
 
     uint32_t blk_row, blk_col;
     uint16_t blk_width_ch = BW_CH;
