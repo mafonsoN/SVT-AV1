@@ -1305,8 +1305,8 @@ static void apply_filtering_central(EbByte *pred,
 static void apply_filtering_central_highbd(uint16_t **pred_16bit,
                                            uint32_t **accum,
                                            uint16_t **count,
-                                           uint16_t blk_height,
                                            uint16_t blk_width,
+                                           uint16_t blk_height,
                                            uint32_t ss_x,
                                            uint32_t ss_y) {
 
@@ -1383,8 +1383,8 @@ static void tf_inter_prediction(PictureParentControlSet *picture_control_set_ptr
     prediction_ptr.origin_x = 0;
     prediction_ptr.origin_y = 0;
     prediction_ptr.stride_y = BW;
-    prediction_ptr.stride_cb = BW_CH;
-    prediction_ptr.stride_cr = BW_CH;
+    prediction_ptr.stride_cb = (uint16_t)BW >> ss_x;
+    prediction_ptr.stride_cr = (uint16_t)BW >> ss_x;
 
     if(!is_highbd){
         assert(src[C_Y] != NULL);
@@ -1638,6 +1638,8 @@ static void get_final_filtered_pixels(EbByte *src_center_ptr_start,
                                       const uint32_t *stride,
                                       int blk_y_src_offset,
                                       int blk_ch_src_offset,
+                                      uint16_t blk_width_ch,
+                                      uint16_t blk_height_ch,
                                       uint64_t *filtered_sse,
                                       uint64_t *filtered_sse_uv,
                                       EbBool is_highbd){
@@ -1657,15 +1659,15 @@ static void get_final_filtered_pixels(EbByte *src_center_ptr_start,
                 }
                 // Process chroma
                 pos = blk_ch_src_offset;
-                for (i = 0, k = 0; i < BH_CH; i++) {
-                    for (j = 0; j < BW_CH; j++, k++) {
+                for (i = 0, k = 0; i < blk_height_ch; i++) {
+                    for (j = 0; j < blk_width_ch; j++, k++) {
                         (*filtered_sse_uv) += (uint64_t)((int32_t)src_center_ptr_start[C_U][pos] - (int32_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]))* ((int32_t)src_center_ptr_start[C_U][pos] - (int32_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]));
                         (*filtered_sse_uv) += (uint64_t)((int32_t)src_center_ptr_start[C_V][pos] - (int32_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]))* ((int32_t)src_center_ptr_start[C_V][pos] - (int32_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]));
                         src_center_ptr_start[C_U][pos] = (uint8_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]);
                         src_center_ptr_start[C_V][pos] = (uint8_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]);
                         pos++;
                     }
-                    pos += stride[C_U] - (BW_CH);
+                    pos += stride[C_U] - blk_width_ch;
                 }
             }else{
                 // Process luma
@@ -1680,15 +1682,15 @@ static void get_final_filtered_pixels(EbByte *src_center_ptr_start,
                 }
                 // Process chroma
                 pos = blk_ch_src_offset;
-                for (i = 0, k = 0; i < BH_CH; i++) {
-                    for (j = 0; j < BW_CH; j++, k++) {
+                for (i = 0, k = 0; i < blk_height_ch; i++) {
+                    for (j = 0; j < blk_width_ch; j++, k++) {
                         (*filtered_sse_uv) += (uint64_t)((int32_t)altref_buffer_highbd_start[C_U][pos] - (int32_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]))* ((int32_t)altref_buffer_highbd_start[C_U][pos] - (int32_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]));
                         (*filtered_sse_uv) += (uint64_t)((int32_t)altref_buffer_highbd_start[C_V][pos] - (int32_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]))* ((int32_t)altref_buffer_highbd_start[C_V][pos] - (int32_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]));
                         altref_buffer_highbd_start[C_U][pos] = (uint16_t)OD_DIVU(accum[C_U][k] + (count[C_U][k] >> 1), count[C_U][k]);
                         altref_buffer_highbd_start[C_V][pos] = (uint16_t)OD_DIVU(accum[C_V][k] + (count[C_V][k] >> 1), count[C_V][k]);
                         pos++;
                     }
-                    pos += stride[C_U] - (BW_CH);
+                    pos += stride[C_U] - blk_width_ch;
                 }
             }
 }
@@ -1724,8 +1726,6 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     uint16_t* altref_buffer_highbd_start[COLOR_CHANNELS], *altref_buffer_highbd_ptr[COLOR_CHANNELS] = { NULL };
 
     uint32_t blk_row, blk_col;
-    uint16_t blk_width_ch = BW_CH;
-    uint16_t blk_height_ch = BH_CH;
     int blk_y_src_offset = 0, blk_ch_src_offset = 0;
 
     PictureParentControlSet *picture_control_set_ptr_central = list_picture_control_set_ptr[index_center];
@@ -1738,6 +1738,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     // chroma subsampling
     uint32_t ss_x = picture_control_set_ptr_central->sequence_control_set_ptr->subsampling_x;
     uint32_t ss_y = picture_control_set_ptr_central->sequence_control_set_ptr->subsampling_y;
+    uint16_t blk_width_ch = (uint16_t)BW >> ss_x;
+    uint16_t blk_height_ch = (uint16_t)BH >> ss_y;
 
     uint32_t blk_cols = (uint32_t)(input_picture_ptr_central->width + BW - 1) / BW; // I think only the part of the picture
     uint32_t blk_rows = (uint32_t)(input_picture_ptr_central->height + BH - 1) / BH; // that fits to the 32x32 blocks are actually filtered
@@ -1745,7 +1747,7 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
     uint32_t stride[COLOR_CHANNELS] = { input_picture_ptr_central->stride_y,
                                         input_picture_ptr_central->stride_cb,
                                         input_picture_ptr_central->stride_cr };
-    uint32_t stride_pred[COLOR_CHANNELS] = {BW, BW_CH, BW_CH};
+    uint32_t stride_pred[COLOR_CHANNELS] = {BW, blk_width_ch, blk_width_ch};
 
     MeContext *context_ptr = me_context_ptr->me_context_ptr;
 
@@ -1830,12 +1832,12 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
 
                     if(!is_highbd){
                         pic_copy_kernel_8bit(src_center_ptr[C_Y], stride[C_Y], pred[C_Y], stride_pred[C_Y], BW, BH);
-                        pic_copy_kernel_8bit(src_center_ptr[C_U], stride[C_U], pred[C_U], stride_pred[C_U], BW_CH, BH_CH);
-                        pic_copy_kernel_8bit(src_center_ptr[C_V], stride[C_V], pred[C_V], stride_pred[C_V], BW_CH, BH_CH);
+                        pic_copy_kernel_8bit(src_center_ptr[C_U], stride[C_U], pred[C_U], stride_pred[C_U], blk_width_ch, blk_height_ch);
+                        pic_copy_kernel_8bit(src_center_ptr[C_V], stride[C_V], pred[C_V], stride_pred[C_V], blk_width_ch, blk_height_ch);
                     }else{
                         pic_copy_kernel_16bit(altref_buffer_highbd_ptr[C_Y], stride[C_Y], pred_16bit[C_Y], stride_pred[C_Y], BW, BH);
-                        pic_copy_kernel_16bit(altref_buffer_highbd_ptr[C_U], stride[C_U], pred_16bit[C_U], stride_pred[C_U], BW_CH, BH_CH);
-                        pic_copy_kernel_16bit(altref_buffer_highbd_ptr[C_V], stride[C_V], pred_16bit[C_V], stride_pred[C_V], BW_CH, BH_CH);
+                        pic_copy_kernel_16bit(altref_buffer_highbd_ptr[C_U], stride[C_U], pred_16bit[C_U], stride_pred[C_U], blk_width_ch, blk_height_ch);
+                        pic_copy_kernel_16bit(altref_buffer_highbd_ptr[C_V], stride[C_V], pred_16bit[C_V], stride_pred[C_V], blk_width_ch, blk_height_ch);
                     }
 
                 }else{
@@ -1963,6 +1965,8 @@ static EbErrorType produce_temporally_filtered_pic(PictureParentControlSet **lis
                                       stride,
                                       blk_y_src_offset,
                                       blk_ch_src_offset,
+                                      blk_width_ch,
+                                      blk_height_ch,
                                       filtered_sse,
                                       filtered_sse_uv,
                                       is_highbd);
